@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
 
 describe('RTL layout primitives', () => {
   it('keeps shell borders and active marks on logical edges', () => {
