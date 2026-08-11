@@ -40,7 +40,7 @@ loading or offline startup.
 
 The schema in `convex/schema.ts` is the authoritative inventory of persisted data. Shared domain constants in `packages/shared/src/domain.ts` must match schema validators.
 
-## Web localization
+## Client localization
 
 The web app bundles Git-owned English and Modern Standard Arabic catalogs. One
 typed locale registry owns each locale's self-name, text direction, and formatter
@@ -50,10 +50,10 @@ direction before paint, while the React locale provider adopts the browser value
 after the stable English server render.
 
 English and Arabic namespaces must have the same keys, interpolation variables,
-and plural forms. The web i18n check enforces that shape without a runtime catalog
-backend. Browser language matching maps regional Arabic tags to generic `ar` for
-this release. Future `ar-SA` and `ar-AE` support requires separate registry values,
-catalogs, and switcher entries.
+and plural forms. Web checks and native catalog tests enforce that shape without
+a runtime catalog backend. Browser and device language matching map regional
+Arabic tags to generic `ar` for this release. Future `ar-SA` and `ar-AE` support
+requires separate registry values, catalogs, and switcher entries.
 
 Presentation formatters use the active locale, including `ar-u-nu-latn` for
 Arabic language rules with `0–9` digit glyphs. Machine dates, route values, IDs,
@@ -61,9 +61,13 @@ and storage keys stay stable. Product chrome follows the locale direction;
 user-authored and model content keeps its natural direction, and technical tokens
 render as isolated left-to-right values.
 
-This boundary belongs to `apps/web`. Expo storage, native layout, and native
-release proof remain separate work, so the web implementation does not claim
-Arabic support on iOS or Android.
+Expo owns a separate bundled catalog and locale provider under `apps/mobile`.
+It reads the device language through `expo-localization`, stores an explicit
+selection through the existing device storage adapter, and derives native
+direction from the same locale registry. A switch between left-to-right and
+right-to-left saves first, updates `I18nManager`, and reloads once so Expo Router
+headers, gestures, and app content cannot disagree. Convex never stores either
+client's locale.
 
 ## Company collaboration and authorization
 

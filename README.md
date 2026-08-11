@@ -22,10 +22,10 @@ The [target product contract](./docs/PRODUCT.md) also defines dependable mobile
 push. Its implemented architecture, product behavior, and release-proof boundary
 are maintained in the mobile push specification and runbook.
 
-The web app and PWA support English and Modern Standard Arabic. The selected
-language stays in the current browser, and Arabic derives right-to-left layout
-and locale-aware formatting from one locale registry. Native iOS and Android
-localization is separate future work.
+The web, PWA, iOS, and Android apps support English and Modern Standard Arabic.
+The selected language stays in the current browser or device, and Arabic derives
+right-to-left layout and locale-aware formatting from one locale registry per
+client.
 
 ## Repository
 
@@ -60,7 +60,8 @@ Read [AGENTS.md](./AGENTS.md) before changing the repository. The maintained doc
 - [Mobile push notification runbook](./docs/MOBILE_PUSH_NOTIFICATIONS_RUNBOOK.md):
   environment setup, delivery operations, diagnostics, and release proof.
 - [Arabic i18n and RTL specification](./docs/ARABIC_I18N_RTL_SPEC.md): bundled
-  web catalogs, browser persistence, language behavior, RTL rules, and proof.
+  web and native catalogs, local persistence, language behavior, RTL rules, and
+  proof.
 
 ## Requirements
 

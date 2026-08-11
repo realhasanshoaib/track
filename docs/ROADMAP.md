@@ -18,14 +18,12 @@ operations in
 The remaining roadmap work is non-production native credential proof, the
 physical iPhone and Android release matrix, and an explicitly approved rollout.
 
-## Native Arabic localization
+## Regional Arabic languages
 
-The web app and PWA ship English and Modern Standard Arabic through the
-[Arabic i18n and RTL specification](./ARABIC_I18N_RTL_SPEC.md). Native iOS and
-Android remain English until a separate release defines device-local persistence,
-Expo locale behavior, native RTL layout, and the physical-device proof matrix.
-Future Arabic regional languages such as `ar-SA` and `ar-AE` remain separate
-switcher entries and catalogs rather than aliases for generic `ar`.
+The web, PWA, iOS, and Android apps ship generic Modern Standard Arabic through
+the [Arabic i18n and RTL specification](./ARABIC_I18N_RTL_SPEC.md). Future
+regional languages such as `ar-SA` and `ar-AE` remain separate switcher entries
+and catalogs rather than aliases for generic `ar`.
 
 ## Planning rule
 

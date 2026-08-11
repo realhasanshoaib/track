@@ -74,8 +74,9 @@ offline, denied, conflict, and read-only states without relying on color.
 
 ## Language and direction
 
-The web interface supports English and Modern Standard Arabic. Language controls
-show each language in its own name and never use national flags. The active
+The web and native interfaces support English and Modern Standard Arabic.
+Language controls show each language in its own name and never use national
+flags. The active
 locale owns root language, direction, and presentation formatting as one state;
 the interface never stores a separate RTL preference.
 
@@ -90,6 +91,12 @@ URLs, mentions, Channel references, task keys, IDs, and code stay isolated
 left-to-right so Arabic context cannot reorder their punctuation. Both directions
 must preserve keyboard order, visible focus, accessible names, and desktop and
 narrow-layout hierarchy.
+
+On native, direction-changing language controls live outside composers and
+unsaved forms because React Native applies process-wide direction after an app
+reload. Expo stack headers, back gestures, sheets, keyboard avoidance, safe
+areas, swipe reply, task views, and conversation controls must agree with the
+same locale-derived direction on iOS and Android.
 
 ## Product language
 

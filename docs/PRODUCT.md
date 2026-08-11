@@ -108,12 +108,12 @@ Project-scoped imported memory may produce Project-scoped suggestions.
 ## Platform direction
 
 Web provides the full conversation, planning, search, Company, Project, Channel,
-and administration experience in English and Modern Standard Arabic. Web
-language choice stays in the browser, and locale selects text direction and
-formatting as one state. Mobile supports the essential conversation and task
-workflows, including threads, task creation and updates, suggestions, comments,
-evidence, notifications, and deep links. Native localization is a separate
-release. Mobile conversation push should feel immediate and dependable while the
+and administration experience in English and Modern Standard Arabic. Mobile
+supports the essential conversation and task workflows in the same languages,
+including threads, task creation and updates, suggestions, comments, evidence,
+notifications, and deep links. Language choice stays in the current browser or
+device, and locale selects text direction and formatting as one state. Mobile
+conversation push should feel immediate and dependable while the
 app is foregrounded, backgrounded, or terminated. Administrative workflows may
 remain web-only when the maintained specification says so.
 
