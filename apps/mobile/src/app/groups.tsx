@@ -31,7 +31,6 @@ type MobileGroup = {
 
 export default function GroupsScreen() {
   const theme = useTheme();
-  const { direction, locale } = useLocale();
   const { t } = useTranslation('work');
   const router = useRouter();
   const release = useReleaseConfig();

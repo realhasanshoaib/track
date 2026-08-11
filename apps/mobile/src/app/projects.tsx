@@ -34,7 +34,7 @@ export default function ProjectsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { t } = useTranslation('common');
-  const { direction, locale } = useLocale();
+  const { direction } = useLocale();
   const { trackUserId, signOut, openProfileSheet } = useTrackUser();
   const { actingCompanyId, actingCompany, companyModelEnabled } = useCompany();
   const { themeOverride, setThemeOverride } = useThemeOverride();
