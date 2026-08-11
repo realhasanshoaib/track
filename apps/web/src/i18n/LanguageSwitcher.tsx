@@ -14,7 +14,7 @@ export function LanguageSwitcher({ className }: LanguageSwitcherProps) {
 
   return (
     <label className={className}>
-      <span className="sr-only">{label}</span>
+      <span>{label}</span>
       <select
         aria-label={label}
         data-testid="language-switcher"
