@@ -25,7 +25,7 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
 import TrackLoader from '#/components/TrackLoader'
-import { formatTime, useLocale } from '#/i18n'
+import { formatTime, type Locale, useLocale } from '#/i18n'
 import { authClient } from '#/lib/auth-client'
 import { useDevAuthBypass } from '#/lib/dev-auth-bypass'
 import { getAvatarTone, getAvatarToneColor, getInitials } from '#/features/workspace/identity'
@@ -96,7 +96,7 @@ function getTimezoneOptions() {
   return Array.from(new Set([browserTimezone, ...supportedValues, ...fallback])).sort()
 }
 
-function getLocalTimeLabel(timezone: string, locale: Parameters<typeof formatTime>[0]) {
+function getLocalTimeLabel(timezone: string, locale: Locale) {
   try {
     return formatTime(locale, new Date(), {
       hour: 'numeric',

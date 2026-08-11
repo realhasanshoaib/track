@@ -95,14 +95,6 @@ export function CompanyProjectPage({
     if (role === "member") return t("roles.member");
     return role;
   };
-  const statusLabel = (status: string) => {
-    if (status === "active") return t("statuses.active");
-    if (status === "suspended") return t("statuses.suspended");
-    if (status === "removed") return t("statuses.removed");
-    if (status === "archived") return t("statuses.archived");
-    if (status === "pending") return t("statuses.pending");
-    return status;
-  };
   const snapshotStatusLabel = (status: string) => {
     if (status === "pending") return t("exit.snapshotPending");
     if (status === "verified") return t("exit.snapshotVerified");

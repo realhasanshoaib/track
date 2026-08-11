@@ -104,8 +104,8 @@ export function CompanyHubPage() {
     if (role === "member") return t("roles.member");
     return role;
   };
-  const statusLabel = (status: string) => {
-    if (status === "active") return t("statuses.active");
+  const statusLabel = (status: string | undefined) => {
+    if (!status || status === "active") return t("statuses.active");
     if (status === "suspended") return t("statuses.suspended");
     if (status === "removed") return t("statuses.removed");
     if (status === "archived") return t("statuses.archived");

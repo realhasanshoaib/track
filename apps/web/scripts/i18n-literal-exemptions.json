@@ -1,4 +1,29 @@
 {
   "version": 1,
-  "exemptions": []
+  "exemptions": [
+    {
+      "path": "src/routes/deletion.tsx",
+      "location": "58",
+      "category": "technical-value",
+      "reason": "The support email address is a stable left-to-right contact value, not translatable copy."
+    },
+    {
+      "path": "src/routes/privacy.tsx",
+      "location": "70",
+      "category": "technical-value",
+      "reason": "The support email address is a stable left-to-right contact value, not translatable copy."
+    },
+    {
+      "path": "src/routes/support.tsx",
+      "location": "52",
+      "category": "technical-value",
+      "reason": "The support email address is a stable left-to-right contact value, not translatable copy."
+    },
+    {
+      "path": "src/routes/terms.tsx",
+      "location": "54",
+      "category": "technical-value",
+      "reason": "The support email address is a stable left-to-right contact value, not translatable copy."
+    }
+  ]
 }
