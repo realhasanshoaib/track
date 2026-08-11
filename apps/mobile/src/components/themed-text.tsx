@@ -16,13 +16,16 @@ export function ThemedText({ contentDirection = 'ui', style, type = 'default', t
   const theme = useTheme();
   const { direction } = useLocale();
   const writingDirection = contentDirection === 'ui' ? direction : contentDirection;
+  const textAlign = contentDirection === 'ui'
+    ? direction === 'rtl' ? 'right' : 'left'
+    : contentDirection === 'ltr' ? 'left' : 'auto';
 
   return (
     <Text
       allowFontScaling={false}
       style={[
         { color: theme[themeColor ?? 'text'] },
-        { textAlign: 'left', writingDirection },
+        { textAlign, writingDirection },
         type === 'default' && Typography.body,
         type === 'small' && Typography.body,
         type === 'smallBold' && Typography.bodyBold,

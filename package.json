@@ -19,9 +19,10 @@
   "scripts": {
     "dev": "turbo dev --parallel",
     "build": "turbo build",
+    "check:i18n": "pnpm --filter @track/web check:i18n",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "test": "turbo test && vitest run --dir convex --environment node",
+    "test": "pnpm check:i18n && turbo test && vitest run --dir convex --environment node",
     "convex:dev": "convex dev",
     "convex:deploy:dev": "convex deploy",
     "convex:deploy:prod": "convex deploy --env-file convex.prod.env"
