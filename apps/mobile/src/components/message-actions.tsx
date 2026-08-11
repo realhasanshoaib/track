@@ -5,6 +5,7 @@ import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useLocale } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight, hapticDestructive } from '@/lib/haptics';
 
@@ -15,6 +16,7 @@ type Props = { visible: boolean; onClose: () => void; actions: Action[] };
 export function MessageActions({ visible, onClose, actions }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { direction } = useLocale();
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -34,7 +36,7 @@ export function MessageActions({ visible, onClose, actions }: Props) {
                 onClose();
                 action.onPress();
               }}
-              style={[styles.row, { minHeight: 52 }]}>
+              style={[styles.row, { minHeight: 52 }, direction === 'rtl' && styles.rtlRow]}>
               {action.icon && (
                 <PlatformIcon
                   color={action.destructive ? '#b91c1c' : theme.textSecondary}
@@ -72,4 +74,5 @@ const styles = StyleSheet.create({
   handle: { alignSelf: 'center', borderRadius: 2, height: 4, marginBottom: Spacing.two, opacity: 0.5, width: 36 },
   content: { gap: 0 },
   row: { alignItems: 'center', flexDirection: 'row', gap: Spacing.three, paddingVertical: Spacing.two },
+  rtlRow: { flexDirection: 'row-reverse' },
 });

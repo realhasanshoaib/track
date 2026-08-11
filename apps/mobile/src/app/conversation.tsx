@@ -16,30 +16,34 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { OptionsSheet, SheetSection, SheetRow } from '@/components/options-sheet';
 import { Spacing, TouchTarget } from '@/constants/theme';
+import { formatDate, useLocale } from '@/i18n';
 import { hapticLight, hapticMedium, hapticDestructive } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
-import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
+import { channelHref } from '@/lib/company-navigation';
 import { useReleaseConfig } from '@/lib/release-config';
 import type { MobileTaskIdentity } from '@/lib/task-navigation';
 import { threadConversationHref, threadListHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
+import { useTranslation } from 'react-i18next';
 
 const reportReasons = ['inaccurate', 'unsafe', 'spam', 'harassment', 'privacy', 'other'] as const;
 
 type PendingMessage = { id: string; body: string; at: number };
 
-function dateSepLabel(ts: number) {
+function dateSepLabel(ts: number, locale: Parameters<typeof formatDate>[0], t: (key: string) => string) {
   const d = new Date(ts);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  if (d.toDateString() === today.toDateString()) return t('date.today');
+  if (d.toDateString() === yesterday.toDateString()) return t('date.yesterday');
+  return formatDate(locale, ts);
 }
 
 export default function ConversationScreen() {
   const theme = useTheme();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('chat');
   const router = useRouter();
   const { trackUserId } = useTrackUser();
   const releaseConfig = useReleaseConfig();
@@ -120,7 +124,7 @@ export default function ConversationScreen() {
     for (const raw of sorted) {
       const dateStr = new Date(raw.at).toDateString();
       if (dateStr !== lastDateStr) {
-        result.push({ kind: 'date-sep', key: `sep-${raw.at}`, at: raw.at, label: dateSepLabel(raw.at) });
+        result.push({ kind: 'date-sep', key: `sep-${raw.at}`, at: raw.at, label: dateSepLabel(raw.at, locale, t) });
         lastDateStr = dateStr;
         lastWasDateSep = true;
       }
@@ -136,7 +140,7 @@ export default function ConversationScreen() {
     }
 
     return result;
-  }, [assistantStreams, messages]);
+  }, [assistantStreams, locale, messages, t]);
   useEffect(() => {
     if (!targetMessageId) return;
     const index = threadItems.findIndex((item) => item.kind === 'message' && item.item.message._id === targetMessageId);
@@ -148,7 +152,7 @@ export default function ConversationScreen() {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
       ...(releaseConfig.threads && actionTarget.kind === 'message' && pid && gid ? [{
-        label: actionTarget.item.channelThread ? 'Open thread' : 'Start thread',
+        label: actionTarget.item.channelThread ? t('actions.openThread') : t('actions.startThread'),
         icon: 'forum-outline' as const,
         onPress: () => {
           if (actionTarget.item.channelThread) {
@@ -159,14 +163,14 @@ export default function ConversationScreen() {
         },
       }] : []),
       ...(!readOnly ? [{
-        label: 'Reply',
+        label: t('actions.reply'),
         icon: 'arrow-up' as const,
         onPress: () => {
           if (actionTarget.kind === 'message') setReplyTo(actionTarget.item);
         },
       }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
-        label: 'Create task',
+        label: t('actions.createTask'),
         icon: 'plus' as const,
         onPress: () => {
           const source = actionTarget.kind === 'message' ? actionTarget.item.message.body : actionTarget.stream.answer;
@@ -177,13 +181,13 @@ export default function ConversationScreen() {
           void createTask({
             projectId: pid,
             groupId: gid,
-            title: source.trim().slice(0, 180) || 'Follow up',
+            title: source.trim().slice(0, 180) || t('actions.followUp'),
             priority: 'none',
             references: [reference],
             idempotencyKey: `${actionTarget.key}:${Date.now()}`,
             actingCompanyId: cid,
             projectMemberId: pmid,
-          });
+          }).catch(() => Alert.alert(t('errors.task'), t('alerts.connectionRetry')));
         },
       }] : []),
       ...(!readOnly &&
@@ -191,17 +195,17 @@ export default function ConversationScreen() {
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
-        label: 'Delete message',
+        label: t('actions.deleteMessage'),
         icon: 'trash-can-outline' as const,
         destructive: true,
         onPress: () => {
           Alert.alert(
-            'Delete message?',
-            'This can’t be undone.',
+            t('alerts.deleteTitle'),
+            t('alerts.deleteBody'),
             [
-              { text: 'Cancel', style: 'cancel' },
+              { text: t('alerts.cancel'), style: 'cancel' },
               {
-                text: 'Delete',
+                text: t('alerts.delete'),
                 style: 'destructive',
                 onPress: () => {
                   setBusy(`delete-${actionTarget.item.message._id}`);
@@ -213,7 +217,7 @@ export default function ConversationScreen() {
                   }).then(() => {
                     setReplyTo((current) => current?.message._id === actionTarget.item.message._id ? null : current);
                   }).catch(() => {
-                    Alert.alert('Message not deleted', 'Check your connection and try again.');
+                    Alert.alert(t('alerts.messageNotDeletedTitle'), t('alerts.connectionRetry'));
                   }).finally(() => setBusy(null));
                 },
               },
@@ -222,13 +226,13 @@ export default function ConversationScreen() {
         },
       }] : []),
       {
-        label: 'Report',
+        label: t('actions.report'),
         icon: 'trash-can-outline' as const,
         destructive: true,
         onPress: () => setReportTarget(actionTarget),
       },
     ];
-  }, [actionTarget, cid, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, trackUserId]);
+  }, [actionTarget, cid, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, t, trackUserId]);
 
   // Clear pending messages when the real message arrives from the server
   useEffect(() => {
@@ -276,81 +280,104 @@ export default function ConversationScreen() {
     setReplyTo(null);
     const pendingId = Date.now().toString();
     setPendingMessages((prev) => [...prev, { id: pendingId, body, at: Date.now() }]);
-    await withBusy('send', async () => {
-      const { parseMentions } = await import('@track/shared');
-      const messageId = await sendMessage({
-        projectId: pid, groupId: gid, authorId: trackUserId,
-        actingCompanyId: cid, projectMemberId: pmid,
-        body, mentions: resolveMentionIds(body, memberItems),
-        replyToMessageId, notificationPreview: body,
+    try {
+      await withBusy('send', async () => {
+        const { parseMentions } = await import('@track/shared');
+        const messageId = await sendMessage({
+          projectId: pid, groupId: gid, authorId: trackUserId,
+          actingCompanyId: cid, projectMemberId: pmid,
+          body, mentions: resolveMentionIds(body, memberItems),
+          replyToMessageId, notificationPreview: body,
+        });
+        if (parseMentions(body).includes('track')) {
+          await askTrack({ projectId: pid, groupId: gid, requesterId: trackUserId, actingCompanyId: cid, projectMemberId: pmid, promptMessageId: messageId, question: body });
+        }
       });
-      if (parseMentions(body).includes('track')) {
-        await askTrack({ projectId: pid, groupId: gid, requesterId: trackUserId, actingCompanyId: cid, projectMemberId: pmid, promptMessageId: messageId, question: body });
-      }
-    });
+    } catch {
+      Alert.alert(t('errors.sendTitle'), t('errors.sendBody'));
+    }
   }
 
   async function uploadAttachment(input: { uri: string; filename: string; contentType: string; body: string; kind?: 'file' | 'voice_note'; durationMs?: number }) {
     if (!trackUserId || !pid || !gid) return;
-    await withBusy(input.kind ?? 'attach', async () => {
-      const uploadUrl = await generateUploadUrl({ groupId: gid, userId: trackUserId, actingCompanyId: cid, projectMemberId: pmid });
-      const blob = await (await fetch(input.uri)).blob();
-      const res = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': input.contentType }, body: blob });
-      if (!res.ok) throw new Error('upload_failed');
-      const { storageId } = await res.json() as { storageId: Id<'_storage'> };
-      const messageId = await sendMessage({
-        projectId: pid, groupId: gid, authorId: trackUserId,
-        actingCompanyId: cid, projectMemberId: pmid,
-        body: input.body, mentions: resolveMentionIds(input.body, memberItems),
-        replyToMessageId: replyTo?.message._id, notificationPreview: input.body,
+    try {
+      await withBusy(input.kind ?? 'attach', async () => {
+        const uploadUrl = await generateUploadUrl({ groupId: gid, userId: trackUserId, actingCompanyId: cid, projectMemberId: pmid });
+        const blob = await (await fetch(input.uri)).blob();
+        const res = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': input.contentType }, body: blob });
+        if (!res.ok) throw new Error('upload_failed');
+        const { storageId } = await res.json() as { storageId: Id<'_storage'> };
+        const messageId = await sendMessage({
+          projectId: pid, groupId: gid, authorId: trackUserId,
+          actingCompanyId: cid, projectMemberId: pmid,
+          body: input.body, mentions: resolveMentionIds(input.body, memberItems),
+          replyToMessageId: replyTo?.message._id, notificationPreview: input.body,
+        });
+        await attachFile({
+          projectId: pid, groupId: gid, messageId, userId: trackUserId,
+          actingCompanyId: cid, projectMemberId: pmid,
+          storageId, filename: input.filename, contentType: input.contentType,
+          size: blob.size, kind: input.kind, durationMs: input.durationMs,
+        });
+        setComposer('');
+        setReplyTo(null);
       });
-      await attachFile({
-        projectId: pid, groupId: gid, messageId, userId: trackUserId,
-        actingCompanyId: cid, projectMemberId: pmid,
-        storageId, filename: input.filename, contentType: input.contentType,
-        size: blob.size, kind: input.kind, durationMs: input.durationMs,
-      });
-      setComposer('');
-      setReplyTo(null);
-    });
+    } catch {
+      Alert.alert(t('errors.uploadTitle'), t('errors.uploadBody'));
+    }
   }
 
   async function pickDocument() {
     hapticLight();
-    const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-    if (picked.canceled || !picked.assets[0]) return;
-    const file = picked.assets[0];
-    await uploadAttachment({ uri: file.uri, filename: file.name, contentType: file.mimeType ?? 'application/octet-stream', body: composer.trim() || `Attached ${file.name}`, kind: 'file' });
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets[0]) return;
+      const file = picked.assets[0];
+      await uploadAttachment({ uri: file.uri, filename: file.name, contentType: file.mimeType ?? 'application/octet-stream', body: composer.trim() || t('composer.attached', { filename: file.name }), kind: 'file' });
+    } catch {
+      Alert.alert(t('errors.uploadTitle'), t('errors.uploadBody'));
+    }
   }
 
   async function toggleRecording() {
-    if (recordingState.isRecording) {
-      await recorder.stop();
-      const uri = recorder.uri;
-      if (!uri) return;
-      await uploadAttachment({ uri, filename: `voice-note-${Date.now()}.m4a`, contentType: 'audio/mp4', body: composer.trim() || 'Sent a voice note.', kind: 'voice_note', durationMs: Math.max(0, Math.round(recordingState.durationMillis)) });
-      return;
+    try {
+      if (recordingState.isRecording) {
+        await recorder.stop();
+        const uri = recorder.uri;
+        if (!uri) return;
+        await uploadAttachment({ uri, filename: `voice-note-${Date.now()}.m4a`, contentType: 'audio/mp4', body: composer.trim() || t('composer.voiceNoteSent'), kind: 'voice_note', durationMs: Math.max(0, Math.round(recordingState.durationMillis)) });
+        return;
+      }
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(t('errors.microphoneTitle'), t('errors.microphoneBody'));
+        return;
+      }
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+    } catch {
+      Alert.alert(t('errors.microphoneTitle'), t('errors.microphoneBody'));
     }
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) return;
-    await recorder.prepareToRecordAsync();
-    recorder.record();
   }
 
   async function submitReport() {
     if (!trackUserId || !pid || !reportTarget || reportTarget.kind === 'date-sep') return;
     hapticDestructive();
-    await withBusy('report', async () => {
-      await createReport({
-        projectId: pid, reporterId: trackUserId, groupId: gid,
-        actingCompanyId: cid, projectMemberId: pmid,
-        targetType: reportTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
-        targetMessageId: reportTarget.kind === 'message' ? reportTarget.item.message._id : undefined,
-        targetAssistantStreamId: reportTarget.kind === 'assistant' ? reportTarget.stream._id : undefined,
-        reason: reportReason, note: '',
+    try {
+      await withBusy('report', async () => {
+        await createReport({
+          projectId: pid, reporterId: trackUserId, groupId: gid,
+          actingCompanyId: cid, projectMemberId: pmid,
+          targetType: reportTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
+          targetMessageId: reportTarget.kind === 'message' ? reportTarget.item.message._id : undefined,
+          targetAssistantStreamId: reportTarget.kind === 'assistant' ? reportTarget.stream._id : undefined,
+          reason: reportReason, note: '',
+        });
+        setReportTarget(null);
       });
-      setReportTarget(null);
-    });
+    } catch {
+      Alert.alert(t('errors.reportTitle'), t('errors.reportBody'));
+    }
   }
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
@@ -382,7 +409,7 @@ export default function ConversationScreen() {
     );
   }, [pid, readOnly, releaseConfig.tasks, taskIdentity, trackUserId]);
 
-  if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
+  if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: t('channel.unavailable') }} /><View style={styles.empty}><ThemedText type="subtitle">{t('channel.unavailable')}</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{cid ? t('channel.navigationCompany') : t('channel.navigationProject')}</ThemedText></View></ThemedView>;
 
   return (
     <ThemedView style={styles.screen}>
@@ -392,16 +419,18 @@ export default function ConversationScreen() {
           headerBlurEffect: 'systemMaterial',
           headerTitle: () => (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('channel.switch')}
               hitSlop={8}
               onPress={() => { hapticLight(); setGroupSwitchOpen(true); }}
-              style={styles.headerTitle}>
-              <ThemedText numberOfLines={1} type="smallBold">{activeGroup?.name ?? 'Conversation'}</ThemedText>
+              style={[styles.headerTitle, direction === 'rtl' && styles.rtlRow]}>
+              <ThemedText contentDirection="auto" numberOfLines={1} type="smallBold">{activeGroup?.name ?? t('channel.conversation')}</ThemedText>
               <PlatformIcon color={theme.textSecondary} name="chevron-down" size={16} />
             </Pressable>
           ),
           headerRight: () => !readOnly ? (
             <Pressable
-              accessibilityLabel="Notifications"
+              accessibilityLabel={t('notifications.accessibilityLabel')}
               android_ripple={{ color: theme.backgroundSelected, borderless: true }}
               hitSlop={8}
               onPress={() => { hapticLight(); setToolsOpen(true); }}
@@ -431,9 +460,13 @@ export default function ConversationScreen() {
           renderItem={renderItem}
           windowSize={9}
           ListEmptyComponent={
-            messages !== undefined ? (
+            messages === undefined ? (
               <View style={styles.empty}>
-                <ThemedText style={{ color: theme.textSecondary }} type="small">Start the conversation</ThemedText>
+                <ThemedText style={{ color: theme.textSecondary }} type="small">{t('channel.loading')}</ThemedText>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <ThemedText style={{ color: theme.textSecondary }} type="small">{t('channel.start')}</ThemedText>
               </View>
             ) : null
           }
@@ -441,11 +474,11 @@ export default function ConversationScreen() {
             pendingMessages.length > 0 ? (
               <View>
                 {pendingMessages.map((m) => (
-                  <View key={m.id} style={styles.pendingRow}>
+                    <View key={m.id} style={[styles.pendingRow, direction === 'rtl' && styles.rtlRow]}>
                     <View style={styles.pendingAvatarSpacer} />
-                    <View style={styles.pendingBody}>
+                      <View style={[styles.pendingBody, direction === 'rtl' && styles.rtlRow]}>
                       <PlatformIcon color={theme.textSecondary} name="clock-outline" size={12} />
-                      <ThemedText style={styles.pendingText} type="small">{m.body}</ThemedText>
+                      <ThemedText contentDirection="auto" style={styles.pendingText} type="small">{m.body}</ThemedText>
                     </View>
                   </View>
                 ))}
@@ -454,7 +487,7 @@ export default function ConversationScreen() {
           }
         />
 
-        {readOnly ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Read-only Company exit archive</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">Messages and frozen memory stop at the Company exit cutoff.</ThemedText></View> : <Composer
+        {readOnly ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">{t('archive.companyTitle')}</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">{t('archive.companyBody')}</ThemedText></View> : <Composer
           activeGroupName={activeGroup?.name ?? null}
           busy={busy === 'send'}
           isRecording={recordingState.isRecording}
@@ -470,7 +503,7 @@ export default function ConversationScreen() {
         />}
       </KeyboardAvoidingView>
 
-      <OptionsSheet onClose={() => setGroupSwitchOpen(false)} title="Switch Channel" visible={groupSwitchOpen}>
+      <OptionsSheet onClose={() => setGroupSwitchOpen(false)} title={t('channel.switch')} visible={groupSwitchOpen}>
         <SheetSection>
           {groupItems.map((item) => (
             <SheetRow
@@ -487,58 +520,58 @@ export default function ConversationScreen() {
         </SheetSection>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setToolsOpen(false)} title="Notifications" visible={toolsOpen}>
+      <OptionsSheet onClose={() => setToolsOpen(false)} title={t('notifications.title')} visible={toolsOpen}>
         <SheetSection>
           <SheetRow
             icon="bell-outline"
-            label="Manage notification settings"
+            label={t('notifications.manage')}
             onPress={() => {
               setToolsOpen(false);
               router.push('/notifications');
             }}
           />
         </SheetSection>
-        {releaseConfig.threads && pid && gid ? <SheetSection title="Conversation">
+        {releaseConfig.threads && pid && gid ? <SheetSection title={t('notifications.conversation')}>
           <SheetRow
             icon="forum-outline"
-            label="Threads"
+            label={t('notifications.threads')}
             onPress={() => {
               setToolsOpen(false);
               router.push(threadListHref(pid, gid, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
             }}
           />
         </SheetSection> : null}
-        <SheetSection title="Global">
+        <SheetSection title={t('notifications.global')}>
           {(['all', 'mentions', 'none'] as const).map((mode) => (
             <SheetRow
               key={mode}
-              label={mode === 'all' ? 'All messages' : mode === 'mentions' ? 'Mentions only' : 'Off'}
+              label={mode === 'all' ? t('notifications.allMessages') : mode === 'mentions' ? t('notifications.mentionsOnly') : t('notifications.off')}
               selected={globalMode === mode}
-              onPress={() => trackUserId && void setGlobalNotif({ userId: trackUserId, mode })}
+              onPress={() => trackUserId && void setGlobalNotif({ userId: trackUserId, mode }).catch(() => Alert.alert(t('notifications.title'), t('alerts.connectionRetry')))}
             />
           ))}
         </SheetSection>
-        <SheetSection title="This Channel">
+        <SheetSection title={t('notifications.thisChannel')}>
           {(['inherit', 'all', 'mentions', 'none'] as const).map((mode) => (
             <SheetRow
               key={mode}
-              label={mode === 'inherit' ? 'Follow global' : mode === 'all' ? 'All messages' : mode === 'mentions' ? 'Mentions only' : 'Off'}
+              label={mode === 'inherit' ? t('notifications.followGlobal') : mode === 'all' ? t('notifications.allMessages') : mode === 'mentions' ? t('notifications.mentionsOnly') : t('notifications.off')}
               selected={groupMode === mode}
-              onPress={() => trackUserId && gid && void setGroupNotif({ userId: trackUserId, groupId: gid, actingCompanyId: cid, projectMemberId: pmid, mode })}
+              onPress={() => trackUserId && gid && void setGroupNotif({ userId: trackUserId, groupId: gid, actingCompanyId: cid, projectMemberId: pmid, mode }).catch(() => Alert.alert(t('notifications.title'), t('alerts.connectionRetry')))}
             />
           ))}
         </SheetSection>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setReportTarget(null)} title="Report" visible={Boolean(reportTarget)}>
-        <SheetSection title="Reason">
-          <View style={styles.reasonGrid}>
+      <OptionsSheet onClose={() => setReportTarget(null)} title={t('report.title')} visible={Boolean(reportTarget)}>
+        <SheetSection title={t('report.reason')}>
+          <View style={[styles.reasonGrid, direction === 'rtl' && styles.rtlRow]}>
             {reportReasons.map((r) => (
               <Pressable
                 key={r}
                 onPress={() => setReportReason(r)}
                 style={[styles.reasonChip, { backgroundColor: reportReason === r ? theme.backgroundSelected : theme.backgroundElement }]}>
-                <ThemedText type="code">{r}</ThemedText>
+                <ThemedText type="code">{t(`report.${r}`)}</ThemedText>
               </Pressable>
             ))}
           </View>
@@ -547,7 +580,7 @@ export default function ConversationScreen() {
           disabled={busy === 'report'}
           onPress={() => void submitReport()}
           style={[styles.reportButton, { backgroundColor: busy === 'report' ? theme.hairline : '#b91c1c' }]}>
-          <ThemedText style={{ color: '#fff' }} type="smallBold">Submit Report</ThemedText>
+          <ThemedText style={{ color: '#fff' }} type="smallBold">{t('report.submit')}</ThemedText>
         </Pressable>
       </OptionsSheet>
 
@@ -573,6 +606,7 @@ const styles = StyleSheet.create({
   reasonChip: { borderRadius: 8, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   reasonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, padding: Spacing.three },
   reportButton: { alignItems: 'center', borderRadius: 10, justifyContent: 'center', minHeight: 46, paddingHorizontal: Spacing.four },
+  rtlRow: { flexDirection: 'row-reverse' },
   screen: { flex: 1 },
   thread: { paddingBottom: Spacing.two, paddingTop: Spacing.two },
 });

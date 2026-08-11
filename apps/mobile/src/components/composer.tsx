@@ -7,8 +7,10 @@ import type { DetailedMessage } from '@/components/thread-row';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { formatDuration, useLocale } from '@/i18n';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   activeGroupName: string | null;
@@ -25,13 +27,6 @@ type Props = {
   value: string;
 };
 
-function formatDuration(ms: number) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
 function RecordingDot() {
   const opacity = useSharedValue(1);
   useEffect(() => {
@@ -44,6 +39,8 @@ function RecordingDot() {
 export function Composer({ activeGroupName, busy, isRecording, recordingDuration = 0, onAttach, onCancelReply, onChangeText, onFocus, onRecord, onSend, replyTo, value }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('chat');
   const [keyboardVisible, setKeyboardVisible] = useState(Keyboard.isVisible());
   const canSend = Boolean(value.trim()) && !busy;
 
@@ -66,22 +63,23 @@ export function Composer({ activeGroupName, busy, isRecording, recordingDuration
       },
     ]}>
       {replyTo ? (
-        <View style={[styles.replyBanner, { backgroundColor: theme.backgroundElement }]}>
+        <View style={[styles.replyBanner, { backgroundColor: theme.backgroundElement }, direction === 'rtl' && styles.rtlRow]}>
           <View style={[styles.replyAccent, { backgroundColor: theme.accent }]} />
           <View style={styles.replyBody}>
             <ThemedText style={{ color: theme.textSecondary }} type="code">
-              Replying to {replyTo.author?.displayName ?? 'Member'}
+              {t('composer.replyingTo', { name: replyTo.author?.displayName ?? t('composer.member') })}
             </ThemedText>
-            <ThemedText numberOfLines={1} type="small">{replyTo.message.body}</ThemedText>
+            <ThemedText contentDirection="auto" numberOfLines={1} type="small">{replyTo.message.body}</ThemedText>
           </View>
-          <Pressable hitSlop={12} onPress={onCancelReply}>
+          <Pressable accessibilityLabel={t('composer.cancelReply')} hitSlop={12} onPress={onCancelReply}>
             <PlatformIcon color={theme.textSecondary} name="close" size={18} />
           </Pressable>
         </View>
       ) : null}
 
-      <View style={styles.row}>
+      <View style={[styles.row, direction === 'rtl' && styles.rtlRow]}>
         <Pressable
+          accessibilityLabel={t('composer.attach')}
           android_ripple={{ color: theme.backgroundSelected, borderless: true }}
           hitSlop={8}
           onPress={() => { hapticLight(); onAttach(); }}
@@ -90,13 +88,14 @@ export function Composer({ activeGroupName, busy, isRecording, recordingDuration
         </Pressable>
 
         {isRecording ? (
-          <View style={[styles.recordingBar, { backgroundColor: theme.backgroundElement }]}>
+          <View style={[styles.recordingBar, { backgroundColor: theme.backgroundElement }, direction === 'rtl' && styles.rtlRow]}>
             <RecordingDot />
-            <ThemedText type="small">Recording…</ThemedText>
-            <ThemedText style={{ color: theme.textSecondary }} type="code">
-              {formatDuration(recordingDuration)}
+            <ThemedText type="small">{t('composer.recording')}</ThemedText>
+            <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">
+              {formatDuration(locale, Math.floor(recordingDuration / 1000))}
             </ThemedText>
             <Pressable
+              accessibilityLabel={t('composer.stopRecording')}
               android_ripple={{ color: theme.backgroundSelected, borderless: true }}
               hitSlop={8}
               onPress={() => { hapticLight(); onRecord(); }}
@@ -105,19 +104,21 @@ export function Composer({ activeGroupName, busy, isRecording, recordingDuration
             </Pressable>
           </View>
         ) : (
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end' }}>
+          <View style={[styles.inputRow, direction === 'rtl' && styles.rtlRow]}>
             <TextInput
               allowFontScaling
+              accessibilityLabel={t('composer.messageAccessibility')}
               multiline
               onChangeText={onChangeText}
               onFocus={onFocus}
-              placeholder={`Message ${activeGroupName ?? 'Channel'} or ask @track…`}
+              placeholder={t('composer.messagePlaceholder', { name: activeGroupName ?? t('channel.name') })}
               placeholderTextColor={theme.textSecondary}
-              style={[styles.pill, { backgroundColor: theme.backgroundElement, color: theme.text, flex: 1 }]}
+              style={[styles.pill, { backgroundColor: theme.backgroundElement, color: theme.text, flex: 1, textAlign: direction === 'rtl' ? 'right' : 'left' }]}
               value={value}
             />
             {canSend ? (
               <Pressable
+                accessibilityLabel={t('composer.send')}
                 android_ripple={{ color: theme.backgroundSelected, borderless: true }}
                 hitSlop={8}
                 onPress={() => { hapticMedium(); onSend(); }}
@@ -126,6 +127,7 @@ export function Composer({ activeGroupName, busy, isRecording, recordingDuration
               </Pressable>
             ) : (
               <Pressable
+                accessibilityLabel={t('composer.record')}
                 android_ripple={{ color: theme.backgroundSelected, borderless: true }}
                 hitSlop={8}
                 onPress={() => { hapticLight(); onRecord(); }}
@@ -145,7 +147,8 @@ const BTN = Platform.select({ ios: 44, android: 48 }) ?? 44;
 const styles = StyleSheet.create({
   bar: { borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   circle: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', width: BTN },
-  micInline: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', marginLeft: Spacing.two, width: BTN },
+  inputRow: { alignItems: 'flex-end', flex: 1, flexDirection: 'row' },
+  micInline: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', marginStart: Spacing.two, width: BTN },
   pill: { borderRadius: 20, fontSize: 14, lineHeight: 20, maxHeight: 112, minHeight: BTN, paddingHorizontal: Spacing.three, paddingVertical: Platform.OS === 'ios' ? 10 : 8 },
   recordingBar: { alignItems: 'center', borderRadius: 20, flex: 1, flexDirection: 'row', gap: Spacing.two, height: BTN, paddingHorizontal: Spacing.three },
   recordingDotBase: { backgroundColor: '#b91c1c', borderRadius: 5, height: 10, width: 10 },
@@ -153,6 +156,7 @@ const styles = StyleSheet.create({
   replyBanner: { alignItems: 'center', borderRadius: 8, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
   replyBody: { flex: 1, gap: 2 },
   row: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.two },
-  sendInline: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', marginLeft: Spacing.two, width: BTN },
+  rtlRow: { flexDirection: 'row-reverse' },
+  sendInline: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', marginStart: Spacing.two, width: BTN },
   stopButton: { alignItems: 'center', borderRadius: BTN / 2, height: BTN, justifyContent: 'center', width: BTN },
 });
