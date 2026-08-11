@@ -44,8 +44,8 @@
     "recording": "جارٍ التسجيل…",
     "messagePlaceholder": "أرسل رسالة إلى {{name}} أو اسأل @track…",
     "voiceNote": "ملاحظة صوتية",
-    "voiceNoteSent": "أرسل ملاحظة صوتية.",
-    "attached": "أرفق {{filename}}"
+    "voiceNoteSent": "تم إرسال ملاحظة صوتية.",
+    "attached": "تم إرفاق {{filename}}"
   },
   "errors": {
     "sendTitle": "لم تُرسل الرسالة",
@@ -159,17 +159,12 @@
     "unfollowed": "أُلغيت متابعة سلسلة المحادثة.",
     "archived": "أُرشفت سلسلة المحادثة.",
     "reopened": "أُعيد فتح سلسلة المحادثة.",
-    "conflictStatus": "غيّر شخص آخر سلسلة المحادثة. عُدّلت الحالة الحالية.",
-    "conflictRename": "غيّر شخص آخر سلسلة المحادثة. حدّث الصفحة وحاول مرة أخرى.",
+    "conflictStatus": "تغيّرت سلسلة المحادثة في مكان آخر. تم تحديث الحالة الحالية.",
+    "conflictRename": "تغيّرت سلسلة المحادثة في مكان آخر. حدّث البيانات وحاول مرة أخرى.",
     "renamed": "أُعيدت تسمية سلسلة المحادثة.",
     "deleted": "حُذفت الرسالة."
   },
   "voice": {
-    "duration_zero": "{{duration}} ملاحظة صوتية",
-    "duration_one": "{{duration}} ملاحظة صوتية",
-    "duration_two": "{{duration}} ملاحظتان صوتيتان",
-    "duration_few": "{{duration}} ملاحظات صوتية",
-    "duration_many": "{{duration}} ملاحظة صوتية",
-    "duration_other": "{{duration}} ملاحظة صوتية"
+    "duration": "{{duration}} ملاحظة صوتية"
   }
 }

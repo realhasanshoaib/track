@@ -16,7 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { OptionsSheet, SheetSection, SheetRow } from '@/components/options-sheet';
 import { Spacing, TouchTarget } from '@/constants/theme';
-import { formatDate, useLocale } from '@/i18n';
+import { formatDate, type Locale, useLocale } from '@/i18n';
 import { hapticLight, hapticMedium, hapticDestructive } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref } from '@/lib/company-navigation';
@@ -30,7 +30,7 @@ const reportReasons = ['inaccurate', 'unsafe', 'spam', 'harassment', 'privacy', 
 
 type PendingMessage = { id: string; body: string; at: number };
 
-function dateSepLabel(ts: number, locale: Parameters<typeof formatDate>[0], t: (key: string) => string) {
+function dateSepLabel(ts: number, locale: Locale, t: (key: string) => string) {
   const d = new Date(ts);
   const today = new Date();
   const yesterday = new Date(today);
@@ -468,15 +468,15 @@ export default function ConversationScreen() {
               <View style={styles.empty}>
                 <ThemedText style={{ color: theme.textSecondary }} type="small">{t('channel.start')}</ThemedText>
               </View>
-            ) : null
+            )
           }
           ListFooterComponent={
             pendingMessages.length > 0 ? (
               <View>
                 {pendingMessages.map((m) => (
-                    <View key={m.id} style={[styles.pendingRow, direction === 'rtl' && styles.rtlRow]}>
+                  <View key={m.id} style={[styles.pendingRow, direction === 'rtl' && styles.rtlRow]}>
                     <View style={styles.pendingAvatarSpacer} />
-                      <View style={[styles.pendingBody, direction === 'rtl' && styles.rtlRow]}>
+                    <View style={[styles.pendingBody, direction === 'rtl' && styles.rtlRow]}>
                       <PlatformIcon color={theme.textSecondary} name="clock-outline" size={12} />
                       <ThemedText contentDirection="auto" style={styles.pendingText} type="small">{m.body}</ThemedText>
                     </View>

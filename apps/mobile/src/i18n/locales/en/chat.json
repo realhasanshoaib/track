@@ -165,11 +165,6 @@
     "deleted": "Message deleted."
   },
   "voice": {
-    "duration_zero": "{{duration}} voice note",
-    "duration_one": "{{duration}} voice note",
-    "duration_two": "{{duration}} voice notes",
-    "duration_few": "{{duration}} voice notes",
-    "duration_many": "{{duration}} voice notes",
-    "duration_other": "{{duration}} voice notes"
+    "duration": "{{duration}} voice note"
   }
 }

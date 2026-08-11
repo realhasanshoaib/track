@@ -388,18 +388,18 @@ Lane contracts:
   decisions in this specification.
 - [x] D0: Map Expo storage, navigation, reload, catalogs, formatting, and RTL
   seams after mobile joined the release.
-- [ ] D1: Land runtime, formatters, language control, catalog checks, and tests.
-- [ ] D2: Land public, auth, profile, PWA, and legal catalogs and usage.
-- [ ] D3: Land workspace, Project, Channel, search, notification, and composer copy.
-- [ ] D4: Land Company collaboration copy.
-- [ ] D5: Land task and thread copy.
-- [ ] D6: Land logical CSS and direction-safe UI primitives.
-- [ ] M1: Land Expo locale discovery, device persistence, native direction reload,
+- [x] D1: Land runtime, formatters, language control, catalog checks, and tests.
+- [x] D2: Land public, auth, profile, PWA, and legal catalogs and usage.
+- [x] D3: Land workspace, Project, Channel, search, notification, and composer copy.
+- [x] D4: Land Company collaboration copy.
+- [x] D5: Land task and thread copy.
+- [x] D6: Land logical CSS and direction-safe UI primitives.
+- [x] M1: Land Expo locale discovery, device persistence, native direction reload,
   shell catalogs, language controls, and focused tests.
-- [ ] M2: Land native Project, Company, notification, and task catalogs plus RTL.
-- [ ] M3: Land native Channel, thread, conversation, and chat catalogs plus RTL.
-- [ ] J: Reconcile namespaces, hooks, formatter call sites, and RTL semantics.
-- [ ] R: Complete independent AI review across web and mobile catalogs and apply
+- [x] M2: Land native Project, Company, notification, and task catalogs plus RTL.
+- [x] M3: Land native Channel, thread, conversation, and chat catalogs plus RTL.
+- [x] J: Reconcile namespaces, hooks, formatter call sites, and RTL semantics.
+- [x] R: Complete independent AI review across web and mobile catalogs and apply
   accepted Arabic copy fixes.
 - [ ] G: Pass catalog checks, focused tests, full remote gate, and local browser
   proof in both directions.

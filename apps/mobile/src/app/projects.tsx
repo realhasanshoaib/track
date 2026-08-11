@@ -282,11 +282,14 @@ function ProjectRow({ item, onPress }: { item: MobileProject; onPress: () => voi
     : item.membership.role === 'admin'
       ? t('projects.roleAdmin')
       : t('projects.roleMember');
-  const channelLabel = item.groupCount === 1 ? t('projects.channel') : t('projects.channels');
+  const channelLabel = t('projects.channelCount', {
+    count: item.groupCount,
+    formattedCount: formatNumber(locale, item.groupCount),
+  });
   const projectMeta = [
     item.membership.companyDisplayNameSnapshot,
     role,
-    `${formatNumber(locale, item.groupCount)} ${channelLabel}`,
+    channelLabel,
     item.membership.status === 'archived' ? t('projects.archive') : null,
   ].filter(Boolean).join(' · ');
   return (

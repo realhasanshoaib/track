@@ -181,7 +181,7 @@ export default function SignInScreen() {
             {/* Auth panel */}
             <View style={styles.panel}>
               {error ? (
-                <View style={[styles.errorBox, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
+                <View style={[styles.errorBox, { backgroundColor: theme.backgroundElement, borderColor: theme.danger }]}>
                   <ThemedText style={{ color: theme.danger }} type="small">
                     {error}
                   </ThemedText>
@@ -354,7 +354,7 @@ export default function SignInScreen() {
             </View>
 
             {/* Legal */}
-            <ThemedText style={[styles.legal, { color: theme.textTertiary }]} type="caption">
+            <ThemedText style={[styles.legal, { color: theme.textSecondary }]} type="small">
               {t('auth.legalPrefix')}{' '}
               <ThemedText
                 accessibilityRole="link"
@@ -363,7 +363,7 @@ export default function SignInScreen() {
                   void Linking.openURL('https://track.q9labs.ai/terms');
                 }}
                 style={[styles.legalLink, { color: theme.textSecondary }]}
-                type="caption"
+                type="small"
               >
                 {t('auth.terms')}
               </ThemedText>{' '}
@@ -375,7 +375,7 @@ export default function SignInScreen() {
                   void Linking.openURL('https://track.q9labs.ai/privacy');
                 }}
                 style={[styles.legalLink, { color: theme.textSecondary }]}
-                type="caption"
+                type="small"
               >
                 {t('auth.privacyPolicy')}
               </ThemedText>

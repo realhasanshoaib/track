@@ -16,7 +16,7 @@
     "emptyActive": "لا توجد سلاسل محادثة نشطة.",
     "emptyArchived": "لا توجد سلاسل محادثة مؤرشفة.",
     "replyOne": "{{count}} رد",
-    "replyMany": "{{count}} ردود",
+    "replyMany": "عدد الردود: {{count}}",
     "following": "تتابعها",
     "unread": "غير مقروءة",
     "unreadAria": "سلسلة محادثة غير مقروءة",
@@ -74,7 +74,7 @@
     "reopenedNotice": "أُعيد فتح سلسلة المحادثة.",
     "renamedNotice": "أُعيدت تسمية سلسلة المحادثة.",
     "unsentReply": "{{error}}. ما زال ردك غير المرسل هنا.",
-    "reportReason": "other"
+    "reportReason": "أخرى"
   },
   "errors": {
     "save": "تعذر الحفظ",

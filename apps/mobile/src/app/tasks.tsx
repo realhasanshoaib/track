@@ -281,7 +281,7 @@ export default function TasksScreen() {
                     : tab === 'my' ? t('tasks.myTasks') : t('tasks.allProjectTasks')}
                 </ThemedText>
                 <ThemedText style={{ color: theme.textSecondary }} type="small">
-                  {tasks ? t(tasks.length === 1 ? 'tasks.count_one' : 'tasks.count_other', { count: formatNumber(locale, tasks.length) }) : t('tasks.loadingWork')}
+                  {tasks ? t('tasks.count', { count: tasks.length, formattedCount: formatNumber(locale, tasks.length) }) : t('tasks.loadingWork')}
                 </ThemedText>
               </View>
               {tab === 'board' && boards && boards.length > 1 ? (

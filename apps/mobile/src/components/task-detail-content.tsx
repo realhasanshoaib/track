@@ -15,7 +15,7 @@ import { TaskAction } from '@/components/task-ui';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDate, formatNumber, formatTime, useLocale } from '@/i18n';
+import { formatDate, formatNumber, formatTime, type Locale, useLocale } from '@/i18n';
 import { useTranslation } from 'react-i18next';
 import { hapticMedium } from '@/lib/haptics';
 import {
@@ -201,7 +201,7 @@ export function TaskDiscussionTab({
   const { t } = useTranslation('work');
   const comments = detail.comments.filter((item) => !item.archivedAt);
   return (
-    <TaskSection title={t(comments.length === 1 ? 'task.comments_one' : 'task.comments_other', { count: formatNumber(locale, comments.length) })}>
+    <TaskSection title={t('task.comments', { count: comments.length, formattedCount: formatNumber(locale, comments.length) })}>
       {comments.length ? comments.map((item) => {
         const author = assignees?.find((candidate) => candidate.member._id === item.authorProjectMemberId)?.user.displayName
           ?? t('task.projectMember');
@@ -391,7 +391,7 @@ function referenceTypeLabel(type: string, t: (key: string) => string) {
   return t('task.referenceTypeUnknown');
 }
 
-function formatTimestamp(locale: string, value: number) {
+function formatTimestamp(locale: Locale, value: number) {
   const date = formatDate(locale, value, { day: 'numeric', month: 'short' });
   const time = formatTime(locale, value, { hour: 'numeric', minute: '2-digit' });
   return `${date}, ${time}`;

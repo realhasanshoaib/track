@@ -8,12 +8,11 @@ import { platformStorage } from '@/lib/platform-storage';
 import {
   canonicalizeLocale,
   getDirection,
-  i18n,
-  initializeI18n,
   LOCALE_STORAGE_KEY,
   type Direction,
   type Locale,
-} from '@/i18n';
+} from '@/i18n/registry';
+import { i18n, initializeI18n } from '@/i18n/runtime';
 
 type LocaleContextValue = {
   locale: Locale;

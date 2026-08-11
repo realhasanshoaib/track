@@ -131,7 +131,7 @@ export function TaskCard({
       style={[styles.card, compact && styles.cardCompact, {
         backgroundColor: theme.backgroundElement,
         borderColor: theme.hairline,
-      ]}>
+      }]}>
       <View style={styles.cardMeta}>
         <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">{publicKey}</ThemedText>
         <TaskPriorityBadge priority={priority} />

@@ -10,7 +10,7 @@ import { ColoredAvatar } from '@/components/colored-avatar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { formatDuration, formatFileSize, formatNumber, formatTime, useLocale } from '@/i18n';
+import { formatDuration, formatFileSize, formatNumber, formatTime, type Locale, useLocale } from '@/i18n';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from 'react-i18next';
@@ -303,7 +303,7 @@ function VoiceRow({ attachment, url }: { attachment: Doc<'attachments'>; url: st
       <PlatformIcon color={theme.accent} name={playing ? 'stop' : 'microphone-outline'} size={16} />
       <ThemedText contentDirection="ltr" style={{ color: theme.accent }} type="code">
         {attachment.durationMs
-          ? t('voice.duration', { count: Math.max(0, Math.round(attachment.durationMs / 1000)), duration: formatDuration(locale, Math.max(0, Math.round(attachment.durationMs / 1000))) })
+          ? t('voice.duration', { duration: formatDuration(locale, Math.max(0, Math.round(attachment.durationMs / 1000))) })
           : t('composer.voiceNote')}
       </ThemedText>
     </Pressable>
@@ -311,11 +311,11 @@ function VoiceRow({ attachment, url }: { attachment: Doc<'attachments'>; url: st
 }
 
 export function fmtTime(ts: number): string;
-export function fmtTime(locale: string, ts: number): string;
-export function fmtTime(localeOrTimestamp: string | number, timestamp?: number) {
+export function fmtTime(locale: Locale, ts: number): string;
+export function fmtTime(localeOrTimestamp: Locale | number, timestamp?: number) {
   const locale = typeof localeOrTimestamp === 'string' ? localeOrTimestamp : 'en';
   const ts = typeof localeOrTimestamp === 'number' ? localeOrTimestamp : timestamp ?? 0;
-  return formatTime(locale as Parameters<typeof formatTime>[0], ts);
+  return formatTime(locale, ts);
 }
 
 export function resolveMentionIds(body: string, members: ProjectMemberRow[]) {

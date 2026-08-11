@@ -130,7 +130,7 @@
     "channelMember": "عضو القناة",
     "channelMembers": "أعضاء القناة",
     "channelViews": "طرق عرض القناة",
-    "moreChannelMembers": "{{count}} عضو إضافي في القناة",
+    "moreChannelMembers": "عدد الأعضاء الإضافيين في القناة: {{count}}",
     "newChannel": "قناة جديدة",
     "projectChannelsTitle": "قنوات {{project}}",
     "projectSettingsTitle": "إعدادات {{project}}"
@@ -164,7 +164,7 @@
     "linksPlaceholder": "ألصق رابطًا واحدًا في كل سطر، مثل:\nhttps://docs.example.com/spec\nhttps://github.com/org/repo/issues/12",
     "linksTab": "الروابط",
     "pasteText": "لصق النص",
-    "readingContext": "جارٍ قراءة سياقك إلى ذاكرة المشروع…",
+    "readingContext": "جارٍ قراءة سياقك وإضافته إلى ذاكرة المشروع…",
     "removeFile": "إزالة {{name}}",
     "startImport": "بدء الاستيراد",
     "supportedSources": "يعمل جيدًا مع تصديرات محادثاتك وملاحظاتك وروابطك",
@@ -265,7 +265,7 @@
     "resizeDetails": "تغيير حجم تفاصيل مساحة العمل"
   },
   "search": {
-    "resultCount": "{{count}} نتيجة",
+    "resultCount": "عدد النتائج: {{count}}",
     "chat": "البحث في هذه المحادثة",
     "chatPlaceholder": "ابحث في هذه المحادثة...",
     "chatShortcut": "البحث في هذه المحادثة (/)",
@@ -345,7 +345,7 @@
     "work": "العمل"
   },
   "thread": {
-    "replyCount": "{{count}} رد"
+    "replyCount": "عدد الردود: {{count}}"
   },
   "typing": {
     "and": "و",

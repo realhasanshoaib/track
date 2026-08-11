@@ -53,7 +53,7 @@ export default function NotificationSettingsScreen() {
     if (!result) return;
     Alert.alert(
       result.queued > 0 ? t('notifications.testQueued') : t('notifications.testNotQueued'),
-      t(result.attempted === 1 ? 'notifications.testSummary_one' : 'notifications.testSummary_other', {
+      t('notifications.testSummary', {
         queued: formatNumber(locale, result.queued),
         failed: formatNumber(locale, result.failed),
         attempted: formatNumber(locale, result.attempted),
@@ -115,7 +115,7 @@ export default function NotificationSettingsScreen() {
 
         {__DEV__ ? <SheetSection title={t('notifications.developmentDiagnostics')}>
           <SheetRow label={t('notifications.sendTest')} onPress={() => void sendTest()} />
-          <SheetRow label={t('notifications.recentDelivery')} trailing={<ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{diagnostics ? t(diagnostics.sampleSize === 1 ? 'common.intent_one' : 'common.intent_other', { count: formatNumber(locale, diagnostics.sampleSize) }) : t('notifications.deliveryLoading')}</ThemedText>} />
+          <SheetRow label={t('notifications.recentDelivery')} trailing={<ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{diagnostics ? t('common.intent', { count: diagnostics.sampleSize, formattedCount: formatNumber(locale, diagnostics.sampleSize) }) : t('notifications.deliveryLoading')}</ThemedText>} />
         </SheetSection> : null}
 
         <ThemedText style={[styles.footnote, { color: theme.textSecondary }]} type="small">

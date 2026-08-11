@@ -2,6 +2,24 @@
   "version": 1,
   "exemptions": [
     {
+      "path": "src/features/workspace/attachment-ui.tsx",
+      "location": "287",
+      "category": "technical-value",
+      "reason": "PDF is a stable file-format label, not translatable copy."
+    },
+    {
+      "path": "src/features/workspace/attachment-ui.tsx",
+      "location": "289",
+      "category": "technical-value",
+      "reason": "MD is a stable file-format label, not translatable copy."
+    },
+    {
+      "path": "src/features/workspace/components/AssistantAnswer.tsx",
+      "location": "55",
+      "category": "product/proper-name",
+      "reason": "T is the fixed Track assistant avatar glyph, not user-facing copy."
+    },
+    {
       "path": "src/routes/deletion.tsx",
       "location": "58",
       "category": "technical-value",

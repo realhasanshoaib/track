@@ -237,7 +237,7 @@ export function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function getAttachmentKind(input: { contentType?: string | null; filename: string }) {
+export function getAttachmentKind(input: { contentType?: string | null; filename: string }): AttachmentKind {
   const contentType = input.contentType?.toLowerCase() ?? ''
   const extension = input.filename.split('.').pop()?.toLowerCase() ?? ''
   const matchedKind = attachmentKinds.find((kind) => matchesAttachmentKind(kind, contentType, extension))

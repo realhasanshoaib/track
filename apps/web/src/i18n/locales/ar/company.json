@@ -33,7 +33,7 @@
     "newPlaceholder": "قناة جديدة",
     "select": "اختر قناة",
     "unreadThread": "{{count}} سلسلة محادثة غير مقروءة",
-    "unreadThreads": "{{count}} سلاسل محادثة غير مقروءة"
+    "unreadThreads": "عدد سلاسل المحادثة غير المقروءة: {{count}}"
   },
   "controls": {
     "addMember": "إضافة {{name}}",
@@ -82,7 +82,7 @@
     },
     "sharedProject": {
       "chooseActive": "اختر علاقة نشطة بين عدة شركات.",
-      "invites": "دعوة {{companies}}",
+      "invites": "تدعو {{companies}}",
       "name": "اسم المشروع",
       "relationship": "العلاقة",
       "selectRelationship": "اختر علاقة",
@@ -129,7 +129,7 @@
     "label": "رسالة",
     "loading": "جارٍ تحميل الرسائل…",
     "placeholder": "رسالة #{{channel}}",
-    "replies": "{{count}} ردود"
+    "replies": "عدد الردود: {{count}}"
   },
   "migration": {
     "activate": "تفعيل ذري",
@@ -139,7 +139,7 @@
     "confirmDescription": "اختر مديرًا واحدًا على الأقل من شركتك؛ فهذا يؤكد هويات أفرادك وأدوارهم.",
     "confirmMapping": "تأكيد ربط الشركة",
     "confirmProject": "تأكيد {{project}}",
-    "confirmed": "تم تأكيد {{confirmed}} من أصل {{total}} شركات.",
+    "confirmed": "تم تأكيد {{confirmed}} من أصل {{total}} من الشركات.",
     "description": "لن يستنتج Track هوية الشركة أو الأدوار المحايدة. اربط كل شخص صراحةً؛ وستُحفظ عضوية المجموعة الحالية كما هي تمامًا.",
     "heading": "ترقية موجّهة من النظام القديم",
     "legacyProject": "المشروع القديم",
@@ -197,9 +197,9 @@
     "active": "نشطة",
     "archived": "مؤرشفة",
     "closed": "مغلقة",
-    "pending": "معلّقة",
+    "pending": "قيد الانتظار",
     "removed": "مزالة",
-    "suspended": "معلّقة"
+    "suspended": "موقوفة"
   },
   "suspension": {
     "askOwner": "اطلب من مالك الشركة إعادة تفعيلها.",

@@ -355,7 +355,7 @@ export function GroupChatPage({
                             filename: attachment.file.name,
                             kind: attachment.kind,
                           })
-                            ? formatDuration(attachment.durationMs)
+                            ? formatDuration(attachment.durationMs ?? 0)
                             : formatFileSize(attachment.file.size)}
                         </small>
                       </span>

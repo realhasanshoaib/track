@@ -22,7 +22,7 @@ export function ThemedText({ contentDirection = 'ui', style, type = 'default', t
       allowFontScaling={false}
       style={[
         { color: theme[themeColor ?? 'text'] },
-        { writingDirection },
+        { textAlign: 'left', writingDirection },
         type === 'default' && Typography.body,
         type === 'small' && Typography.body,
         type === 'smallBold' && Typography.bodyBold,

@@ -6,14 +6,14 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect, type ComponentProps } from 'react';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { authClient } from '@/lib/auth-client';
 import { convexClient } from '@/lib/convex-client';
 import { TrackUserProvider } from '@/contexts/track-user-context';
-import { LocaleProvider } from '@/contexts/locale-context';
+import { LocaleProvider, useLocale } from '@/contexts/locale-context';
 import { CompanyProvider } from '@/contexts/company-context';
 import { ThemeOverrideProvider, useThemeOverride } from '@/contexts/theme-override-context';
 import { Colors } from '@/constants/theme';
@@ -50,12 +50,22 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <LocaleProvider>
+    <LocaleProvider>
+      <DirectionRoot>
         <ThemeOverrideProvider>
           <AppLayout />
         </ThemeOverrideProvider>
-      </LocaleProvider>
+      </DirectionRoot>
+    </LocaleProvider>
+  );
+}
+
+function DirectionRoot({ children }: { children: ReactNode }) {
+  const { direction } = useLocale();
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1, direction }}>
+      {children}
     </GestureHandlerRootView>
   );
 }
