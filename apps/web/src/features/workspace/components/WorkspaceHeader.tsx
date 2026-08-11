@@ -2,6 +2,7 @@ import type { ChangeEvent, RefObject } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { Columns3, Menu, MessageSquare, MessageSquarePlus, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
@@ -12,6 +13,7 @@ import { AvatarNameTooltip } from '#/features/workspace/avatar-tooltip'
 import { getAvatarTone, getInitials } from '#/features/workspace/identity'
 import type { ActiveChannelMemberItem } from '#/features/workspace/lib/channel-header-members'
 import { useReleaseConfig } from '#/lib/release-config'
+import { formatNumber } from '#/i18n'
 
 type ProjectItem = {
   project: Doc<'projects'>
@@ -53,6 +55,7 @@ export function WorkspaceHeader({
   onSearchToggle,
   view,
 }: WorkspaceHeaderProps) {
+  const { t } = useTranslation('workspace')
   const releaseConfig = useReleaseConfig()
   const channelTasks = useQuery(
     api.tasks.list,
@@ -73,7 +76,7 @@ export function WorkspaceHeader({
   return (
     <header className="track-thread-header">
       <Button
-        aria-label="Open navigation"
+        aria-label={t('sidebar.openNavigation')}
         className="icon-button track-mobile-menu-button"
         onClick={onMobileNavOpen}
         type="button"
@@ -85,10 +88,10 @@ export function WorkspaceHeader({
           {view === 'group' && activeGroup
             ? `#${activeGroup.name}`
               : view === 'settings' && activeProject
-                ? `${activeProject.project.name} Settings`
+                ? t('header.projectSettingsTitle', { project: activeProject.project.name })
                 : activeProject
-                  ? `${activeProject.project.name} Channels`
-                  : 'Select a Project'}
+                  ? t('header.projectChannelsTitle', { project: activeProject.project.name })
+                  : t('sidebar.selectProject')}
         </h1>
         {view === 'group' && activeProject ? (
           <span className="track-header-topic">
@@ -97,21 +100,21 @@ export function WorkspaceHeader({
         ) : null}
       </div>
       {view === 'group' && activeProjectId && releaseConfig.tasks ? (
-        <nav aria-label="Channel views" className="track-header-view-tabs">
+        <nav aria-label={t('header.channelViews')} className="track-header-view-tabs">
           <span aria-current="page" className="active">
-            <MessageSquare size={13} /> Conversation
+            <MessageSquare size={13} /> {t('common.conversation')}
           </span>
           <Link
             params={{ projectId: activeProjectId }}
             search={{ board: activeChannelBoard?.board._id, view: 'board' }}
             to="/workspace/projects/$projectId/tasks"
           >
-            <Columns3 size={13} /> Board <span className="track-header-tab-count">{openChannelTaskCount}</span>
+            <Columns3 size={13} /> {t('common.board')} <span className="track-header-tab-count">{formatNumber(openChannelTaskCount)}</span>
           </Link>
         </nav>
       ) : null}
       <div className="track-header-actions">
-        <div className="track-header-members" aria-label="Channel members">
+        <div className="track-header-members" aria-label={t('header.channelMembers')}>
           {headerMembers.map((item) => {
             const user = item.user
             return (
@@ -119,7 +122,7 @@ export function WorkspaceHeader({
                 avatarUrl={headerMemberAvatarUrlById.get(user._id)}
                 bannerStyle={user.profileBannerStyle}
                 bio={user.profileBio}
-                detail={user.profileDesignation ?? 'Channel member'}
+                detail={user.profileDesignation ?? t('header.channelMember')}
                 key={user._id}
                 name={user.displayName}
                 toneSource={user.email}
@@ -139,19 +142,19 @@ export function WorkspaceHeader({
                 .filter(Boolean)
                 .slice(0, 4)
                 .join(', ')}
-              name={`${extraHeaderMemberCount} more Channel member${extraHeaderMemberCount === 1 ? '' : 's'}`}
+              name={t('header.moreChannelMembers', { count: formatNumber(extraHeaderMemberCount) })}
             >
-              <span className="track-member-more">+{extraHeaderMemberCount}</span>
+              <span className="track-member-more">+{formatNumber(extraHeaderMemberCount)}</span>
             </AvatarNameTooltip>
           ) : null}
         </div>
         {view === 'group' ? (
           <>
             <Button
-              aria-label="Search this chat"
+              aria-label={t('search.chat')}
               className="icon-button"
               onClick={onSearchToggle}
-              title="Search this chat (/)"
+              title={t('search.chatShortcut')}
               type="button"
             >
               <Search size={15} />
@@ -172,7 +175,7 @@ export function WorkspaceHeader({
             onClick={onInvite}
             type="button"
           >
-            Invite
+            {t('common.invite')}
           </Button>
         ) : null}
         {view === 'group' ? null : view === 'project' ? (
@@ -183,7 +186,7 @@ export function WorkspaceHeader({
             type="button"
           >
             <MessageSquarePlus size={14} />
-            New Channel
+            {t('header.newChannel')}
           </Button>
         ) : null}
       </div>

@@ -1,5 +1,7 @@
 import { CornerUpLeft, CornerUpRight, MoreHorizontal, Paperclip, Search, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import '#/i18n'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { Button } from '#/components/ui/button'
@@ -7,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from '#/components/ui/input'
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from '#/components/ui/popover'
 import { Textarea } from '#/components/ui/textarea'
+import { formatNumber } from '#/i18n'
 import type { GroupMessageItem, ReplyToMessagePreview } from '../thread-item-components'
 import { getGroupAvatar } from '../group-avatar'
 import { CreateTaskFromMessage } from '#/features/tasks/ConversationTaskActions'
@@ -36,13 +39,14 @@ export function MessageActions({
   }) => Promise<boolean>
   onReplyMessage: (item: GroupMessageItem) => void
 }) {
+  const { t } = useTranslation('workspace')
   return (
-    <div className="track-message-actions" aria-label="Message actions">
+    <div className="track-message-actions" aria-label={t('message.actions')}>
       <Button
-        aria-label="Reply to message"
+        aria-label={t('message.replyTo')}
         className="icon-button track-message-action-button"
         onClick={() => onReplyMessage(item)}
-        title="Reply"
+        title={t('common.reply')}
         type="button"
       >
         <CornerUpLeft size={14} />
@@ -60,9 +64,9 @@ export function MessageActions({
         <DropdownMenuTrigger
           render={
             <Button
-              aria-label="More message actions"
+              aria-label={t('message.moreActions')}
               className="icon-button track-message-action-button"
-              title="More"
+              title={t('common.more')}
               type="button"
             />
           }
@@ -77,19 +81,19 @@ export function MessageActions({
                 if (text) void navigator.clipboard?.writeText(text)
               }}
             >
-              Copy text
+              {t('message.copyText')}
             </DropdownMenuItem>
             {canDelete ? (
               <DropdownMenuItem
                 disabled={busyAction === `delete-${item.message._id}`}
                 onClick={() => {
-                  if (!window.confirm('Delete this message? This can’t be undone.')) return
+                  if (!window.confirm(t('message.deleteConfirm'))) return
                   void onDeleteMessage(item.message._id)
                 }}
                 variant="destructive"
               >
                 <Trash2 />
-                Delete message
+                {t('message.delete')}
               </DropdownMenuItem>
             ) : null}
           </DropdownMenuGroup>
@@ -118,6 +122,7 @@ function ForwardMessagePopover({
     body: string
   }) => Promise<boolean>
 }) {
+  const { t } = useTranslation('workspace')
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [note, setNote] = useState('')
@@ -157,9 +162,9 @@ function ForwardMessagePopover({
         disabled={!activeGroupId || !canForward}
         render={
           <Button
-            aria-label="Forward message"
+            aria-label={t('message.forward')}
             className="icon-button track-message-action-button"
-            title="Forward"
+            title={t('message.forward')}
             type="button"
           />
         }
@@ -168,13 +173,13 @@ function ForwardMessagePopover({
       </PopoverTrigger>
       <PopoverContent align="end" className="track-forward-popover" side="top" sideOffset={8}>
         <PopoverHeader>
-          <PopoverTitle>Forward to Group</PopoverTitle>
-          <PopoverDescription>Send a copied snapshot with an optional note.</PopoverDescription>
+          <PopoverTitle>{t('message.forwardToChannel')}</PopoverTitle>
+          <PopoverDescription>{t('message.forwardDescription')}</PopoverDescription>
         </PopoverHeader>
         <div className="track-forward-search">
           <Search size={13} />
           <Input
-            aria-label="Search Groups"
+            aria-label={t('message.searchChannels')}
             autoComplete="off"
             onChange={(event) => setQuery(event.currentTarget.value)}
             onKeyDown={(event) => {
@@ -183,20 +188,20 @@ function ForwardMessagePopover({
                 focusTargetAt(0)
               }
             }}
-            placeholder="Search groups..."
+            placeholder={t('message.searchChannelsPlaceholder')}
             value={query}
           />
         </div>
         <ForwardPreview item={item} />
         <Textarea
-          aria-label="Optional forwarding note"
+          aria-label={t('message.forwardingNote')}
           className="track-forward-note"
           onChange={(event) => setNote(event.currentTarget.value)}
-          placeholder="Add a note for this Group..."
+          placeholder={t('message.forwardingNotePlaceholder')}
           value={note}
         />
         <div
-          aria-label="Groups you can forward to"
+          aria-label={t('message.forwardTargets')}
           className="track-forward-targets"
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -226,7 +231,7 @@ function ForwardMessagePopover({
               const { Icon, tone } = getGroupAvatar(group)
               return (
                 <button
-                  aria-label={`Forward to ${group.name}`}
+                  aria-label={t('message.forwardTo', { channel: group.name })}
                   aria-selected={activeTargetIndex === index}
                   className="track-forward-target"
                   disabled={isForwarding}
@@ -245,7 +250,7 @@ function ForwardMessagePopover({
                   </span>
                   <span>
                     <strong>{group.name}</strong>
-                    <small>{group.kind.replaceAll('_', ' ')} Group</small>
+                    <small>{t('dialogs.channelKind', { kind: group.kind.replaceAll('_', ' ') })}</small>
                   </span>
                   <CornerUpRight size={13} />
                 </button>
@@ -253,8 +258,8 @@ function ForwardMessagePopover({
             })
           ) : (
             <div className="track-forward-empty">
-              <strong>No Groups available</strong>
-              <span>You need access to another Group where you can send messages.</span>
+              <strong>{t('message.noForwardChannels')}</strong>
+              <span>{t('message.noForwardChannelsDescription')}</span>
             </div>
           )}
         </div>
@@ -264,25 +269,27 @@ function ForwardMessagePopover({
 }
 
 export function QuotedMessageBlock({ quote }: { quote: ReplyToMessagePreview }) {
+  const { t } = useTranslation('workspace')
   return (
     <div className="track-message-quote">
       <span>{quote.authorName}</span>
-      <p>{quote.body || 'Attachment message'}</p>
+      <p>{quote.body || t('chat.attachmentMessage')}</p>
     </div>
   )
 }
 
 function ForwardPreview({ item }: { item: GroupMessageItem }) {
-  const authorName = item.author?.displayName ?? 'Unknown Member'
+  const { t } = useTranslation('workspace')
+  const authorName = item.author?.displayName ?? t('chat.unknownMember')
   const attachmentCount = item.attachments.length
   return (
     <div className="track-forward-preview">
       <span>{authorName}</span>
-      <p>{item.message.body || 'Attachment message'}</p>
+      <p>{item.message.body || t('chat.attachmentMessage')}</p>
       {attachmentCount > 0 ? (
         <small>
           <Paperclip size={12} />
-            {attachmentCount} attachment{attachmentCount === 1 ? '' : 's'} will be copied
+          {t('message.attachmentsWillBeCopied', { count: formatNumber(attachmentCount) })}
         </small>
       ) : null}
     </div>

@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useAction, useMutation } from 'convex/react'
 import { useId, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
@@ -27,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
 import { Textarea } from '#/components/ui/textarea'
 import { useReleaseConfig } from '#/lib/release-config'
 import { cn } from '#/lib/utils'
+import { formatFileSize, formatNumber } from '#/i18n'
 
 import { IMPORT_SOURCES } from './import-source-logos'
 
@@ -46,12 +48,6 @@ type Status =
   | { kind: 'done'; message: string }
   | { kind: 'error'; message: string }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export function ProjectMemoryImportDialog({
   actorId,
   groupId,
@@ -62,6 +58,7 @@ export function ProjectMemoryImportDialog({
   open,
   projectId,
 }: ProjectMemoryImportDialogProps) {
+  const { t } = useTranslation('workspace')
   const release = useReleaseConfig()
   const generateGroupUploadUrl = useMutation(api.messages.generateUploadUrl)
   const startMemoryImport = useAction((api as any).memoryActions.startImport)
@@ -96,7 +93,7 @@ export function ProjectMemoryImportDialog({
       .map((link) => link.trim())
       .filter(Boolean)
     if (!hasInput) {
-      setStatus({ kind: 'error', message: 'Add text, links, or files before starting an import.' })
+      setStatus({ kind: 'error', message: t('memory.addInput') })
       return
     }
 
@@ -110,7 +107,7 @@ export function ProjectMemoryImportDialog({
         size: number
       }> = []
       for (const [index, file] of files.entries()) {
-        setStatus({ kind: 'working', message: `Uploading ${file.name} (${index + 1}/${files.length})` })
+        setStatus({ kind: 'working', message: t('memory.uploading', { name: file.name, current: formatNumber(index + 1), total: formatNumber(files.length) }) })
         const uploadUrl = await generateGroupUploadUrl({ groupId, userId: actorId })
         const response = await fetch(uploadUrl, {
           body: file,
@@ -126,7 +123,7 @@ export function ProjectMemoryImportDialog({
           storageId,
         })
       }
-      setStatus({ kind: 'working', message: 'Reading your context into project memory…' })
+      setStatus({ kind: 'working', message: t('memory.readingContext') })
       const result = await startMemoryImport({
         actorId,
         groupId,
@@ -138,18 +135,18 @@ export function ProjectMemoryImportDialog({
       }) as { importId: Id<'memoryImports'>; summary?: string }
       let taskMessage = ''
       if (findTasks && release.tasks) {
-        setStatus({ kind: 'working', message: 'Finding grounded task suggestions in this import…' })
+        setStatus({ kind: 'working', message: t('memory.findingTasks') })
         try {
           const extraction = await extractTasks({ importId: result.importId })
-          taskMessage = ` ${extraction.created} task suggestion${extraction.created === 1 ? '' : 's'} added to Inbox.`
+          taskMessage = ` ${t('memory.tasksAdded', { count: formatNumber(extraction.created) })}`
         } catch (error) {
-          taskMessage = ' Memory imported, but task extraction failed; retry from task administration.'
+          taskMessage = ` ${t('memory.taskExtractionFailed')}`
           onError?.(error)
         }
       }
       setStatus({
         kind: 'done',
-        message: `${result.summary ?? 'Imported. Project memory is up to date.'}${taskMessage}`,
+        message: `${result.summary ?? t('memory.importComplete')}${taskMessage}`,
       })
       setText('')
       setLinks('')
@@ -157,7 +154,7 @@ export function ProjectMemoryImportDialog({
     } catch (error) {
       setStatus({
         kind: 'error',
-        message: error instanceof Error ? `Import failed: ${error.message}` : 'Import failed.',
+        message: t('memory.importFailed'),
       })
       onError?.(error)
     } finally {
@@ -174,10 +171,9 @@ export function ProjectMemoryImportDialog({
             <HugeiconsIcon icon={SparklesIcon} size={18} strokeWidth={2} />
           </span>
           <div className="flex flex-col gap-1">
-            <DialogTitle>Import project memory</DialogTitle>
+            <DialogTitle>{t('memory.title')}</DialogTitle>
             <DialogDescription>
-              Bring conversations, notes, and docs into {groupName ?? 'this group'} so Track keeps
-              the context for you.
+              {t('memory.description', { group: groupName ?? t('memory.thisChannel') })}
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -195,7 +191,7 @@ export function ProjectMemoryImportDialog({
             ))}
           </div>
           <span className="text-xs/relaxed text-muted-foreground">
-            Works great with your chat exports, notes & links
+            {t('memory.supportedSources')}
           </span>
         </div>
 
@@ -203,34 +199,34 @@ export function ProjectMemoryImportDialog({
           <TabsList className="w-full">
             <TabsTrigger value="text">
               <HugeiconsIcon icon={StickyNote02Icon} strokeWidth={2} />
-              Text
+              {t('memory.textTab')}
             </TabsTrigger>
             <TabsTrigger value="links">
               <HugeiconsIcon icon={Link04Icon} strokeWidth={2} />
-              Links{linkCount ? ` (${linkCount})` : ''}
+              {t('memory.linksTab')}{linkCount ? ` (${formatNumber(linkCount)})` : ''}
             </TabsTrigger>
             <TabsTrigger value="files">
               <HugeiconsIcon icon={CloudUploadIcon} strokeWidth={2} />
-              Files{files.length ? ` (${files.length})` : ''}
+              {t('memory.filesTab')}{files.length ? ` (${formatNumber(files.length)})` : ''}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="text" className="pt-3">
             <Textarea
-              aria-label="Paste text"
+              aria-label={t('memory.pasteText')}
               className="min-h-32"
               onChange={(event) => setText(event.currentTarget.value)}
-              placeholder="Paste chat exports, meeting notes, decisions, constraints, or background…"
+              placeholder={t('memory.textPlaceholder')}
               value={text}
             />
           </TabsContent>
 
           <TabsContent value="links" className="pt-3">
             <Textarea
-              aria-label="Add links"
+              aria-label={t('memory.addLinks')}
               className="min-h-32"
               onChange={(event) => setLinks(event.currentTarget.value)}
-              placeholder={'Paste one link per line, e.g.\nhttps://docs.example.com/spec\nhttps://github.com/org/repo/issues/12'}
+              placeholder={t('memory.linksPlaceholder')}
               value={links}
             />
           </TabsContent>
@@ -255,9 +251,9 @@ export function ProjectMemoryImportDialog({
             >
               <HugeiconsIcon className="text-muted-foreground" icon={CloudUploadIcon} size={22} strokeWidth={1.8} />
               <span className="text-xs/relaxed font-medium">
-                Drop files here or <span className="text-accent">browse</span>
+                {t('memory.dropFiles')} <span className="text-accent">{t('memory.browse')}</span>
               </span>
-              <span className="text-xs/relaxed text-muted-foreground">Exports, PDFs, docs, or images</span>
+              <span className="text-xs/relaxed text-muted-foreground">{t('memory.fileTypes')}</span>
               <input
                 className="sr-only"
                 id={fileInputId}
@@ -276,9 +272,9 @@ export function ProjectMemoryImportDialog({
                   >
                     <span className="truncate text-xs/relaxed font-medium">{file.name}</span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs/relaxed text-muted-foreground">{formatBytes(file.size)}</span>
+                      <span className="text-xs/relaxed text-muted-foreground">{formatFileSize(file.size)}</span>
                       <button
-                        aria-label={`Remove ${file.name}`}
+                        aria-label={t('memory.removeFile', { name: file.name })}
                         className="text-muted-foreground transition-colors hover:text-destructive"
                         onClick={() => removeFile(index)}
                         type="button"
@@ -293,7 +289,7 @@ export function ProjectMemoryImportDialog({
           </TabsContent>
         </Tabs>
 
-        {release.tasks ? <label className="flex items-center gap-2 text-xs/relaxed"><input checked={findTasks} onChange={(event) => setFindTasks(event.currentTarget.checked)} type="checkbox" /> Find grounded task suggestions after this import</label> : null}
+        {release.tasks ? <label className="flex items-center gap-2 text-xs/relaxed"><input checked={findTasks} onChange={(event) => setFindTasks(event.currentTarget.checked)} type="checkbox" /> {t('memory.findTasks')}</label> : null}
 
         {status ? (
           <p
@@ -329,12 +325,12 @@ export function ProjectMemoryImportDialog({
             {busy ? (
               <>
                 <HugeiconsIcon className="animate-spin" icon={Loading03Icon} strokeWidth={2} />
-                Importing…
+                {t('memory.importing')}
               </>
             ) : (
               <>
                 <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} />
-                Start import
+                {t('memory.startImport')}
               </>
             )}
           </Button>

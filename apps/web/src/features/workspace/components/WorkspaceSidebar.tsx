@@ -1,10 +1,12 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { Building2, ChevronDown, FolderKanban, ListTodo, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, UserRound } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { api } from '../../../../../../convex/_generated/api'
 import ThemeToggle from '#/components/ThemeToggle'
+import { formatNumber, LanguageSwitcher } from '#/i18n'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Button } from '#/components/ui/button'
 import {
@@ -89,6 +91,13 @@ export function WorkspaceSidebar({
   view,
   visibleGroups,
 }: WorkspaceSidebarProps) {
+  const { t } = useTranslation('workspace')
+  const roleLabel = (role: string) => {
+    if (role === 'admin' || role === 'client' || role === 'owner' || role === 'staff') {
+      return t(`dialogs.roles.${role}`)
+    }
+    return role
+  }
   const releaseConfig = useReleaseConfig()
   const threadUnread = useQuery(
     api.channelThreads.listGroupUnread,
@@ -103,7 +112,7 @@ export function WorkspaceSidebar({
     <>
       {mobileNavOpen ? (
         <button
-          aria-label="Close navigation"
+          aria-label={t('sidebar.closeNavigation')}
           className="track-mobile-nav-scrim"
           onClick={() => onMobileNavOpenChange(false)}
           type="button"
@@ -127,11 +136,11 @@ export function WorkspaceSidebar({
           />
           <span className="track-brand-word">Track</span>
           <button
-            aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={navCollapsed ? t('sidebar.expandNavigation') : t('sidebar.collapseNavigation')}
             aria-pressed={navCollapsed}
             className="track-nav-collapse-button"
             onClick={() => onNavCollapsedChange((isCollapsed) => !isCollapsed)}
-            title={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            title={navCollapsed ? t('sidebar.expandNavigation') : t('sidebar.collapseNavigation')}
             type="button"
           >
             {navCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
@@ -139,24 +148,24 @@ export function WorkspaceSidebar({
         </div>
 
         <div className="track-current-project">
-          <span className="track-nav-section-label">Project</span>
+          <span className="track-nav-section-label">{t('common.project')}</span>
           <DropdownMenu>
             <DropdownMenuTrigger
-              aria-label={`Switch project: ${activeProject?.project.name ?? 'Select a project'}`}
+              aria-label={t('sidebar.switchProject', { name: activeProject?.project.name ?? t('sidebar.selectProject') })}
               className="track-current-project-card"
               disabled={!projectItems.length}
-              title={navCollapsed ? activeProject?.project.name ?? 'Select a project' : undefined}
+              title={navCollapsed ? activeProject?.project.name ?? t('sidebar.selectProject') : undefined}
             >
               <FolderKanban className="track-nav-icon" size={14} />
               <span className="track-nav-copy">
-                <span className="track-nav-title">{activeProject?.project.name ?? 'Select a project'}</span>
-                <span className="track-nav-meta">{activeProject?.project.clientLabel ?? 'No label'}</span>
+                <span className="track-nav-title">{activeProject?.project.name ?? t('sidebar.selectProject')}</span>
+                <span className="track-nav-meta">{activeProject?.project.clientLabel ?? t('sidebar.noLabel')}</span>
               </span>
               <ChevronDown className="track-nav-icon track-project-chevron" size={14} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="track-project-switcher-menu" side="right" sideOffset={8}>
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Switch project</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('sidebar.switchProjectLabel')}</DropdownMenuLabel>
                 {projectItems.map((item) => (
                   <DropdownMenuItem
                     className={item.project._id === activeProjectId ? 'track-project-switcher-item active' : 'track-project-switcher-item'}
@@ -167,32 +176,32 @@ export function WorkspaceSidebar({
                     onTouchStart={() => onPreloadProjectRoute(item.project._id)}
                   >
                     <span className="track-menu-project-name">{item.project.name}</span>
-                    <span className="track-menu-project-role">{item.membership.role}</span>
+                    <span className="track-menu-project-role">{roleLabel(item.membership.role)}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="track-project-switcher-create" onClick={onCreateProject}>
                 <Plus size={13} />
-                Create project
+                {t('sidebar.createProject')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        {releaseConfig.companyModel ? <div className="track-nav-secondary company-nav-link"><Link className="track-nav-item" to="/workspace/company"><Building2 className="track-nav-icon" size={14} /><span className="track-nav-copy"><span className="track-nav-title">Companies</span><span className="track-nav-meta">Relationships and shared work</span></span></Link></div> : null}
+        {releaseConfig.companyModel ? <div className="track-nav-secondary company-nav-link"><Link className="track-nav-item" to="/workspace/company"><Building2 className="track-nav-icon" size={14} /><span className="track-nav-copy"><span className="track-nav-title">{t('sidebar.companies')}</span><span className="track-nav-meta">{t('sidebar.companyMeta')}</span></span></Link></div> : null}
 
         {activeProjectId ? (
           <div className="track-nav-secondary">
             <div className="track-sidebar-groups">
               <div className="track-nav-section">
-                <span>Channels</span>
+                <span>{t('common.channels')}</span>
                 <button
-                  aria-label="Create group"
+                  aria-label={t('sidebar.createChannel')}
                   className="track-nav-action"
                   disabled={busyAction === 'create-group'}
                   onClick={onCreateGroup}
-                  title={navCollapsed ? 'Create group' : undefined}
+                  title={navCollapsed ? t('sidebar.createChannel') : undefined}
                   type="button"
                 >
                   <Plus aria-hidden="true" size={13} />
@@ -218,33 +227,33 @@ export function WorkspaceSidebar({
                       <span className="track-nav-copy">
                         <span className="track-nav-title">{group.name}</span>
                         {threadUnreadByGroup.get(group._id) ? <span className="track-nav-meta">
-                          {threadUnreadByGroup.get(group._id)} unread {threadUnreadByGroup.get(group._id) === 1 ? 'thread' : 'threads'}
+                          {t('sidebar.unreadThreads', { count: formatNumber(threadUnreadByGroup.get(group._id) ?? 0) })}
                         </span> : null}
                       </span>
                     </Button>
                   )
                 })}
                 {visibleGroups.length === 0 ? (
-                  <span className="track-nav-empty">No groups yet</span>
+                  <span className="track-nav-empty">{t('sidebar.noChannels')}</span>
                 ) : null}
               </div>
             </div>
 
             <div className="track-sidebar-tools">
               <div className="track-nav-section no-action">
-                <span>Work</span>
+                <span>{t('sidebar.work')}</span>
               </div>
               <Button
                 className="track-nav-item"
                 disabled={!activeProjectId}
                 onClick={onOpenProjectSearch}
-                title={navCollapsed ? 'Search' : undefined}
+                title={navCollapsed ? t('common.search') : undefined}
                 type="button"
               >
                 <Search className="track-nav-icon" size={14} />
                 <span className="track-nav-copy">
-                  <span className="track-nav-title">Search</span>
-                  <span className="track-nav-meta">Messages and files</span>
+                  <span className="track-nav-title">{t('common.search')}</span>
+                  <span className="track-nav-meta">{t('sidebar.searchMeta')}</span>
                 </span>
               </Button>
               {releaseConfig.tasks ? (
@@ -253,13 +262,13 @@ export function WorkspaceSidebar({
                   className="track-nav-item"
                   params={{ projectId: activeProjectId }}
                   search={{ view: 'board' }}
-                  title={navCollapsed ? 'Tasks' : undefined}
+                  title={navCollapsed ? t('common.tasks') : undefined}
                   to="/workspace/projects/$projectId/tasks"
                 >
                   <ListTodo className="track-nav-icon" size={14} />
                   <span className="track-nav-copy">
-                    <span className="track-nav-title">Tasks</span>
-                    <span className="track-nav-meta">Boards, my tasks, inbox</span>
+                    <span className="track-nav-title">{t('common.tasks')}</span>
+                    <span className="track-nav-meta">{t('sidebar.tasksMeta')}</span>
                   </span>
                 </Link>
               ) : null}
@@ -269,13 +278,13 @@ export function WorkspaceSidebar({
                 onClick={onNavigateProjectSettings}
                 onPointerEnter={onPreloadProjectSettingsRoute}
                 onTouchStart={onPreloadProjectSettingsRoute}
-                title={navCollapsed ? 'Settings' : undefined}
+                title={navCollapsed ? t('common.settings') : undefined}
                 type="button"
               >
                 <Settings2 className="track-nav-icon" size={14} />
                 <span className="track-nav-copy">
-                  <span className="track-nav-title">Settings</span>
-                  <span className="track-nav-meta">Members, notifications</span>
+                  <span className="track-nav-title">{t('common.settings')}</span>
+                  <span className="track-nav-meta">{t('sidebar.settingsMeta')}</span>
                 </span>
               </Button>
             </div>
@@ -287,10 +296,10 @@ export function WorkspaceSidebar({
             <>
               <Button
                 aria-expanded={logoutConfirmOpen}
-                aria-label={`Account menu for ${currentUserName}`}
+                aria-label={t('sidebar.accountMenuFor', { name: currentUserName })}
                 className="track-nav-account-button"
                 onClick={() => onLogoutConfirmOpenChange((isOpen) => !isOpen)}
-                title={`${currentUserName} account`}
+                title={t('sidebar.accountTitle', { name: currentUserName })}
                 type="button"
               >
                 <Avatar className={`track-avatar ${getAvatarTone(currentUserEmail)}`}>
@@ -299,27 +308,28 @@ export function WorkspaceSidebar({
                 </Avatar>
               </Button>
               {logoutConfirmOpen ? (
-                <div className="track-account-menu" role="dialog" aria-label="Account menu">
+                <div className="track-account-menu" role="dialog" aria-label={t('sidebar.accountMenu')}>
                   <div className="track-account-menu-user">
                     <strong>{currentUserName}</strong>
                     <span>{currentUserDesignation}</span>
                   </div>
                   <div className="track-account-menu-actions">
                     <Button
-                      aria-label="Profile settings"
+                      aria-label={t('sidebar.profileSettings')}
                       className="track-nav-footer-button"
                       onClick={() => { window.location.href = '/profile' }}
-                      title="Profile settings"
+                      title={t('sidebar.profileSettings')}
                       type="button"
                     >
                       <UserRound size={14} />
                     </Button>
                     <ThemeToggle />
+                    <LanguageSwitcher />
                     <Button
-                      aria-label="Log out"
+                      aria-label={t('sidebar.logOut')}
                       className="track-nav-footer-button"
                       onClick={onSignOut}
-                      title="Log out"
+                      title={t('sidebar.logOut')}
                       type="button"
                     >
                       <LogOut size={14} />
@@ -350,42 +360,43 @@ export function WorkspaceSidebar({
           {!navCollapsed ? (
             <div className="track-nav-footer-actions">
               <Button
-                aria-label="Profile settings"
+                aria-label={t('sidebar.profileSettings')}
                 className="track-nav-footer-button"
                 onClick={() => { window.location.href = '/profile' }}
-                title="Profile settings"
+                title={t('sidebar.profileSettings')}
                 type="button"
               >
                 <UserRound size={14} />
               </Button>
               <ThemeToggle />
+              <LanguageSwitcher />
               <Button
                 aria-expanded={logoutConfirmOpen}
-                aria-label="Log out"
+                aria-label={t('sidebar.logOut')}
                 className="track-nav-footer-button"
                 onClick={() => onLogoutConfirmOpenChange((isOpen) => !isOpen)}
-                title="Log out"
+                title={t('sidebar.logOut')}
                 type="button"
               >
                 <LogOut size={14} />
               </Button>
               {logoutConfirmOpen ? (
-                <div className="track-logout-confirm" role="dialog" aria-label="Confirm logout">
-                  <p>Log out of Track?</p>
+                <div className="track-logout-confirm" role="dialog" aria-label={t('sidebar.confirmLogout')}>
+                  <p>{t('sidebar.logoutQuestion')}</p>
                   <div className="track-logout-confirm-actions">
                     <Button
                       className="track-button subtle"
                       onClick={() => onLogoutConfirmOpenChange(false)}
                       type="button"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button
                       className="track-button track-button-primary"
                       onClick={onSignOut}
                       type="button"
                     >
-                      Log out
+                      {t('sidebar.logOut')}
                     </Button>
                   </div>
                 </div>

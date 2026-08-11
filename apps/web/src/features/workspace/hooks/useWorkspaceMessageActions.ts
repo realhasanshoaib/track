@@ -1,4 +1,5 @@
 import { useAction, useMutation } from 'convex/react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
@@ -41,6 +42,7 @@ export function useWorkspaceMessageActions({
   replyToMessage: GroupMessageItem | null
   trackUserId: Id<'users'> | null
 }) {
+  const { t } = useTranslation('workspace')
   const sendMessageMutation = useMutation(api.messages.send)
   const forwardMessageMutation = useMutation(api.messages.forwardMessage)
   const deleteMessageMutation = useMutation(api.messages.remove)
@@ -83,6 +85,9 @@ export function useWorkspaceMessageActions({
         notificationPreview: getAttachmentNotificationPreview({
           body,
           pendingAttachments,
+        }, {
+          attachment: t('notifications.sentAttachment'),
+          voiceNote: t('notifications.sentVoiceNote'),
         }),
       })
       for (const attachment of uploadedAttachments) {

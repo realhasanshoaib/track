@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import { FolderKanban, ListTodo, LoaderCircle, MessagesSquare, Paperclip, Search, X } from 'lucide-react'
@@ -7,6 +8,7 @@ import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { AttachmentTypeIcon } from '#/features/workspace/attachment-ui'
 import { useReleaseConfig } from '#/lib/release-config'
+import { formatNumber } from '#/i18n'
 
 export type ProjectSearchFilter = 'all' | 'messages' | 'files' | 'groups' | 'tasks' | 'threads'
 
@@ -52,6 +54,7 @@ export function ProjectSearchDialog({
   sections: Array<{ key: string; label: string; results: ProjectSearchResult[] }>
   total: number
 }) {
+  const { t } = useTranslation('workspace')
   const releaseConfig = useReleaseConfig()
   const resultButtonsRef = useRef<Array<HTMLButtonElement | null>>([])
   const flatResults = useMemo(
@@ -110,12 +113,12 @@ export function ProjectSearchDialog({
   if (!open) return null
 
   const filters: Array<{ Icon: typeof Search; label: string; value: ProjectSearchFilter }> = [
-    { Icon: Search, label: 'All', value: 'all' },
-    { Icon: MessagesSquare, label: 'Messages', value: 'messages' },
-    { Icon: Paperclip, label: 'Files', value: 'files' },
-    { Icon: FolderKanban, label: 'Groups', value: 'groups' },
-    ...(releaseConfig.tasks ? [{ Icon: ListTodo, label: 'Tasks', value: 'tasks' as const }] : []),
-    ...(releaseConfig.threads ? [{ Icon: MessagesSquare, label: 'Threads', value: 'threads' as const }] : []),
+    { Icon: Search, label: t('search.filters.all'), value: 'all' },
+    { Icon: MessagesSquare, label: t('search.filters.messages'), value: 'messages' },
+    { Icon: Paperclip, label: t('search.filters.files'), value: 'files' },
+    { Icon: FolderKanban, label: t('search.filters.channels'), value: 'groups' },
+    ...(releaseConfig.tasks ? [{ Icon: ListTodo, label: t('common.tasks'), value: 'tasks' as const }] : []),
+    ...(releaseConfig.threads ? [{ Icon: MessagesSquare, label: t('common.threads'), value: 'threads' as const }] : []),
   ]
   const hasQuery = query.trim().length >= 2
   let resultIndex = -1
@@ -123,7 +126,7 @@ export function ProjectSearchDialog({
   return (
     <div className="track-project-search-overlay" role="presentation" onMouseDown={onClose}>
       <section
-        aria-label="Project search"
+        aria-label={t('search.projectSearch')}
         aria-modal="true"
         className="track-project-search"
         onMouseDown={(event) => event.stopPropagation()}
@@ -131,10 +134,10 @@ export function ProjectSearchDialog({
       >
         <header className="track-project-search-header">
           <div>
-            <span className="mono-label">Current project search</span>
+            <span className="mono-label">{t('search.currentProject')}</span>
             <h2>{projectName}</h2>
           </div>
-          <Button aria-label="Close project search" className="icon-button" onClick={onClose} type="button">
+          <Button aria-label={t('search.closeProjectSearch')} className="icon-button" onClick={onClose} type="button">
             <X size={15} />
           </Button>
         </header>
@@ -145,17 +148,17 @@ export function ProjectSearchDialog({
             className="track-project-search-input"
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             placeholder={releaseConfig.tasks && releaseConfig.threads
-              ? 'Search messages, files, threads, groups, and tasks...'
+              ? t('search.placeholderAll')
               : releaseConfig.tasks
-                ? 'Search messages, files, groups, and tasks...'
+                ? t('search.placeholderTasks')
                 : releaseConfig.threads
-                  ? 'Search messages, files, groups, and threads...'
-                  : 'Search messages, files, and groups...'}
+                  ? t('search.placeholderThreads')
+                  : t('search.placeholderBasic')}
             value={query}
           />
-          <span>{total} results</span>
+          <span>{t('search.resultCount', { count: formatNumber(total) })}</span>
         </div>
-        <div className="track-project-search-filters" role="list" aria-label="Search filters">
+        <div className="track-project-search-filters" role="list" aria-label={t('search.filtersLabel')}>
           {filters.map((item) => (
             <button
               className={filter === item.value ? 'active' : ''}
@@ -173,24 +176,24 @@ export function ProjectSearchDialog({
           {!hasQuery ? (
             <div className="track-project-search-state">
               <Search size={18} />
-              <p>Type at least 2 characters to search this project.</p>
-              <small>Use ⌘K anywhere, or / inside a group when the composer is not focused.</small>
+              <p>{t('search.typeMore')}</p>
+              <small>{t('search.shortcuts')}</small>
             </div>
           ) : loading ? (
             <div className="track-project-search-state">
               <LoaderCircle className="spin" size={18} />
-              <p>Searching project...</p>
+              <p>{t('search.searchingProject')}</p>
             </div>
           ) : total === 0 ? (
             <div className="track-project-search-state">
               <Search size={18} />
-              <p>No results for "{query.trim()}".</p>
+              <p>{t('search.noResults', { query: query.trim() })}</p>
             </div>
           ) : (
             sections.map((section) =>
               section.results.length > 0 ? (
                 <div className="track-project-search-section" key={section.key}>
-                  <p className="track-project-search-section-label">{section.label}</p>
+                  <p className="track-project-search-section-label">{t(`search.filters.${section.key}`)}</p>
                   {section.results.map((result) => {
                     resultIndex += 1
                     const currentResultIndex = resultIndex

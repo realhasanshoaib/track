@@ -46,6 +46,12 @@ export type WorkspaceMentionSection = {
 export function buildWorkspaceMentionOptions(
   activeMembers: Array<WorkspaceChannelMember | WorkspaceProjectMember>,
   visibleGroups: Array<Doc<'groups'>>,
+  labels?: {
+    assistant: string
+    channelMember: string
+    group: string
+    projectMemory: string
+  },
 ): Array<WorkspaceMentionOption> {
   const members = activeMembers
     .filter((item) => item.user !== null)
@@ -57,7 +63,7 @@ export function buildWorkspaceMentionOptions(
         label: user.displayName,
         sublabel: 'role' in item.membership
           ? item.membership.role
-          : 'Channel member',
+          : labels?.channelMember ?? 'Channel member',
         handle: getMentionHandle(user.displayName) || getMentionHandle(user.email),
         tone: getAvatarTone(user.email),
       }
@@ -68,7 +74,7 @@ export function buildWorkspaceMentionOptions(
       id: group._id,
       kind: 'group' as const,
       label: group.name,
-      sublabel: 'group',
+      sublabel: labels?.group ?? 'group',
       handle: getMentionHandle(group.name),
       tone: getGroupAvatar(group).tone,
     }))
@@ -78,8 +84,8 @@ export function buildWorkspaceMentionOptions(
     {
       id: 'track',
       kind: 'assistant',
-      label: 'Track Assistant',
-      sublabel: 'project memory',
+      label: labels?.assistant ?? 'Track Assistant',
+      sublabel: labels?.projectMemory ?? 'project memory',
       handle: 'track',
       tone: 'bot',
     },
@@ -132,18 +138,23 @@ export function filterMentionOptions(
 
 export function buildMentionSections(
   mentionOptions: Array<WorkspaceMentionOption>,
+  labels: { groups: string; people: string; assistant: string } = {
+    assistant: 'Assistant',
+    groups: 'Groups',
+    people: 'People',
+  },
 ): Array<WorkspaceMentionSection> {
   return [
     {
-      label: 'Groups',
+      label: labels.groups,
       options: mentionOptions.filter((option) => option.kind === 'group'),
     },
     {
-      label: 'People',
+      label: labels.people,
       options: mentionOptions.filter((option) => option.kind === 'member'),
     },
     {
-      label: 'Assistant',
+      label: labels.assistant,
       options: mentionOptions.filter((option) => option.kind === 'assistant'),
     },
   ].filter((section) => section.options.length > 0)
@@ -153,24 +164,31 @@ export function buildComposerPlaceholder({
   activeGroupName,
   activeChannelMembers,
   currentUserId,
+  labels,
 }: {
   activeGroupName: string | undefined
   activeChannelMembers: Array<WorkspaceChannelMember>
   currentUserId: Id<'users'> | null
+  labels?: {
+    formatCount?: (count: number) => string
+    thisChannel: string
+    message: (destination: string) => string
+    writeTo: (people: string, destination: string) => string
+  }
 }) {
   const composerPeople = activeChannelMembers
     .filter((item) => item.user._id !== currentUserId)
     .map((item) => item.user.displayName.trim().split(/\s+/)[0])
     .filter(Boolean)
-  const destination = activeGroupName ?? 'this Channel'
-  if (composerPeople.length === 0) return `Message ${destination} or ask @track...`
+  const destination = activeGroupName ?? labels?.thisChannel ?? 'this Channel'
+  if (composerPeople.length === 0) return labels?.message(destination) ?? `Message ${destination} or ask @track...`
 
   const visiblePeople = composerPeople.slice(0, 2)
   let participantCopy = visiblePeople[0]
   if (composerPeople.length === 2) participantCopy = visiblePeople.join(' and ')
   if (composerPeople.length > 2) {
     const remainingCount = composerPeople.length - visiblePeople.length
-    participantCopy = `${visiblePeople.join(', ')}, and ${remainingCount} other${remainingCount === 1 ? '' : 's'}`
+    participantCopy = `${visiblePeople.join(', ')}, and ${labels?.formatCount?.(remainingCount) ?? remainingCount} other${remainingCount === 1 ? '' : 's'}`
   }
-  return `Write to ${participantCopy} in ${destination} or ask @track...`
+  return labels?.writeTo(participantCopy, destination) ?? `Write to ${participantCopy} in ${destination} or ask @track...`
 }

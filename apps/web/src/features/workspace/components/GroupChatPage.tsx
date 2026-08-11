@@ -2,12 +2,13 @@ import { Fragment } from 'react'
 import type { ComponentProps } from 'react'
 import type { ClipboardEvent, RefObject } from 'react'
 import { AtSign, Bot, ChevronDown, CornerUpLeft, Import, MessagesSquare, Paperclip, Smile, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { Avatar, AvatarFallback } from '#/components/ui/avatar'
 import { Button } from '#/components/ui/button'
 import { Textarea } from '#/components/ui/textarea'
-import { AttachmentTypeIcon, formatFileSize } from '#/features/workspace/attachment-ui'
+import { AttachmentTypeIcon } from '#/features/workspace/attachment-ui'
 import type { createPendingAttachment } from '#/features/workspace/attachments/pending-attachments'
 import { getInitials } from '#/features/workspace/identity'
 import { formatThreadDayLabel, getThreadDayKey } from '#/features/workspace/lib/thread-date'
@@ -18,7 +19,6 @@ import { TypingIndicatorLine } from '#/features/workspace/typing-indicators'
 import {
   VoiceNoteReview,
   VoiceRecorder,
-  formatVoiceDuration,
   isVoiceNoteAttachment,
 } from '#/features/workspace/voice-notes'
 import type { ChatSearchMatch } from '#/features/workspace/search/chat-search'
@@ -26,6 +26,7 @@ import type { WorkspaceThreadItem } from '#/features/workspace/search/chat-threa
 import { ChannelTaskPanel } from '#/features/tasks/ConversationTaskActions'
 import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
 import { useReleaseConfig } from '#/lib/release-config'
+import { formatDate, formatDuration, formatFileSize } from '#/i18n'
 
 type PendingAttachment = ReturnType<typeof createPendingAttachment>
 type ActiveTypingIndicator = ComponentProps<typeof TypingIndicatorLine>['indicators'][number]
@@ -176,6 +177,7 @@ export function GroupChatPage({
   visibleMessages,
   voiceRecordingActive,
 }: GroupChatPageProps) {
+  const { t } = useTranslation('workspace')
   const releaseConfig = useReleaseConfig()
   return (
     <>
@@ -203,18 +205,17 @@ export function GroupChatPage({
               <span className="track-empty-conversation-icon">
                 <MessagesSquare size={22} />
               </span>
-              <h2>{activeGroup.name} is ready</h2>
+              <h2>{t('chat.groupReady', { group: activeGroup.name })}</h2>
               <p>
-                Start this group with a decision, question, scope note, or mention @track to turn the first
-                useful detail into project memory.
+                {t('chat.groupReadyDescription')}
               </p>
             </div>
           ) : null}
 
           {chatSearchTerm && chatSearchMatches.length === 0 ? (
             <div className="track-empty">
-              <p className="mono-label m-0">No matches</p>
-              <p>No chat items match "{chatSearchTerm}".</p>
+              <p className="mono-label m-0">{t('search.noMatches')}</p>
+              <p>{t('search.noChatMatches', { query: chatSearchTerm })}</p>
             </div>
           ) : null}
 
@@ -228,7 +229,11 @@ export function GroupChatPage({
               return (
                 <Fragment key={threadItem.key}>
                   {shouldShowDaySeparator ? (
-                    <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at)} />
+                    <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at, {
+                      formatDate,
+                      today: t('dates.today'),
+                      yesterday: t('dates.yesterday'),
+                    })} />
                   ) : null}
                   <MessageRow
                     activeGroupId={activeGroupId}
@@ -259,7 +264,11 @@ export function GroupChatPage({
               return (
                 <Fragment key={threadItem.key}>
                   {shouldShowDaySeparator ? (
-                    <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at)} />
+                    <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at, {
+                      formatDate,
+                      today: t('dates.today'),
+                      yesterday: t('dates.yesterday'),
+                    })} />
                   ) : null}
                   <AssistantAnswer
                     mentionGroups={mentionGroups}
@@ -278,7 +287,7 @@ export function GroupChatPage({
         </div>
         {showJumpToLatest ? (
           <Button
-            aria-label="Jump to latest message"
+            aria-label={t('chat.jumpToLatest')}
             className="track-jump-latest"
             onClick={scrollThreadToLatest}
             type="button"
@@ -292,14 +301,14 @@ export function GroupChatPage({
         <TypingIndicatorLine indicators={activeTypingIndicators} />
         <div className={voiceRecordingActive ? 'track-composer recording' : 'track-composer'}>
           {!voiceRecordingActive && replyToMessage ? (
-            <div className="track-composer-quote" aria-label="Replying to message">
+            <div className="track-composer-quote" aria-label={t('chat.replyingToMessage')}>
               <CornerUpLeft size={14} />
               <span>
-                <strong>Replying to {replyToMessage.author?.displayName ?? 'Unknown Member'}</strong>
-                <small>{replyToMessage.message.body || 'Attachment message'}</small>
+                <strong>{t('chat.replyingTo', { name: replyToMessage.author?.displayName ?? t('chat.unknownMember') })}</strong>
+                <small>{replyToMessage.message.body || t('chat.attachmentMessage')}</small>
               </span>
               <button
-                aria-label="Cancel reply"
+                aria-label={t('chat.cancelReply')}
                 onClick={() => onReplyToMessageChange(null)}
                 type="button"
               >
@@ -308,7 +317,7 @@ export function GroupChatPage({
             </div>
           ) : null}
           {!voiceRecordingActive && pendingAttachments.length > 0 ? (
-            <div className="track-composer-attachments" aria-label="Pending attachments">
+            <div className="track-composer-attachments" aria-label={t('chat.pendingAttachments')}>
               {pendingAttachments.map((attachment) => (
                 <div
                   className={
@@ -346,12 +355,12 @@ export function GroupChatPage({
                             filename: attachment.file.name,
                             kind: attachment.kind,
                           })
-                            ? formatVoiceDuration(attachment.durationMs)
+                            ? formatDuration(attachment.durationMs)
                             : formatFileSize(attachment.file.size)}
                         </small>
                       </span>
                       <button
-                        aria-label={`Remove ${attachment.file.name}`}
+                        aria-label={t('chat.removeAttachment', { name: attachment.file.name })}
                         className="track-composer-attachment-remove"
                         onClick={() => removePendingAttachment(attachment.id)}
                         type="button"
@@ -366,7 +375,7 @@ export function GroupChatPage({
           ) : null}
           {!voiceRecordingActive ? (
             <Textarea
-              aria-label={`Message ${activeGroup?.name ?? 'Group'}`}
+              aria-label={t('chat.messageChannel', { channel: activeGroup?.name ?? t('common.channel') })}
               disabled={!activeGroupId || busyAction === 'send-message'}
               onBlur={onComposerBlur}
               onChange={(event) => {
@@ -418,7 +427,7 @@ export function GroupChatPage({
             />
           ) : null}
           {!voiceRecordingActive && showMentionMenu ? (
-            <div className="track-mention-menu" role="listbox" aria-label="Mention someone">
+            <div className="track-mention-menu" role="listbox" aria-label={t('chat.mentionSomeone')}>
               {mentionSections.map((section) => (
                 <div className="track-mention-section" key={section.label}>
                   <p className="track-mention-section-label">{section.label}</p>
@@ -462,14 +471,14 @@ export function GroupChatPage({
             </div>
           ) : null}
           {!voiceRecordingActive && emojiPickerOpen ? (
-            <div className="track-emoji-picker" role="dialog" aria-label="Emoji picker">
+            <div className="track-emoji-picker" role="dialog" aria-label={t('chat.emojiPicker')}>
               {emojiGroups.map((group) => (
                 <div className="track-emoji-group" key={group.label}>
                   <p className="mono-label m-0">{group.label}</p>
                   <div className="track-emoji-grid">
                     {group.emojis.map((emoji) => (
                       <button
-                        aria-label={`Insert ${emoji}`}
+                        aria-label={t('chat.insertEmoji', { emoji })}
                         className="track-emoji-option"
                         key={`${group.label}-${emoji}`}
                         onMouseDown={(event) => {
@@ -493,7 +502,7 @@ export function GroupChatPage({
                 className="icon-button"
                 disabled={!activeGroupId || busyAction === 'memory-import'}
                 onClick={onOpenMemoryImport}
-                title="Import project memory"
+                title={t('chat.importMemory')}
                 type="button"
               >
                 <Import size={15} />
@@ -504,7 +513,7 @@ export function GroupChatPage({
                 className="icon-button"
                 disabled={!activeGroupId || busyAction === 'send-message'}
                 onClick={() => fileInputRef.current?.click()}
-                title="Add attachment"
+                title={t('chat.addAttachment')}
                 type="button"
               >
                 <Paperclip size={15} />
@@ -532,7 +541,7 @@ export function GroupChatPage({
                       composerRef.current?.setSelectionRange(nextCursor, nextCursor)
                     })
                   }}
-                  title="Mention"
+                  title={t('chat.mention')}
                   type="button"
                 >
                   <AtSign size={15} />
@@ -544,7 +553,7 @@ export function GroupChatPage({
                     setComposerCursorFromRef()
                     onEmojiPickerOpenChange(!emojiPickerOpen)
                   }}
-                  title="Emoji"
+                  title={t('chat.emoji')}
                   type="button"
                 >
                   <Smile size={15} />
@@ -560,7 +569,7 @@ export function GroupChatPage({
                   onClick={onSendMessage}
                   type="button"
                 >
-                  Send
+                  {t('common.send')}
                   <span className="track-send-key">↵</span>
                 </Button>
               </>

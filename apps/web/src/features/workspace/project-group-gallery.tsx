@@ -1,4 +1,6 @@
 import type { Doc, Id } from '../../../../../convex/_generated/dataModel'
+import { useTranslation } from 'react-i18next'
+import '#/i18n'
 import { getGroupAvatar } from './group-avatar'
 
 type ProjectGroupGalleryProps = {
@@ -7,6 +9,7 @@ type ProjectGroupGalleryProps = {
 }
 
 export function ProjectGroupGallery({ groups, onOpenGroup }: ProjectGroupGalleryProps) {
+  const { t } = useTranslation('workspace')
   return (
     <div className="track-group-gallery-scroll">
       <div className="track-group-gallery">
@@ -24,9 +27,9 @@ export function ProjectGroupGallery({ groups, onOpenGroup }: ProjectGroupGallery
               </span>
               <span className="track-group-card-copy">
                 <strong>{group.name}</strong>
-                <span>{group.kind} conversation</span>
+                <span>{t('gallery.conversationKind', { kind: group.kind })}</span>
               </span>
-              <span className="track-group-card-action">Open chat</span>
+              <span className="track-group-card-action">{t('gallery.openChat')}</span>
             </button>
           )
         })}

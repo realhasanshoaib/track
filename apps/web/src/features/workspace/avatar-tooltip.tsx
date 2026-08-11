@@ -4,6 +4,7 @@ import type { ComponentProps, CSSProperties, ReactNode } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '#/components/ui/tooltip'
 import { getAvatarTone, getAvatarToneColor, getInitials } from './identity'
+import { formatTime } from '#/i18n'
 import {
   ProfileBannerBackground,
   type ProfileBannerStyle,
@@ -189,12 +190,10 @@ function loadAvatarPalette(avatarUrl: string) {
 
 function getLocalTimeLabel(timezone: string) {
   try {
-    return new Intl.DateTimeFormat([], {
-      hour: 'numeric',
-      minute: '2-digit',
+    return formatTime(new Date(), {
       timeZone: timezone,
       timeZoneName: 'short',
-    }).format(new Date())
+    })
   } catch {
     return timezone
   }

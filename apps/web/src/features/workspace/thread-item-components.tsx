@@ -1,9 +1,10 @@
 import { CornerUpRight, ExternalLink, Paperclip, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Doc, Id } from '../../../../../convex/_generated/dataModel'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Card } from '#/components/ui/card'
-import { AttachmentTypeIcon, formatFileSize } from './attachment-ui'
+import { AttachmentTypeIcon } from './attachment-ui'
 import { AvatarNameTooltip } from './avatar-tooltip'
 import { getGroupAvatar } from './group-avatar'
 import { getAvatarTone, getInitials } from './identity'
@@ -11,6 +12,7 @@ import { MarkdownText } from './markdown'
 import { VoiceNotePlayer, isAudioAttachment } from './voice-notes'
 import { MessageInlineTasks } from '#/features/tasks/ConversationTaskActions'
 import { threadHref } from '#/features/threads/thread-navigation'
+import { formatFileSize, formatNumber, formatTime } from '#/i18n'
 
 export type ReplyToMessagePreview = {
   messageId: Id<'messages'>
@@ -66,12 +68,15 @@ export type MessageCitationPreview = {
   }>
 }
 
-export function getForwardedSourceLabel(forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>) {
-  return forwarded.sourceGroupName ? `Forwarded from ${forwarded.sourceGroupName}` : 'Forwarded message'
+export function getForwardedSourceLabel(
+  forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>,
+  labels: { from: string; message: string } = { from: 'Forwarded from', message: 'Forwarded message' },
+) {
+  return forwarded.sourceGroupName ? `${labels.from} ${forwarded.sourceGroupName}` : labels.message
 }
 
-export function formatCopiedAttachmentCount(count: number) {
-  return `${count} attachment${count === 1 ? '' : 's'} copied`
+export function formatCopiedAttachmentCount(count: number, labels: { one: string; many: string; copied: string; formatCount?: (count: number) => string } = { one: 'attachment', many: 'attachments', copied: 'copied' }) {
+  return `${labels.formatCount?.(count) ?? count} ${count === 1 ? labels.one : labels.many} ${labels.copied}`
 }
 
 export function MessageRow({
@@ -111,7 +116,8 @@ export function MessageRow({
   onReplyMessage: (item: GroupMessageItem) => void
   searchQuery?: string
 }) {
-  const authorName = item.author?.displayName ?? 'Unknown Member'
+  const { t } = useTranslation('workspace')
+  const authorName = item.author?.displayName ?? t('chat.unknownMember')
   const canForward = groups.some((group) => group._id !== item.message.groupId)
   return (
     <article
@@ -151,7 +157,7 @@ export function MessageRow({
           {/*<Badge className="track-role-chip" variant="outline">
             {visibleRole}
           </Badge>*/}
-          <time>{new Date(item.message.createdAt).toLocaleTimeString()}</time>
+          <time>{formatTime(item.message.createdAt)}</time>
         </div>
         {item.replyTo ? <QuotedMessageBlock quote={item.replyTo} /> : null}
         {item.forwardedFrom ? (
@@ -184,7 +190,7 @@ export function MessageRow({
             )}
           >
             <strong>{item.channelThread.name}</strong>
-            <span>{item.channelThread.replyCount} {item.channelThread.replyCount === 1 ? 'reply' : 'replies'}</span>
+            <span>{t('thread.replyCount', { count: formatNumber(item.channelThread.replyCount) })}</span>
           </a>
         ) : null}
         {item.attachments.length > 0 ? (
@@ -274,8 +280,12 @@ function ForwardedMessageBlock({
   forwarded: ForwardedMessagePreview
   onOpenSource: (groupId: Id<'groups'>, messageId: Id<'messages'>) => void
 }) {
+  const { t } = useTranslation('workspace')
   const attachmentCount = forwarded.attachmentSnapshots.length
-  const sourceLabel = getForwardedSourceLabel(forwarded)
+  const sourceLabel = getForwardedSourceLabel(forwarded, {
+    from: t('message.forwardedFrom'),
+    message: t('message.forwardedMessage'),
+  })
   return (
     <div className="track-forwarded-block">
       <div className="track-forwarded-label">
@@ -283,12 +293,17 @@ function ForwardedMessageBlock({
         <span>{sourceLabel}</span>
       </div>
       <div className="track-forwarded-card">
-        <span>{forwarded.originalAuthorName} · {new Date(forwarded.originalCreatedAt).toLocaleTimeString()}</span>
-        <p>{forwarded.originalBody || 'Attachment message'}</p>
+        <span>{forwarded.originalAuthorName} · {formatTime(forwarded.originalCreatedAt)}</span>
+        <p>{forwarded.originalBody || t('chat.attachmentMessage')}</p>
         {attachmentCount > 0 ? (
           <small>
             <Paperclip size={12} />
-            {formatCopiedAttachmentCount(attachmentCount)}
+            {formatCopiedAttachmentCount(attachmentCount, {
+              copied: t('message.copied'),
+              formatCount: formatNumber,
+              many: t('message.attachments'),
+              one: t('message.attachment'),
+            })}
           </small>
         ) : null}
       </div>
@@ -299,12 +314,12 @@ function ForwardedMessageBlock({
           type="button"
         >
           <ExternalLink size={12} />
-          View source
+          {t('message.viewSource')}
         </button>
       ) : (
         <span className="track-forwarded-source muted">
           <X size={12} />
-          Source restricted
+          {t('message.sourceRestricted')}
         </span>
       )}
     </div>

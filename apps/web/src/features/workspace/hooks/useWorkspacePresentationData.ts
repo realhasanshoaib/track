@@ -1,5 +1,6 @@
 import { useQuery } from 'convex/react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
@@ -8,6 +9,7 @@ import { buildChatSearchMatches } from '#/features/workspace/search/chat-search'
 import { buildMessageCitations, buildWorkspaceThreadItems } from '#/features/workspace/search/chat-thread-data'
 import { buildProjectSearchSections, getProjectSearchTotal } from '#/features/workspace/search/project-search-sections'
 import type { useWorkspaceData } from '#/features/workspace/hooks/useWorkspaceData'
+import { formatNumber } from '#/i18n'
 
 type WorkspaceData = ReturnType<typeof useWorkspaceData>
 
@@ -34,6 +36,7 @@ export function useWorkspacePresentationData({
   groupMessages,
   projectSearchResults,
 }: PresentationDataOptions) {
+  const { t } = useTranslation('workspace')
   const visibleMessages = useMemo(() => [...groupMessages].reverse(), [groupMessages])
   const threadItems = useMemo(
     () => buildWorkspaceThreadItems({ assistantStreams: groupAssistantStreams, messages: visibleMessages }),
@@ -92,6 +95,12 @@ export function useWorkspacePresentationData({
       activeGroupName: activeGroup?.name,
       activeChannelMembers,
       currentUserId,
+      labels: {
+        formatCount: formatNumber,
+        thisChannel: t('common.thisChannel'),
+        message: (destination) => t('chat.composerMessage', { destination }),
+        writeTo: (people, destination) => t('chat.composerWriteTo', { people, destination }),
+      },
     }),
     extraHeaderMemberCount: Math.max(
       activeChannelMembers.length - headerMembers.length,
@@ -102,7 +111,9 @@ export function useWorkspacePresentationData({
     hiddenHeaderMembers,
     latestThreadItemKey: threadItems.at(-1)?.key ?? null,
     messageAuthorAvatarUrlById,
-    messageCitations: buildMessageCitations(visibleMessages),
+    messageCitations: buildMessageCitations(visibleMessages, {
+      unknownMember: t('chat.unknownMember'),
+    }),
     projectSearchSections,
     projectSearchTotal: getProjectSearchTotal(projectSearchSections),
     threadItems,

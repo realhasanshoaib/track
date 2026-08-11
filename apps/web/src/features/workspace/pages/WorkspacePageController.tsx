@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
@@ -41,6 +42,7 @@ type WorkspacePageProps = {
 }
 
 export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePageProps) {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
   const session = authClient.useSession()
   const syncCurrentUser = useMutation(api.auth.syncGoogleUser)
@@ -49,7 +51,7 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
   const acceptPendingInvitations = useMutation(api.invitations.acceptPendingForCurrentUser)
 
   const [trackUserId, setTrackUserId] = useState<Id<'users'> | null>(() => {
-    const sessionUser = getSessionUser(authClient.getSessionData?.())
+    const sessionUser = getSessionUser(authClient.getSessionData?.(), t('identity.trackUser'))
     return sessionUser ? getResolvedTrackUserId(sessionUser.id) : null
   })
   const [activeProjectId, setActiveProjectId] = useState<Id<'projects'> | null>(null)
@@ -112,8 +114,8 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
   const routeGroupId = groupId as Id<'groups'> | undefined
   const devAuthBypass = useDevAuthBypass()
   const sessionUser = useMemo(
-    () => getSessionUser(session.data ?? devAuthBypass.sessionData),
-    [devAuthBypass.sessionData, session.data],
+    () => getSessionUser(session.data ?? devAuthBypass.sessionData, t('identity.trackUser')),
+    [devAuthBypass.sessionData, session.data, t],
   )
   const hasSessionAccess = Boolean(session.data || devAuthBypass.enabled)
   const oauthCallbackPending = useOAuthCallbackPending(hasSessionAccess)
@@ -145,16 +147,26 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     visibleGroups,
   } = workspaceData
   const mentionOptions = useMemo(
-    () => buildWorkspaceMentionOptions(activeChannelMembers, visibleGroups),
-    [activeChannelMembers, visibleGroups],
+    () => buildWorkspaceMentionOptions(activeChannelMembers, visibleGroups, {
+      assistant: t('assistant.name'),
+      channelMember: t('header.channelMember'),
+      group: t('common.channel'),
+      projectMemory: t('common.projectMemory'),
+    }),
+    [activeChannelMembers, t, visibleGroups],
   )
   const mentionGroups = useMemo(
     () => buildMentionGroups(activeChannelMembers, visibleGroups),
     [activeChannelMembers, visibleGroups],
   )
   const forwardMentionOptions = useMemo(
-    () => buildWorkspaceMentionOptions(activeProjectMembers, visibleGroups),
-    [activeProjectMembers, visibleGroups],
+    () => buildWorkspaceMentionOptions(activeProjectMembers, visibleGroups, {
+      assistant: t('assistant.name'),
+      channelMember: t('header.channelMember'),
+      group: t('common.channel'),
+      projectMemory: t('common.projectMemory'),
+    }),
+    [activeProjectMembers, t, visibleGroups],
   )
   const activeMention = useMemo(
     () => getActiveMention(composer, composerCursor),
@@ -165,8 +177,12 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     [activeMention, mentionOptions],
   )
   const mentionSections = useMemo(
-    () => buildMentionSections(filteredMentionOptions),
-    [filteredMentionOptions],
+    () => buildMentionSections(filteredMentionOptions, {
+      assistant: t('common.assistant'),
+      groups: t('common.channels'),
+      people: t('common.people'),
+    }),
+    [filteredMentionOptions, t],
   )
   const showMentionMenu = activeMention !== null && filteredMentionOptions.length > 0
   const composerHasTypingText = composer.trim().length > 0
@@ -247,9 +263,13 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     setInviteDialogOpen,
     setProjectDialogOpen,
   } = dialogState
-  const currentUserName = currentTrackUser?.displayName ?? sessionUser?.name ?? 'Track User'
+  const currentUserName = currentTrackUser?.displayName ?? sessionUser?.name ?? t('identity.trackUser')
   const currentUserEmail = currentTrackUser?.email ?? sessionUser?.email ?? currentUserName
-  const currentUserDesignation = currentTrackUser?.profileDesignation ?? activeProject?.membership.role ?? 'owner'
+  const currentUserDesignation = currentTrackUser?.profileDesignation ?? (
+    activeProject?.membership.role
+      ? t(`dialogs.roles.${activeProject.membership.role}`)
+      : t('identity.owner')
+  )
   const isProjectRouteLoading =
     trackUserId !== null &&
     (projects === undefined ||
@@ -377,8 +397,8 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     trackUserId,
   })
 
-  function setActionError(error: unknown) {
-    setUiError(error instanceof Error ? error.message : 'Something went wrong')
+  function setActionError(_error: unknown) {
+    setUiError(t('errors.generic'))
   }
 
   async function handleSignOut() {

@@ -1,4 +1,5 @@
 import { Bell, GripVertical, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import {
@@ -12,13 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu'
-import { formatRailLabel } from '#/features/workspace/lib/formatting'
 import { notificationModes } from '#/features/workspace/constants'
-import { notificationPermissionLabels, type WebNotificationPermission } from '#/features/workspace/web-notifications'
+import { type WebNotificationPermission } from '#/features/workspace/web-notifications'
 import { ChannelTaskPanel } from '#/features/tasks/ConversationTaskActions'
 import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
 import type { GroupMessageItem } from '#/features/workspace/thread-items'
 import { useReleaseConfig } from '#/lib/release-config'
+import { formatDate } from '#/i18n'
 import { AttachmentTypeIcon } from '../attachment-ui'
 
 type WorkspaceRailProps = {
@@ -64,10 +65,13 @@ function NotificationMenu({
   onNotificationMode,
   onSendTestNotification,
 }: NotificationMenuProps) {
+  const { t } = useTranslation('workspace')
+  const modeLabel = (mode: (typeof notificationModes)[number]) => t(`notifications.mode.${mode}`)
+  const permissionLabel = (permission: WebNotificationPermission) => t(`notifications.permission.${permission}`)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="Notification settings"
+        aria-label={t('notifications.settings')}
         className="track-rail-icon-button"
         disabled={!activeProjectId}
       >
@@ -75,30 +79,30 @@ function NotificationMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="track-rail-menu">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-          <p className="track-rail-menu-note">Browser: {notificationPermissionLabels[notificationPermission]}</p>
+          <DropdownMenuLabel>{t('notifications.title')}</DropdownMenuLabel>
+          <p className="track-rail-menu-note">{t('notifications.browserStatus', { status: permissionLabel(notificationPermission) })}</p>
           <DropdownMenuItem
             disabled={busyAction === 'notifications' || busyAction === 'test-notifications'}
             onClick={onEnableBrowserNotifications}
           >
-            {notificationPermission === 'granted' ? 'Reconnect browser alerts' : 'Enable browser alerts'}
+            {notificationPermission === 'granted' ? t('notifications.reconnect') : t('notifications.enable')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={busyAction === 'notifications' || busyAction === 'test-notifications'}
             onClick={onSendTestNotification}
           >
-            Send test alert
+            {t('notifications.sendTest')}
           </DropdownMenuItem>
           {notificationStatus ? <p className="track-rail-menu-note">{notificationStatus}</p> : null}
           <DropdownMenuSeparator />
-          <p className="track-rail-menu-note">Global: {formatRailLabel(globalNotificationMode)}</p>
+          <p className="track-rail-menu-note">{t('notifications.global', { mode: modeLabel(globalNotificationMode) })}</p>
           <DropdownMenuRadioGroup
             value={groupNotificationMode}
             onValueChange={(mode) => onNotificationMode(mode as (typeof notificationModes)[number])}
           >
             {notificationModes.map((mode) => (
               <DropdownMenuRadioItem key={mode} value={mode}>
-                {formatRailLabel(mode)}
+                {modeLabel(mode)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -126,11 +130,12 @@ export function WorkspaceRail({
   userId,
   visibleMessages,
 }: WorkspaceRailProps) {
+  const { t } = useTranslation('workspace')
   const releaseConfig = useReleaseConfig()
   const references = visibleMessages
     .flatMap((item) => item.attachments.map((file) => ({
       ...file,
-      author: item.author?.displayName ?? 'Unknown member',
+      author: item.author?.displayName ?? t('chat.unknownMember'),
       createdAt: item.message.createdAt,
     })))
     .slice(-4)
@@ -140,7 +145,7 @@ export function WorkspaceRail({
       <aside className="track-rail collapsed">
         <div className="track-rail-collapsed-actions">
           <button
-            aria-label="Expand workspace details"
+            aria-label={t('rail.expandDetails')}
             className="track-rail-collapse-button"
             onClick={onExpand}
             type="button"
@@ -166,7 +171,7 @@ export function WorkspaceRail({
   return (
     <aside className="track-rail">
       <button
-        aria-label="Resize workspace details"
+        aria-label={t('rail.resizeDetails')}
         className="track-rail-resize-handle"
         onPointerDown={(event) => {
           event.preventDefault()
@@ -180,7 +185,7 @@ export function WorkspaceRail({
       </button>
       <div className="track-rail-toolbar">
         <button
-          aria-label="Collapse workspace details"
+          aria-label={t('rail.collapseDetails')}
           className="track-rail-icon-button"
           onClick={onCollapse}
           type="button"
@@ -201,7 +206,7 @@ export function WorkspaceRail({
       </div>
       <section className="track-rail-section track-rail-reference-section">
         <div className="track-rail-heading-row">
-          <span className="track-rail-heading">Recent references</span>
+          <span className="track-rail-heading">{t('rail.recentReferences')}</span>
         </div>
         <div className="track-rail-reference-list">
           {references.map(({ attachment, author, createdAt, url }) => {
@@ -210,7 +215,7 @@ export function WorkspaceRail({
                 <AttachmentTypeIcon contentType={attachment.contentType} filename={attachment.filename} />
                 <span className="track-rail-reference-copy">
                   <strong>{attachment.filename}</strong>
-                  <small>from {author} · {new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small>
+                  <small>{t('rail.referenceFrom', { author, date: formatDate(createdAt) })}</small>
                 </span>
               </>
             )
@@ -220,7 +225,7 @@ export function WorkspaceRail({
               <span className="track-rail-reference" key={attachment._id}>{content}</span>
             )
           })}
-          {!references.length ? <p className="track-rail-empty">Files shared in this Channel appear here.</p> : null}
+          {!references.length ? <p className="track-rail-empty">{t('rail.noReferences')}</p> : null}
         </div>
       </section>
       {releaseConfig.tasks && activeGroup ? <ChannelTaskPanel group={activeGroup} variant="rail" /> : null}

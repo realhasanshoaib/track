@@ -38,12 +38,15 @@ export function buildWorkspaceThreadItems({
   ].sort((a, b) => a.at - b.at)
 }
 
-export function buildMessageCitations(messages: Array<GroupMessageItem>): Map<string, MessageCitationPreview> {
+export function buildMessageCitations(
+  messages: Array<GroupMessageItem>,
+  labels: { unknownMember: string } = { unknownMember: 'Unknown Member' },
+): Map<string, MessageCitationPreview> {
   return new Map(
     messages.map((item) => [
       String(item.message._id),
       {
-        author: item.author?.displayName ?? 'Unknown Member',
+        author: item.author?.displayName ?? labels.unknownMember,
         body: item.message.body.slice(0, 90),
         createdAt: item.message.createdAt,
         attachments: item.attachments.map(({ attachment }) => ({

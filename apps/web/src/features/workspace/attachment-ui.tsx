@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 
 type AttachmentTone =
   | 'archive'
@@ -326,12 +327,14 @@ export function AttachmentTypeIcon({
   size?: number
 }) {
   const kind = getAttachmentKind({ contentType, filename })
+  const { t } = useTranslation('workspace')
+  const label = kind.tone === 'file' && !kind.extensions ? kind.label : t(`attachments.types.${kind.tone}`)
   const extension = filename.split('.').pop()?.toLowerCase() ?? ''
   const brandMark = getBrandMark(kind.tone, extension)
 
   if (brandMark) {
     return (
-      <span aria-label={kind.label} className={`track-attachment-type-icon track-ft ${brandMark.className}`} role="img">
+      <span aria-label={label} className={`track-attachment-type-icon track-ft ${brandMark.className}`} role="img">
         {brandMark.glyph}
       </span>
     )
@@ -340,9 +343,9 @@ export function AttachmentTypeIcon({
   const Icon = kind.icon
 
   return (
-    <span aria-label={kind.label} className={`track-attachment-type-icon ${kind.tone}`} role="img">
+    <span aria-label={label} className={`track-attachment-type-icon ${kind.tone}`} role="img">
       <Icon aria-hidden="true" size={size} />
-      <small>{kind.label}</small>
+      <small>{label}</small>
     </span>
   )
 }

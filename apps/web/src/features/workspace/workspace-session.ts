@@ -14,7 +14,7 @@ export function setResolvedTrackUserId(sessionUserId: string, trackUserId: Id<'u
   resolvedTrackUserIds.set(sessionUserId, trackUserId)
 }
 
-export function getSessionUser(sessionData: unknown) {
+export function getSessionUser(sessionData: unknown, fallbackName = 'Track User') {
   if (!sessionData || typeof sessionData !== 'object') return null
 
   const data = sessionData as {
@@ -38,6 +38,6 @@ export function getSessionUser(sessionData: unknown) {
   return {
     id,
     email: user.email ?? '',
-    name: user.name ?? user.email?.split('@')[0] ?? 'Track User',
+    name: user.name ?? user.email?.split('@')[0] ?? fallbackName,
   }
 }

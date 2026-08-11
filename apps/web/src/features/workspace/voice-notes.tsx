@@ -1,9 +1,11 @@
 import { Mic, Pause, Play, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '#/components/ui/button'
 import { cn } from '#/lib/utils'
+import { formatDuration } from '#/i18n'
 
 export const voiceNoteMimeTypes = [
   'audio/webm;codecs=opus',
@@ -64,6 +66,7 @@ export function VoiceRecorder({
   onRecorded: (recording: { file: File; durationMs: number; previewUrl: string }) => void
   onRecordingChange?: (recording: boolean) => void
 }) {
+  const { t } = useTranslation('workspace')
   const [status, setStatus] = useState<VoiceRecorderStatus>('idle')
   const [elapsedMs, setElapsedMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -83,11 +86,11 @@ export function VoiceRecorder({
     if (disabled || status !== 'idle') return
     setError(null)
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setError('Voice recording is not supported in this browser.')
+      setError(t('voice.unsupported'))
       return
     }
     if (typeof MediaRecorder === 'undefined') {
-      setError('Voice recording is not supported in this browser.')
+      setError(t('voice.unsupported'))
       return
     }
 
@@ -122,8 +125,8 @@ export function VoiceRecorder({
       stopStream()
       setError(
         recordingError instanceof DOMException && recordingError.name === 'NotAllowedError'
-          ? 'Microphone permission is blocked.'
-          : 'Could not start voice recording.',
+          ? t('voice.permissionBlocked')
+          : t('voice.startFailed'),
       )
     }
   }
@@ -169,8 +172,8 @@ export function VoiceRecorder({
         <div className="track-voice-recorder-main">
           <span className="track-recording-dot" aria-hidden="true" />
           <span className="track-voice-recorder-copy">
-            <strong>Recording voice note</strong>
-            <small>{formatVoiceDuration(elapsedMs)}</small>
+            <strong>{t('voice.recording')}</strong>
+            <small>{formatDuration(elapsedMs)}</small>
           </span>
           <span className="track-recording-meter" aria-hidden="true">
             {Array.from({ length: 18 }).map((_, index) => (
@@ -185,7 +188,7 @@ export function VoiceRecorder({
             type="button"
           >
             <X size={14} />
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             className="track-button track-button-primary"
@@ -193,7 +196,7 @@ export function VoiceRecorder({
             type="button"
           >
             <Square size={13} />
-            Stop
+            {t('voice.stop')}
           </Button>
         </div>
       </div>
@@ -206,7 +209,7 @@ export function VoiceRecorder({
         className="icon-button"
         disabled={disabled || status === 'requesting'}
         onClick={() => void startRecording()}
-        title="Record voice note"
+        title={t('voice.record')}
         type="button"
       >
         <Mic size={15} />
@@ -227,6 +230,7 @@ export function VoiceNoteReview({
   onRemove: () => void
   previewUrl: string
 }) {
+  const { t } = useTranslation('workspace')
   return (
     <div className="track-voice-review">
       <VoiceNotePlayer
@@ -239,10 +243,10 @@ export function VoiceNoteReview({
         variant="composer"
       />
       <Button
-        aria-label="Remove voice note"
+        aria-label={t('voice.remove')}
         className="track-voice-review-remove"
         onClick={onRemove}
-        title="Remove voice note"
+        title={t('voice.remove')}
         type="button"
       >
         <X size={13} />
@@ -279,7 +283,8 @@ export function VoiceNotePlayer({
     ? durationSeconds
     : Math.min(currentTime, durationSeconds || currentTime)
   const progress = durationSeconds > 0 ? Math.min(displayCurrentTime / durationSeconds, 1) : 0
-  const label = isVoiceNoteAttachment({ contentType, filename, kind }) ? 'Voice note' : 'Audio'
+  const { t } = useTranslation('workspace')
+  const label = isVoiceNoteAttachment({ contentType, filename, kind }) ? t('voice.voiceNote') : t('voice.audio')
 
   useEffect(() => {
     const audio = audioRef.current
@@ -340,7 +345,7 @@ export function VoiceNotePlayer({
     <div className={cn('track-voice-player', `track-voice-player-${variant}`, className)}>
       {url ? <audio preload="metadata" ref={audioRef} src={url} /> : null}
       <Button
-        aria-label={playing ? 'Pause voice note' : 'Play voice note'}
+        aria-label={playing ? t('voice.pause') : t('voice.play')}
         className="track-voice-play"
         disabled={!canPlay}
         onClick={() => void togglePlayback()}
@@ -351,7 +356,7 @@ export function VoiceNotePlayer({
       <div className="track-voice-main">
         <strong className="track-voice-label">{label}</strong>
         <input
-          aria-label="Voice note progress"
+          aria-label={t('voice.progress')}
           className="track-voice-progress"
           disabled={!canPlay || durationSeconds <= 0}
           max="100"
@@ -362,7 +367,7 @@ export function VoiceNotePlayer({
           value={Math.round(progress * 100)}
         />
         <span className="track-voice-duration">
-          {formatVoiceDuration(displayCurrentTime * 1000)} / {formatVoiceDuration(durationSeconds * 1000)}
+          {formatDuration(displayCurrentTime * 1000)} / {formatDuration(durationSeconds * 1000)}
         </span>
       </div>
     </div>

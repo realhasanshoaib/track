@@ -1,5 +1,6 @@
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
@@ -16,6 +17,7 @@ import {
   subscribeToWebPush,
   type WebNotificationPermission,
 } from '#/features/workspace/web-notifications'
+import { formatNumber } from '#/i18n'
 
 type ProjectItem = {
   project: Doc<'projects'>
@@ -37,6 +39,7 @@ export function useWorkspaceNotifications({
   visibleMessages: Array<GroupMessageItem>
   messagesLoaded: boolean
 }) {
+  const { t } = useTranslation('workspace')
   const setGlobalNotificationMode = useMutation(api.notifications.setGlobalMode)
   const setGroupNotificationMode = useMutation(api.notifications.setGroupMode)
   const registerNotificationSubscription = useMutation(api.notifications.registerSubscription)
@@ -60,15 +63,33 @@ export function useWorkspaceNotifications({
     groupNotificationSettings.find((item) => item.groupId === activeGroupId)?.mode ?? 'inherit'
   const globalNotificationMode = notificationSettings?.global?.globalMode ?? 'all'
 
-  function setNotificationError(error: unknown, fallback = 'Something went wrong') {
-    const message = error instanceof Error ? error.message : fallback
-    setNotificationStatus(`${message} (${getWebPushDiagnostics()})`)
+  function setNotificationError(_error: unknown, fallback = t('notifications.errorGeneric')) {
+    setNotificationStatus(`${fallback} (${getWebPushDiagnostics()})`)
+  }
+
+  function translatePushStep(step: string) {
+    const steps: Record<string, string> = {
+      'Checking push subscription...': t('notifications.steps.checkingSubscription'),
+      'Checking service worker...': t('notifications.steps.checkingWorker'),
+      'Checking push permission...': t('notifications.steps.checkingPermission'),
+      'Claiming service worker...': t('notifications.steps.claimingWorker'),
+      'Creating push subscription...': t('notifications.steps.creatingSubscription'),
+      'Registering service worker...': t('notifications.steps.registeringWorker'),
+      'Refreshing push subscription...': t('notifications.steps.refreshingSubscription'),
+      'Saving push subscription...': t('notifications.steps.savingSubscription'),
+      'Waiting for active push subscription...': t('notifications.steps.waitingActiveSubscription'),
+      'Waiting for service worker...': t('notifications.steps.waitingWorker'),
+    }
+    const pushPermissionPrefix = 'Push permission: '
+    return step.startsWith(pushPermissionPrefix)
+      ? t('notifications.steps.pushPermission', { permission: step.slice(pushPermissionPrefix.length) })
+      : steps[step] ?? t('notifications.steps.working')
   }
 
   async function registerBrowserPushSubscription(options: { forceRefresh?: boolean; onStep?: (step: string) => void } = {}) {
     if (!trackUserId) return
     if (!webPushPublicKey) {
-      throw new Error('Web push is not configured for this environment.')
+      throw new Error(t('notifications.webPushUnavailable'))
     }
     const subscription = await subscribeToWebPush(webPushPublicKey, options)
     options.onStep?.('Saving push subscription...')
@@ -127,10 +148,14 @@ export function useWorkspaceNotifications({
     }
 
     void showMessageNotification({
-      title: `${latestMessage.author?.displayName ?? 'New message'} in ${activeGroup.name}`,
+      title: t('notifications.newMessageTitle', { author: latestMessage.author?.displayName ?? t('notifications.newMessage'), channel: activeGroup.name }),
       body: getIncomingMessageNotificationBody({
         body: latestMessage.message.body,
         attachments: latestMessage.attachments,
+      }, {
+        attachment: t('notifications.sentAttachment'),
+        message: t('notifications.newMessage'),
+        voiceNote: t('notifications.sentVoiceNote'),
       }).slice(0, 160),
       tag: `track-message-${latestMessage.message._id}`,
       url: window.location.pathname,
@@ -177,25 +202,25 @@ export function useWorkspaceNotifications({
       const permission = await requestNotificationPermission()
       setNotificationPermission(permission)
       if (permission === 'denied') {
-        throw new Error('Browser notifications are blocked for Track.')
+        throw new Error(t('notifications.blocked'))
       }
       if (permission === 'unsupported') {
-        throw new Error('This browser does not support web notifications.')
+        throw new Error(t('notifications.unsupported'))
       }
       if (permission === 'granted') {
         await registerBrowserPushSubscription({
-          onStep: (step) => setNotificationStatus(`${step} (${getWebPushDiagnostics()})`),
+          onStep: (step) => setNotificationStatus(`${translatePushStep(step)} (${getWebPushDiagnostics()})`),
         })
         await showMessageNotification({
-          title: 'Track notifications enabled',
-          body: 'You will get alerts for new project messages.',
+          title: t('notifications.enabledTitle'),
+          body: t('notifications.enabledBody'),
           tag: 'track-notifications-enabled',
           url: window.location.pathname,
         })
-        setNotificationStatus('Browser alerts reconnected.')
+        setNotificationStatus(t('notifications.reconnected'))
       }
     } catch (error) {
-      setNotificationError(error, 'Browser alert reconnect failed.')
+      setNotificationError(error, t('notifications.reconnectFailed'))
     } finally {
       setNotificationBusyAction(null)
     }
@@ -212,23 +237,23 @@ export function useWorkspaceNotifications({
         setNotificationPermission(permission as WebNotificationPermission)
       }
       if (permission !== 'granted') {
-        throw new Error(permission === 'denied' ? 'Browser notifications are blocked for Track.' : 'Browser notifications are not enabled.')
+        throw new Error(permission === 'denied' ? t('notifications.blocked') : t('notifications.notEnabled'))
       }
 
       await registerBrowserPushSubscription({
-        onStep: (step) => setNotificationStatus(`${step} (${getWebPushDiagnostics()})`),
+        onStep: (step) => setNotificationStatus(`${translatePushStep(step)} (${getWebPushDiagnostics()})`),
       })
-      setNotificationStatus(`Sending server test... (${getWebPushDiagnostics()})`)
+      setNotificationStatus(`${t('notifications.sendingTest')} (${getWebPushDiagnostics()})`)
       const result = await sendTestPushAction({ userId: trackUserId })
       if (result.attempted === 0) {
-        throw new Error('No browser push subscription was saved yet. Try reconnecting alerts and keep this tab open for a moment.')
+        throw new Error(t('notifications.noSubscription'))
       }
       if (result.sent === 0) {
-        throw new Error('Track found your browser subscription, but the push service rejected the test alert.')
+        throw new Error(t('notifications.pushRejected'))
       }
-      setNotificationStatus(`Test alert sent to ${result.sent} browser${result.sent === 1 ? '' : 's'}.`)
+      setNotificationStatus(t('notifications.testSent', { count: formatNumber(result.sent) }))
     } catch (error) {
-      setNotificationError(error, 'Test alert failed.')
+      setNotificationError(error, t('notifications.testFailed'))
     } finally {
       setNotificationBusyAction(null)
     }
