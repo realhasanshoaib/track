@@ -10,6 +10,8 @@ import { Spacing } from '@/constants/theme';
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useTheme } from '@/hooks/use-theme';
 import { usePushNotifications } from '@/lib/push-notifications';
+import { formatNumber, useLocale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 
 type ConversationMode = 'all' | 'mentions' | 'none';
 type TaskMode = 'important' | 'all' | 'muted';
@@ -17,6 +19,8 @@ type PreviewMode = 'full' | 'context' | 'hidden';
 
 export default function NotificationSettingsScreen() {
   const theme = useTheme();
+  const { locale } = useLocale();
+  const { t } = useTranslation('work');
   const { trackUserId } = useTrackUser();
   const push = usePushNotifications();
   const settings = useQuery(api.notifications.getSettings, trackUserId ? { userId: trackUserId } : 'skip');
@@ -41,26 +45,31 @@ export default function NotificationSettingsScreen() {
     void setPreferences({
       userId: trackUserId,
       ...changes,
-    }).catch(() => Alert.alert('Settings not saved', 'Check your connection and try again.'));
+    }).catch(() => Alert.alert(t('notifications.settingsNotSaved'), t('notifications.checkConnection')));
   }
 
   async function sendTest() {
     const result = await push.sendTestNotification();
     if (!result) return;
     Alert.alert(
-      result.queued > 0 ? 'Test queued' : 'Test not queued',
-      `${result.queued} queued · ${result.failed} failed across ${result.attempted} target${result.attempted === 1 ? '' : 's'}.`,
+      result.queued > 0 ? t('notifications.testQueued') : t('notifications.testNotQueued'),
+      t(result.attempted === 1 ? 'notifications.testSummary_one' : 'notifications.testSummary_other', {
+        queued: formatNumber(locale, result.queued),
+        failed: formatNumber(locale, result.failed),
+        attempted: formatNumber(locale, result.attempted),
+        count: result.attempted,
+      }),
     );
   }
 
   const permissionTitle = push.permissionState === 'granted' || push.permissionState === 'provisional'
-    ? push.registered ? 'Notifications are connected' : 'Finishing notification setup'
-    : push.permissionState === 'denied' ? 'Notifications are disabled' : 'Stay current when Track is closed';
+    ? push.registered ? t('notifications.connected') : t('notifications.finishing')
+    : push.permissionState === 'denied' ? t('notifications.disabled') : t('notifications.stayCurrent');
   const permissionBody = push.permissionState === 'denied'
-    ? `Enable Track in ${Platform.OS === 'ios' ? 'iOS' : 'Android'} Settings to receive Project activity.`
+    ? t(Platform.OS === 'ios' ? 'notifications.iosSettings' : 'notifications.androidSettings')
     : push.permissionState === 'granted' || push.permissionState === 'provisional'
-      ? 'Track will notify this device for eligible conversation and task activity.'
-      : 'Get timely message previews, mentions, replies, Channel activity, and task changes.';
+      ? t('notifications.connectedBody')
+      : t('notifications.pendingBody');
 
   return (
     <ThemedView style={styles.screen}>
@@ -71,50 +80,56 @@ export default function NotificationSettingsScreen() {
           </View>
           <ThemedText type="subtitle">{permissionTitle}</ThemedText>
           <ThemedText style={{ color: theme.textSecondary }}>{permissionBody}</ThemedText>
-          {push.error ? <ThemedText style={{ color: '#b91c1c' }} type="small">{push.error.replaceAll('_', ' ')}</ThemedText> : null}
+          {push.error ? <ThemedText style={{ color: '#b91c1c' }} type="small">{notificationErrorLabel(push.error, t)}</ThemedText> : null}
           {push.permissionState === 'denied' ? (
-            <PrimaryButton disabled={push.syncing} label="Open device settings" onPress={() => void push.openDeviceSettings()} />
+            <PrimaryButton disabled={push.syncing} label={t('notifications.openDeviceSettings')} onPress={() => void push.openDeviceSettings()} />
           ) : push.permissionState === 'not_determined' ? (
-            <PrimaryButton disabled={push.syncing} label={push.syncing ? 'Checking…' : 'Enable notifications'} onPress={() => void push.requestPermission()} />
+            <PrimaryButton disabled={push.syncing} label={push.syncing ? t('notifications.checking') : t('notifications.enable')} onPress={() => void push.requestPermission()} />
           ) : !push.registered ? (
-            <PrimaryButton disabled={push.syncing} label={push.syncing ? 'Connecting…' : 'Try again'} onPress={() => void push.refresh()} />
+            <PrimaryButton disabled={push.syncing} label={push.syncing ? t('notifications.connecting') : t('notifications.tryAgain')} onPress={() => void push.refresh()} />
           ) : null}
         </View>
 
-        <SheetSection title="Conversation default">
+        <SheetSection title={t('notifications.conversationDefault')}>
           {(['all', 'mentions', 'none'] as const).map((mode) => (
-            <SheetRow key={mode} label={mode === 'all' ? 'All messages' : mode === 'mentions' ? 'Mentions and replies' : 'Off'} selected={global.globalMode === mode} onPress={() => update({ conversationMode: mode })} />
+            <SheetRow key={mode} label={mode === 'all' ? t('notifications.allMessages') : mode === 'mentions' ? t('notifications.mentionsReplies') : t('notifications.off')} selected={global.globalMode === mode} onPress={() => update({ conversationMode: mode })} />
           ))}
         </SheetSection>
 
-        <SheetSection title="Task default">
+        <SheetSection title={t('notifications.taskDefault')}>
           {(['important', 'all', 'muted'] as const).map((mode) => (
-            <SheetRow key={mode} label={mode === 'important' ? 'Important activity' : mode === 'all' ? 'All followed activity' : 'Off'} selected={global.taskMode === mode} onPress={() => update({ taskMode: mode })} />
+            <SheetRow key={mode} label={mode === 'important' ? t('notifications.importantActivity') : mode === 'all' ? t('notifications.allFollowedActivity') : t('notifications.off')} selected={global.taskMode === mode} onPress={() => update({ taskMode: mode })} />
           ))}
         </SheetSection>
 
-        <SheetSection title="Privacy">
-          <SheetRow label="Show message and task previews" selected={global.previewMode === 'full'} onPress={() => update({ previewMode: 'full' })} />
-          <SheetRow label="Show sender and work context" selected={global.previewMode === 'context'} onPress={() => update({ previewMode: 'context' })} />
-          <SheetRow label="Hide all work context" selected={global.previewMode === 'hidden'} onPress={() => update({ previewMode: 'hidden' })} />
+        <SheetSection title={t('notifications.privacy')}>
+          <SheetRow label={t('notifications.showMessageTaskPreviews')} selected={global.previewMode === 'full'} onPress={() => update({ previewMode: 'full' })} />
+          <SheetRow label={t('notifications.showSenderContext')} selected={global.previewMode === 'context'} onPress={() => update({ previewMode: 'context' })} />
+          <SheetRow label={t('notifications.hideWorkContext')} selected={global.previewMode === 'hidden'} onPress={() => update({ previewMode: 'hidden' })} />
         </SheetSection>
 
-        <SheetSection title="Presentation">
-          <SheetRow label="Sound" trailing={<Switch accessibilityLabel="Notification sound" onValueChange={(value) => update({ soundEnabled: value })} value={global.soundEnabled} />} />
-          <SheetRow label="Badges" trailing={<Switch accessibilityLabel="Notification badges" onValueChange={(value) => update({ badgesEnabled: value })} value={global.badgesEnabled} />} />
+        <SheetSection title={t('notifications.presentation')}>
+          <SheetRow label={t('notifications.sound')} trailing={<Switch accessibilityLabel={t('notifications.soundAccessibility')} onValueChange={(value) => update({ soundEnabled: value })} value={global.soundEnabled} />} />
+          <SheetRow label={t('notifications.badges')} trailing={<Switch accessibilityLabel={t('notifications.badgesAccessibility')} onValueChange={(value) => update({ badgesEnabled: value })} value={global.badgesEnabled} />} />
         </SheetSection>
 
-        {__DEV__ ? <SheetSection title="Development diagnostics">
-          <SheetRow label="Send test notification" onPress={() => void sendTest()} />
-          <SheetRow label="Recent delivery state" trailing={<ThemedText style={{ color: theme.textSecondary }} type="code">{diagnostics ? `${diagnostics.sampleSize} intents` : 'Loading…'}</ThemedText>} />
+        {__DEV__ ? <SheetSection title={t('notifications.developmentDiagnostics')}>
+          <SheetRow label={t('notifications.sendTest')} onPress={() => void sendTest()} />
+          <SheetRow label={t('notifications.recentDelivery')} trailing={<ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{diagnostics ? t(diagnostics.sampleSize === 1 ? 'common.intent_one' : 'common.intent_other', { count: formatNumber(locale, diagnostics.sampleSize) }) : t('notifications.deliveryLoading')}</ThemedText>} />
         </SheetSection> : null}
 
         <ThemedText style={[styles.footnote, { color: theme.textSecondary }]} type="small">
-          Push delivery is best effort. Apple and Google control final device presentation. Notification payloads contain the preview level selected above.
+          {t('notifications.pushFootnote')}
         </ThemedText>
       </ScrollView>
     </ThemedView>
   );
+}
+
+function notificationErrorLabel(error: string, t: (key: string) => string) {
+  if (error === 'notification_sync_failed') return t('notifications.syncError');
+  if (error === 'push_token_refresh_failed') return t('notifications.tokenRefreshError');
+  return t('notifications.safeError');
 }
 
 function PrimaryButton({ disabled, label, onPress }: { disabled: boolean; label: string; onPress: () => void }) {

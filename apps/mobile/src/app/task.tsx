@@ -37,26 +37,26 @@ import { useTheme } from '@/hooks/use-theme';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useReleaseConfig } from '@/lib/release-config';
 import { setActivePushContext } from '@/lib/push-presentation';
-import { taskDueLabel, taskPriorityLabel } from '@/lib/task-presentation';
+import { localTaskDate, taskDueLabel, taskPriorityLabel } from '@/lib/task-presentation';
+import { formatDate, useLocale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 
 type DetailTab = 'details' | 'discussion' | 'activity';
 
 const priorities: TaskPriority[] = ['none', 'urgent', 'high', 'medium', 'low'];
-const detailTabs: Array<{ label: string; value: DetailTab }> = [
-  { label: 'Details', value: 'details' },
-  { label: 'Discussion', value: 'discussion' },
-  { label: 'Activity', value: 'activity' },
-];
+const detailTabs: DetailTab[] = ['details', 'discussion', 'activity'];
 
-function errorMessage(failure: unknown) {
-  if (!(failure instanceof Error)) return 'The task action failed.';
-  if (failure.message.includes('task_conflict')) return 'This task changed elsewhere.';
-  if (failure.message.includes('task_access_changed')) return 'This task is no longer available to this represented membership.';
-  return failure.message.replaceAll('_', ' ');
+function errorMessage(failure: unknown, t: (key: string) => string) {
+  if (!(failure instanceof Error)) return t('task.safeError');
+  if (failure.message.includes('task_conflict')) return t('task.conflict');
+  if (failure.message.includes('task_access_changed')) return t('task.accessChanged');
+  return t('task.safeError');
 }
 
 export default function TaskScreen() {
   const theme = useTheme();
+  const { locale } = useLocale();
+  const { t } = useTranslation('work');
   const release = useReleaseConfig();
   const network = useNetworkState();
   const { projectId, taskKey, companyId, membershipId, archive } = useLocalSearchParams<{
@@ -153,7 +153,7 @@ export default function TaskScreen() {
       clear?.();
       hapticMedium();
     } catch (failure) {
-      const message = errorMessage(failure);
+      const message = errorMessage(failure, t);
       setError(message);
       if (failure instanceof Error && failure.message.includes('task_conflict')) {
         setConflict(true);
@@ -222,14 +222,14 @@ export default function TaskScreen() {
   if (!release.tasks) {
     return (
       <ThemedView style={styles.screen}>
-        <EmptyState icon="file-document-outline" title="Tasks unavailable" body="Conversation remains available while the task release is disabled." />
+        <EmptyState icon="file-document-outline" title={t('tasks.unavailable')} body={t('tasks.unavailableBody')} />
       </ThemedView>
     );
   }
   if (detail === undefined) {
     return (
       <ThemedView style={styles.screen}>
-        <Stack.Screen options={{ title: taskKey || 'Task' }} />
+        <Stack.Screen options={{ title: taskKey || t('common.task') }} />
         <View style={styles.loading}>
           <View style={[styles.loadingHero, { backgroundColor: theme.backgroundElement }]} />
           <TaskCardSkeletons count={3} />
@@ -240,15 +240,16 @@ export default function TaskScreen() {
   if (!detail) {
     return (
       <ThemedView style={styles.screen}>
-        <Stack.Screen options={{ title: 'Task unavailable' }} />
-        <EmptyState icon="shield-lock-outline" title="Task unavailable" body="The task does not exist or this represented membership cannot access its scope." />
+        <Stack.Screen options={{ title: t('task.taskUnavailable') }} />
+        <EmptyState icon="shield-lock-outline" title={t('task.taskUnavailable')} body={t('task.taskUnavailableBody')} />
       </ThemedView>
     );
   }
 
   const assigneeName = assignees?.find((item) => item.member._id === detail.task.assigneeProjectMemberId)?.user.displayName
-    ?? (detail.assignee ? 'Assigned member' : 'Unassigned');
-  const due = taskDueLabel(detail.task.dueDate, undefined, detail.state?.category);
+    ?? (detail.assignee ? t('common.assignedMember') : t('common.unassigned'));
+  const due = taskDueLabel(detail.task.dueDate, undefined, detail.state?.category, { formatDate, locale, t });
+  const overdue = Boolean(detail.task.dueDate && detail.task.dueDate < localTaskDate() && detail.state?.category !== 'completed' && detail.state?.category !== 'canceled');
 
   return (
     <ThemedView style={styles.screen}>
@@ -256,7 +257,7 @@ export default function TaskScreen() {
         title: detail.task.publicKey,
         headerRight: () => detail.capabilities.canEdit && archive !== '1' ? (
           <Pressable
-            accessibilityLabel="Edit task"
+            accessibilityLabel={t('task.editAccessibility')}
             onPress={() => {
               hapticLight();
               applyDetailToDraft(detail);
@@ -275,43 +276,49 @@ export default function TaskScreen() {
           contentInsetAdjustmentBehavior="automatic"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled">
-          {offline ? <TaskStateBanner icon="cloud-off" message="Offline — reconnect to update this task" tone="offline" /> : null}
-          {archive === '1' ? <TaskStateBanner icon="shield-lock-outline" message="Read-only Company exit archive" /> : null}
-          {readOnly && archive !== '1' ? <TaskStateBanner icon="shield-lock-outline" message="You can view this task, but editing is restricted" /> : null}
+          {offline ? <TaskStateBanner icon="cloud-off" message={t('task.offline')} tone="offline" /> : null}
+          {archive === '1' ? <TaskStateBanner icon="shield-lock-outline" message={t('task.readOnlyArchive')} /> : null}
+          {readOnly && archive !== '1' ? <TaskStateBanner icon="shield-lock-outline" message={t('task.restrictedEditing')} /> : null}
           {detail.restrictedEarlierContext ? (
-            <TaskStateBanner icon="shield-lock-outline" message="Some earlier context is restricted by Channel access" />
+            <TaskStateBanner icon="shield-lock-outline" message={t('task.restrictedContext')} />
           ) : null}
           {conflict ? (
             <TaskStateBanner
-              action={{ label: 'Review latest', onPress: reviewConflict }}
+              action={{ label: t('task.reviewLatest'), onPress: reviewConflict }}
               icon="refresh"
-              message="This task changed elsewhere"
+              message={t('task.changedElsewhere')}
               tone="danger"
             />
           ) : error ? (
-            <TaskStateBanner action={{ label: 'Dismiss', onPress: () => setError('') }} icon="refresh" message={error} tone="danger" />
+            <TaskStateBanner action={{ label: t('tasks.dismissError'), onPress: () => setError('') }} icon="refresh" message={error} tone="danger" />
           ) : null}
 
           <View style={styles.hero}>
             <View style={styles.eyebrow}>
-              <ThemedText style={{ color: theme.textSecondary }} type="code">
-                {detail.task.publicKey} · {detail.board?.name ?? 'Archived board'}
-              </ThemedText>
+              <View style={styles.eyebrowKey}>
+                <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">{detail.task.publicKey}</ThemedText>
+                <ThemedText style={{ color: theme.textSecondary }} type="code">·</ThemedText>
+                <ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{detail.board?.name ?? t('common.archiveReadOnly')}</ThemedText>
+              </View>
               <TaskPriorityBadge priority={detail.task.priority} />
             </View>
-            <ThemedText style={styles.taskTitle}>{detail.task.title}</ThemedText>
+            <ThemedText contentDirection="auto" style={styles.taskTitle}>{detail.task.title}</ThemedText>
             <View style={styles.heroMeta}>
-              <TaskStatusPill category={detail.state?.category} label={detail.state?.name ?? 'Unknown'} />
+              <TaskStatusPill category={detail.state?.category} label={detail.state?.name ?? t('common.unknown')} />
               {due ? (
                 <View style={styles.inlineMeta}>
-                  <PlatformIcon color={due.startsWith('Overdue') ? theme.danger : theme.textSecondary} name="calendar" size={16} />
-                  <ThemedText style={{ color: due.startsWith('Overdue') ? theme.danger : theme.textSecondary }} type="small">{due}</ThemedText>
+                  <PlatformIcon color={overdue ? theme.danger : theme.textSecondary} name="calendar" size={16} />
+                  <ThemedText contentDirection="auto" style={{ color: overdue ? theme.danger : theme.textSecondary }} type="small">{due}</ThemedText>
                 </View>
               ) : null}
             </View>
           </View>
 
-          <TaskSegmentedControl onChange={setTab} segments={detailTabs} value={tab} />
+          <TaskSegmentedControl
+            onChange={setTab}
+            segments={detailTabs.map((value) => ({ value, label: value === 'details' ? t('task.details') : value === 'discussion' ? t('task.discussion') : t('task.activity') }))}
+            value={tab}
+          />
 
           {tab === 'details' ? (
             <TaskDetailsTab
@@ -379,11 +386,11 @@ export default function TaskScreen() {
         setEditOpen(false);
         setEditRevision(null);
         applyDetailToDraft(detail);
-      }} title="Update task" visible={editOpen}>
-        <SheetInput label="Title" onChangeText={setTitle} value={title} />
-        <SheetInput label="Description" multiline onChangeText={setDescription} value={description} />
-        <SheetInput label="Due date (YYYY-MM-DD)" onChangeText={setDueDate} value={dueDate} />
-        <SheetSection title="Status">
+      }} title={t('task.updateTask')} visible={editOpen}>
+        <SheetInput label={t('common.title')} onChangeText={setTitle} value={title} />
+        <SheetInput label={t('common.description')} multiline onChangeText={setDescription} value={description} />
+        <SheetInput label={t('common.dueDateInput')} onChangeText={setDueDate} value={dueDate} />
+        <SheetSection title={t('task.status')}>
           {board?.states.map((state) => (
             <SheetRow
               icon="check-circle"
@@ -394,19 +401,19 @@ export default function TaskScreen() {
             />
           ))}
         </SheetSection>
-        <SheetSection title="Priority">
+        <SheetSection title={t('common.priority')}>
           {priorities.map((value) => (
             <SheetRow
               icon="flag"
               key={value}
-              label={taskPriorityLabel(value)}
+              label={taskPriorityLabel(value, t)}
               selected={priority === value}
               onPress={() => setPriority(value)}
             />
           ))}
         </SheetSection>
-        <SheetSection title="Assignee">
-          <SheetRow icon="person" label="Unassigned" selected={!assigneeId} onPress={() => setAssigneeId('')} />
+        <SheetSection title={t('common.assignee')}>
+          <SheetRow icon="person" label={t('common.unassigned')} selected={!assigneeId} onPress={() => setAssigneeId('')} />
           {assignees?.map((item) => (
             <SheetRow
               icon="person"
@@ -418,7 +425,7 @@ export default function TaskScreen() {
           ))}
         </SheetSection>
         {labels?.length ? (
-          <SheetSection title="Labels">
+          <SheetSection title={t('common.labels')}>
             {labels.map((label) => (
               <SheetRow
                 icon="flag"
@@ -435,7 +442,7 @@ export default function TaskScreen() {
           </SheetSection>
         ) : null}
         {error ? <ThemedText style={{ color: theme.danger }} type="small">{error}</ThemedText> : null}
-        <TaskAction disabled={busy || !title.trim()} label={busy ? 'Saving…' : 'Save changes'} onPress={() => void saveTask()} primary />
+        <TaskAction disabled={busy || !title.trim()} label={busy ? t('task.saving') : t('task.save')} onPress={() => void saveTask()} primary />
       </OptionsSheet>
     </ThemedView>
   );
@@ -445,6 +452,7 @@ const styles = StyleSheet.create({
   content: { gap: Spacing.four, padding: Spacing.three, paddingBottom: Spacing.six },
   contentWithComposer: { paddingBottom: Spacing.four },
   eyebrow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
+  eyebrowKey: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
   headerButton: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },
   hero: { gap: Spacing.two },
   heroMeta: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },

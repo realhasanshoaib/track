@@ -20,6 +20,23 @@ describe('task presentation', () => {
     expect(taskStateTone('started')).toBe('active');
   });
 
+  it('uses translated labels without changing machine values', () => {
+    const translated = (key: string, options?: Record<string, unknown>) => {
+      if (key === 'priority.urgent') return 'عاجلة';
+      if (key === 'task.due') return `الاستحقاق ${String(options?.date)}`;
+      if (key === 'task.activityCreated') return 'أنشأ هذه المهمة';
+      return key;
+    };
+    expect(taskPriorityLabel('urgent', translated)).toBe('عاجلة');
+    expect(taskDueLabel('2026-07-31', '2026-07-30', undefined, {
+      locale: 'ar-u-nu-latn',
+      t: translated,
+    })).toContain('الاستحقاق');
+    expect(taskActivityLabel('created', translated)).toBe('أنشأ هذه المهمة');
+    expect(formatTaskDate('2026-07-31', 'ar-u-nu-latn')).toMatch(/31/);
+    expect(formatTaskDate('2026-07-31', 'ar-u-nu-latn')).not.toMatch(/[٠-٩]/);
+  });
+
   it('describes due dates relative to the supplied local date', () => {
     expect(localTaskDate(new Date(2026, 6, 30, 23, 30))).toBe('2026-07-30');
     expect(taskDueLabel(undefined, '2026-07-30')).toBeNull();

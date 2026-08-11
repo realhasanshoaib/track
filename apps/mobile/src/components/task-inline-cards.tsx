@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   assistantStreamId?: Id<'assistantStreams'>;
@@ -19,6 +20,7 @@ type Props = {
 
 export function TaskInlineCards({ assistantStreamId, identity, messageId, projectId }: Props) {
   const theme = useTheme();
+  const { t } = useTranslation('work');
   const router = useRouter();
   const queryIdentity = identity ? {
     actingCompanyId: identity.companyId,
@@ -46,10 +48,12 @@ export function TaskInlineCards({ assistantStreamId, identity, messageId, projec
             router.push(taskDetailHref(projectId, item.task.publicKey, identity));
           }}
           style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
-          <ThemedText style={{ color: theme.textSecondary }} type="code">
-            {item.task.publicKey} · {item.state?.name ?? 'Unknown status'}
-          </ThemedText>
-          <ThemedText numberOfLines={2} type="smallBold">{item.task.title}</ThemedText>
+          <View style={styles.meta}>
+            <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">{item.task.publicKey}</ThemedText>
+            <ThemedText style={{ color: theme.textSecondary }} type="code">·</ThemedText>
+            <ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{item.state?.name ?? t('common.unknown')}</ThemedText>
+          </View>
+          <ThemedText contentDirection="auto" numberOfLines={2} type="smallBold">{item.task.title}</ThemedText>
         </Pressable>
       ))}
     </View>
@@ -64,11 +68,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
+  meta: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   cards: {
     gap: Spacing.one,
     marginBottom: Spacing.two,
-    marginLeft: 52,
-    marginRight: Spacing.three,
+    marginStart: 52,
+    marginEnd: Spacing.three,
     marginTop: Spacing.one,
   },
 });

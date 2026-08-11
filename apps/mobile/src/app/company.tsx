@@ -9,9 +9,11 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing, TouchTarget } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { useTranslation } from "react-i18next";
 
 export default function CompanyScreen() {
   const theme = useTheme();
+  const { t } = useTranslation('work');
   const { trackUserId } = useTrackUser();
   const {
     actingCompanyId,
@@ -60,23 +62,20 @@ export default function CompanyScreen() {
       await action();
       Alert.alert(success);
     } catch {
-      Alert.alert(
-        "Action unavailable",
-        "Your authority or the invitation changed. Refresh and try again.",
-      );
+      Alert.alert(t('company.actionUnavailable'), t('company.actionUnavailableBody'));
     }
   }
 
   if (!companyModelEnabled)
     return (
       <ThemedView style={styles.screen}>
-        <Stack.Screen options={{ title: "Companies" }} />
+        <Stack.Screen options={{ title: t('company.title') }} />
         <View style={styles.empty}>
           <ThemedText type="subtitle">
-            Company collaboration is disabled
+            {t('company.disabledTitle')}
           </ThemedText>
           <ThemedText>
-            This server has not enabled the Company release.
+            {t('company.disabledBody')}
           </ThemedText>
         </View>
       </ThemedView>
@@ -84,15 +83,14 @@ export default function CompanyScreen() {
 
   return (
     <ThemedView style={styles.screen}>
-      <Stack.Screen options={{ title: "Companies" }} />
+      <Stack.Screen options={{ title: t('company.title') }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="subtitle">Acting Company</ThemedText>
+        <ThemedText type="subtitle">{t('company.actingTitle')}</ThemedText>
         <ThemedText style={{ color: theme.textSecondary }} type="small">
-          Choose the identity represented by Project and Channel actions.
-          Company membership alone never grants content.
+          {t('company.actingBody')}
         </ThemedText>
         <Choice
-          label="Personal / legacy Projects"
+          label={t('company.personalLegacyProjects')}
           onPress={() => setActingCompanyId(null)}
           selected={!actingCompanyId}
         />
@@ -100,13 +98,13 @@ export default function CompanyScreen() {
           company ? (
             <Choice
               key={company._id}
-              label={`${company.displayName} · ${membership.role}${company.status !== "active" ? ` · ${company.status}` : ""}`}
+              label={`${company.displayName} · ${roleLabel(membership.role, t)}${company.status !== "active" ? ` · ${statusLabel(company.status, t)}` : ""}`}
               onPress={() =>
                 company.status === "active"
                   ? setActingCompanyId(company._id)
                   : Alert.alert(
-                      "Company suspended",
-                      "An owner can reactivate this Company from the web administration surface.",
+                      t('company.suspendedTitle'),
+                      t('company.suspendedBody'),
                     )
               }
               selected={company._id === actingCompanyId}
@@ -115,12 +113,12 @@ export default function CompanyScreen() {
         )}
 
         {(companyInvitations ?? []).length ? (
-          <Section title="Company invitations">
+          <Section title={t('company.invitations')}>
             {companyInvitations?.map(({ company, invitation }) => (
               <Invitation
                 key={invitation._id}
-                title={company?.displayName ?? "Company"}
-                detail={`Join as ${invitation.role}`}
+                title={company?.displayName ?? t('company.companyFallback')}
+                detail={t('company.invitationDetail', { role: roleLabel(invitation.role, t) })}
                 accept={() =>
                   run(
                     () =>
@@ -128,7 +126,7 @@ export default function CompanyScreen() {
                         invitationId: invitation._id,
                         decision: "accept",
                       }),
-                    "Company joined",
+                    t('company.joinedCompany'),
                   )
                 }
                 decline={() =>
@@ -138,7 +136,7 @@ export default function CompanyScreen() {
                         invitationId: invitation._id,
                         decision: "decline",
                       }),
-                    "Invitation declined",
+                    t('company.invitationDeclined'),
                   )
                 }
               />
@@ -147,13 +145,13 @@ export default function CompanyScreen() {
         ) : null}
 
         {actingCompanyId && (relationshipInvitations ?? []).length ? (
-          <Section title="Relationship invitations">
+          <Section title={t('company.relationshipInvitations')}>
             {relationshipInvitations?.map(
               ({ invitation, invitingCompany, relationship, participants }) => (
                 <Invitation
                   key={invitation._id}
-                  title={relationship?.name ?? "Relationship"}
-                  detail={`${invitingCompany?.displayName ?? "A Company"} invited ${participants.map((company) => company.displayName).join(", ")}`}
+                  title={relationship?.name ?? t('company.relationshipFallback')}
+                  detail={t('company.relationshipDetail', { company: invitingCompany?.displayName ?? t('company.companyFallback'), participants: participants.map((company) => company.displayName).join(', ') })}
                   accept={() =>
                     run(
                       () =>
@@ -162,7 +160,7 @@ export default function CompanyScreen() {
                           invitationId: invitation._id,
                           decision: "accept",
                         }),
-                      "Relationship joined",
+                      t('company.joinedRelationship'),
                     )
                   }
                   decline={() =>
@@ -173,7 +171,7 @@ export default function CompanyScreen() {
                           invitationId: invitation._id,
                           decision: "decline",
                         }),
-                      "Invitation declined",
+                      t('company.invitationDeclined'),
                     )
                   }
                 />
@@ -183,13 +181,13 @@ export default function CompanyScreen() {
         ) : null}
 
         {actingCompanyId && trackUserId && (projectInvitations ?? []).length ? (
-          <Section title="Shared Project invitations">
+          <Section title={t('company.sharedProjectInvitations')}>
             {projectInvitations?.map(
               ({ invitation, invitingCompany, project }) => (
                 <Invitation
                   key={invitation._id}
-                  title={project?.name ?? "Shared Project"}
-                  detail={`${invitingCompany?.displayName ?? "A Company"} will gain only the confirmed General Channel audience.`}
+                  title={project?.name ?? t('company.sharedProjectFallback')}
+                  detail={t('company.sharedProjectDetail', { company: invitingCompany?.displayName ?? t('company.companyFallback') })}
                   accept={() =>
                     run(
                       () =>
@@ -201,7 +199,7 @@ export default function CompanyScreen() {
                             { userId: trackUserId, role: "manager" },
                           ],
                         }),
-                      "Project joined",
+                      t('company.joinedProject'),
                     )
                   }
                   decline={() =>
@@ -213,7 +211,7 @@ export default function CompanyScreen() {
                           decision: "decline",
                           initialMembers: [],
                         }),
-                      "Invitation declined",
+                      t('company.invitationDeclined'),
                     )
                   }
                 />
@@ -223,7 +221,7 @@ export default function CompanyScreen() {
         ) : null}
 
         {actingCompanyId ? (
-          <Section title="Relationships">
+          <Section title={t('company.relationships')}>
             {(relationships ?? []).map(({ relationship, participants }) => (
               <View
                 key={relationship._id}
@@ -232,7 +230,7 @@ export default function CompanyScreen() {
                   { backgroundColor: theme.backgroundElement },
                 ]}
               >
-                <ThemedText type="smallBold">{relationship.name}</ThemedText>
+                <ThemedText contentDirection="auto" type="smallBold">{relationship.name}</ThemedText>
                 <ThemedText style={{ color: theme.textSecondary }} type="small">
                   {participants
                     .map((company) => company.displayName)
@@ -241,8 +239,7 @@ export default function CompanyScreen() {
               </View>
             ))}
             <ThemedText style={{ color: theme.textSecondary }} type="small">
-              Profile editing, member administration, removal votes, migration,
-              and archive administration are available on web in this release.
+              {t('company.adminNote')}
             </ThemedText>
           </Section>
         ) : null}
@@ -275,7 +272,7 @@ function Choice({
         },
       ]}
     >
-      <ThemedText type="smallBold">
+      <ThemedText contentDirection="auto" type="smallBold">
         {selected ? "✓ " : ""}
         {label}
       </ThemedText>
@@ -310,10 +307,11 @@ function Invitation({
   title: string;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation('work');
   return (
     <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-      <ThemedText type="smallBold">{title}</ThemedText>
-      <ThemedText style={{ color: theme.textSecondary }} type="small">
+      <ThemedText contentDirection="auto" type="smallBold">{title}</ThemedText>
+      <ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="small">
         {detail}
       </ThemedText>
       <View style={styles.actions}>
@@ -322,7 +320,7 @@ function Invitation({
           style={[styles.button, { backgroundColor: theme.text }]}
         >
           <ThemedText style={{ color: theme.background }} type="smallBold">
-            Accept
+            {t('common.accept')}
           </ThemedText>
         </Pressable>
         <Pressable
@@ -332,11 +330,31 @@ function Invitation({
             { borderColor: theme.hairline, borderWidth: 1 },
           ]}
         >
-          <ThemedText type="smallBold">Decline</ThemedText>
+          <ThemedText type="smallBold">{t('common.decline')}</ThemedText>
         </Pressable>
       </View>
     </View>
   );
+}
+
+function roleLabel(role: string, t: (key: string) => string) {
+  const key = role === 'owner' ? 'company.roleOwner'
+    : role === 'admin' ? 'company.roleAdmin'
+      : role === 'staff' ? 'company.roleStaff'
+        : role === 'manager' ? 'company.roleManager'
+          : role === 'viewer' ? 'company.roleViewer'
+            : role === 'guest' ? 'company.roleGuest'
+              : role === 'member' ? 'company.roleMember'
+                : 'company.roleUnknown';
+  return t(key);
+}
+
+function statusLabel(status: string, t: (key: string) => string) {
+  const key = status === 'suspended' ? 'company.statusSuspended'
+    : status === 'archived' ? 'company.statusArchived'
+      : status === 'active' ? 'company.statusActive'
+        : 'company.statusUnknown';
+  return t(key);
 }
 
 const styles = StyleSheet.create({

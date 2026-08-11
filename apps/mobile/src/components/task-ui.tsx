@@ -7,8 +7,11 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
+import { formatDate, useLocale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 import {
   taskDueLabel,
+  localTaskDate,
   taskPriorityGlyph,
   taskPriorityLabel,
   taskStateTone,
@@ -73,19 +76,20 @@ export function TaskStatusPill({
   return (
     <View style={[styles.pill, { backgroundColor: palette.background }]}>
       <View style={[styles.pillDot, { backgroundColor: palette.foreground }]} />
-      <ThemedText numberOfLines={1} style={{ color: palette.foreground }} type="code">{label}</ThemedText>
+      <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: palette.foreground }} type="code">{label}</ThemedText>
     </View>
   );
 }
 
 export function TaskPriorityBadge({ priority }: { priority: TaskPriority }) {
   const theme = useTheme();
+  const { t } = useTranslation('work');
   if (priority === 'none') return null;
   const color = priority === 'urgent' ? theme.danger : priority === 'high' ? theme.warning : theme.textSecondary;
   return (
-    <View accessibilityLabel={`${taskPriorityLabel(priority)} priority`} style={styles.priority}>
+    <View accessibilityLabel={t('priority.accessibility', { label: taskPriorityLabel(priority, t) })} style={styles.priority}>
       <ThemedText style={{ color, fontWeight: '800' }} type="code">{taskPriorityGlyph(priority)}</ThemedText>
-      <ThemedText style={{ color }} type="code">{taskPriorityLabel(priority)}</ThemedText>
+      <ThemedText style={{ color }} type="code">{taskPriorityLabel(priority, t)}</ThemedText>
     </View>
   );
 }
@@ -114,8 +118,10 @@ export function TaskCard({
   title: string;
 }) {
   const theme = useTheme();
-  const due = taskDueLabel(dueDate, undefined, category);
-  const overdue = due?.startsWith('Overdue');
+  const { locale } = useLocale();
+  const { t } = useTranslation('work');
+  const due = taskDueLabel(dueDate, undefined, category, { formatDate, locale, t });
+  const overdue = Boolean(dueDate && dueDate < localTaskDate() && category !== 'completed' && category !== 'canceled');
 
   return (
     <Pressable
@@ -125,18 +131,18 @@ export function TaskCard({
       style={[styles.card, compact && styles.cardCompact, {
         backgroundColor: theme.backgroundElement,
         borderColor: theme.hairline,
-      }]}>
+      ]}>
       <View style={styles.cardMeta}>
-        <ThemedText style={{ color: theme.textSecondary }} type="code">{publicKey}</ThemedText>
+        <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">{publicKey}</ThemedText>
         <TaskPriorityBadge priority={priority} />
       </View>
-      <ThemedText numberOfLines={compact ? 3 : 2} style={styles.cardTitle} type="smallBold">{title}</ThemedText>
+      <ThemedText contentDirection="auto" numberOfLines={compact ? 3 : 2} style={styles.cardTitle} type="smallBold">{title}</ThemedText>
       <View style={styles.cardDetails}>
         <TaskStatusPill category={category} label={stateName} />
         {due ? (
           <View style={styles.inlineMeta}>
             <PlatformIcon color={overdue ? theme.danger : theme.textSecondary} name="calendar" size={14} />
-            <ThemedText style={{ color: overdue ? theme.danger : theme.textSecondary }} type="code">{due}</ThemedText>
+            <ThemedText contentDirection="auto" style={{ color: overdue ? theme.danger : theme.textSecondary }} type="code">{due}</ThemedText>
           </View>
         ) : null}
       </View>
@@ -145,13 +151,13 @@ export function TaskCard({
           {assignee ? (
             <View style={styles.assignee}>
               <ColoredAvatar label={assignee} seed={assignee} size={22} />
-              <ThemedText numberOfLines={1} style={{ color: theme.textSecondary }} type="small">{assignee}</ThemedText>
+              <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.textSecondary }} type="small">{assignee}</ThemedText>
             </View>
           ) : <View />}
           {linkedContext ? (
             <View style={styles.linked}>
               <PlatformIcon color={theme.textSecondary} name="link" size={14} />
-              <ThemedText numberOfLines={1} style={{ color: theme.textSecondary }} type="code">{linkedContext}</ThemedText>
+              <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.textSecondary }} type="code">{linkedContext}</ThemedText>
             </View>
           ) : null}
         </View>
