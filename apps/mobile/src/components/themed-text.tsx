@@ -1,23 +1,28 @@
 import { Text, type TextProps } from 'react-native';
 
 import { ThemeColor, Typography } from '@/constants/theme';
+import { useLocale } from '@/contexts/locale-context';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextType = 'default' | 'title' | 'subtitle' | 'small' | 'smallBold' | 'code' | 'link';
 
 export type ThemedTextProps = TextProps & {
+  contentDirection?: 'ui' | 'auto' | 'ltr';
   type?: ThemedTextType;
   themeColor?: ThemeColor;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+export function ThemedText({ contentDirection = 'ui', style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
+  const { direction } = useLocale();
+  const writingDirection = contentDirection === 'ui' ? direction : contentDirection;
 
   return (
     <Text
       allowFontScaling={false}
       style={[
         { color: theme[themeColor ?? 'text'] },
+        { writingDirection },
         type === 'default' && Typography.body,
         type === 'small' && Typography.body,
         type === 'smallBold' && Typography.bodyBold,

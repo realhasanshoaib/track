@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 import { authClient } from '@/lib/auth-client';
 import { useDevAuthBypass } from '@/lib/dev-auth-bypass';
@@ -22,6 +23,8 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { SignInHero } from '@/components/sign-in-hero';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { LanguageSwitcher } from '@/i18n';
+import { useLocale } from '@/contexts/locale-context';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -30,6 +33,8 @@ import googleMarkImage from '@/assets/images/google-g.png';
 export default function SignInScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation('common');
+  const { direction } = useLocale();
   const devAuthBypass = useDevAuthBypass();
   const session = authClient.useSession();
   const [busy, setBusy] = useState(false);
@@ -60,7 +65,7 @@ export default function SignInScreen() {
           : await authClient.signIn.social({ provider, callbackURL: '/' });
       const err = (result as { error?: { code?: string; message?: string } | null }).error;
       if (err) {
-        throw new Error(err.message ?? err.code ?? 'Sign-in failed');
+        throw new Error(err.code ?? 'auth_error');
       }
       await waitForSessionReady(session.refetch);
       router.replace('/');
@@ -69,7 +74,7 @@ export default function SignInScreen() {
       if (isAppleCancel(e)) {
         return;
       }
-      setError(e instanceof Error ? e.message : 'Sign-in failed');
+      setError(getAuthErrorMessage(e, t));
     } finally {
       setBusy(false);
     }
@@ -78,7 +83,7 @@ export default function SignInScreen() {
   async function signInWithEmail() {
     const input = validateEmailSignIn(email, password);
     if (!input.ok) {
-      setError(input.error);
+      setError(getValidationErrorMessage(input.error, t));
       return;
     }
 
@@ -92,7 +97,7 @@ export default function SignInScreen() {
         callbackURL: '/',
       });
       if (result.error) {
-        throw new Error('Email or password is incorrect.');
+        throw new Error('email_or_password_incorrect');
       }
       if (requiresTwoFactor(result.data)) {
         return;
@@ -101,7 +106,7 @@ export default function SignInScreen() {
       router.replace('/');
     } catch (e) {
       hapticLight();
-      setError(e instanceof Error ? e.message : 'Sign-in failed');
+      setError(getAuthErrorMessage(e, t));
     } finally {
       setBusy(false);
     }
@@ -110,7 +115,7 @@ export default function SignInScreen() {
   async function signUpWithEmail() {
     const input = validateEmailSignUp(name, email, password);
     if (!input.ok) {
-      setError(input.error);
+      setError(getValidationErrorMessage(input.error, t));
       return;
     }
 
@@ -125,13 +130,13 @@ export default function SignInScreen() {
         callbackURL: '/',
       });
       if (result.error) {
-        throw new Error(result.error.message ?? 'Could not create the account.');
+        throw new Error(result.error.code ?? 'account_creation_failed');
       }
       await waitForSessionReady(session.refetch);
       router.replace('/');
     } catch (e) {
       hapticLight();
-      setError(e instanceof Error ? e.message : 'Could not create the account.');
+      setError(getAuthErrorMessage(e, t, 'signUp'));
     } finally {
       setBusy(false);
     }
@@ -151,7 +156,7 @@ export default function SignInScreen() {
       router.replace('/');
     } catch {
       hapticLight();
-      setError('Development sign-in failed. Check the development auth configuration.');
+      setError(t('auth.developmentSignInFailed'));
     } finally {
       setBusy(false);
     }
@@ -160,7 +165,7 @@ export default function SignInScreen() {
   const showApple = Platform.OS !== 'android';
 
   return (
-    <ThemedView style={styles.screen}>
+    <ThemedView style={[styles.screen, { direction }]}>
       <SafeAreaView edges={['top', 'bottom']} style={styles.safe}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>
           <ScrollView
@@ -168,6 +173,9 @@ export default function SignInScreen() {
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
           >
+            <View style={styles.languageWrap}>
+              <LanguageSwitcher compact />
+            </View>
             <SignInHero />
 
             {/* Auth panel */}
@@ -192,7 +200,7 @@ export default function SignInScreen() {
                 ]}
               >
                 <Image accessibilityIgnoresInvertColors source={googleMarkImage} style={styles.authIcon} />
-                <ThemedText style={[styles.authLabel, { color: theme.background }]}>Continue with Google</ThemedText>
+                <ThemedText style={[styles.authLabel, { color: theme.background }]}>{t('auth.continueGoogle')}</ThemedText>
               </Pressable>
 
               {/* Apple */}
@@ -210,7 +218,7 @@ export default function SignInScreen() {
                   ]}
                 >
                   <PlatformIcon color={theme.text} name="apple" size={20} />
-                  <ThemedText style={[styles.authLabel, { color: theme.text }]}>Continue with Apple</ThemedText>
+                  <ThemedText style={[styles.authLabel, { color: theme.text }]}>{t('auth.continueApple')}</ThemedText>
                 </Pressable>
               ) : null}
 
@@ -218,12 +226,12 @@ export default function SignInScreen() {
                 <View style={styles.emailFields}>
                   {emailIntent === 'signUp' ? (
                     <TextInput
-                      accessibilityLabel="Full name"
+                      accessibilityLabel={t('auth.fullName')}
                       autoCapitalize="words"
                       autoComplete="name"
                       editable={!busy}
                       onChangeText={setName}
-                      placeholder="Full name"
+                      placeholder={t('auth.fullName')}
                       placeholderTextColor={theme.textSecondary}
                       returnKeyType="next"
                       style={[
@@ -232,6 +240,7 @@ export default function SignInScreen() {
                           backgroundColor: theme.backgroundElement,
                           borderColor: theme.hairline,
                           color: theme.text,
+                          writingDirection: direction,
                         },
                       ]}
                       textContentType="name"
@@ -239,43 +248,47 @@ export default function SignInScreen() {
                     />
                   ) : null}
                   <TextInput
-                    accessibilityLabel="Email address"
+                    accessibilityLabel={t('auth.emailAddress')}
                     autoCapitalize="none"
                     autoComplete="email"
                     editable={!busy}
                     keyboardType="email-address"
                     onChangeText={setEmail}
-                    placeholder="Email address"
+                    placeholder={t('auth.emailAddress')}
                     placeholderTextColor={theme.textSecondary}
                     returnKeyType="next"
                     style={[
                       styles.input,
                       {
-                        backgroundColor: theme.backgroundElement,
-                        borderColor: theme.hairline,
-                        color: theme.text,
+                          backgroundColor: theme.backgroundElement,
+                          borderColor: theme.hairline,
+                          color: theme.text,
+                          textAlign: 'left',
+                          writingDirection: 'ltr',
                       },
                     ]}
                     textContentType="emailAddress"
                     value={email}
                   />
                   <TextInput
-                    accessibilityLabel="Password"
+                    accessibilityLabel={t('auth.password')}
                     autoCapitalize="none"
                     autoComplete={emailIntent === 'signUp' ? 'new-password' : 'current-password'}
                     editable={!busy}
                     onChangeText={setPassword}
                     onSubmitEditing={submitEmail}
-                    placeholder="Password"
+                    placeholder={t('auth.password')}
                     placeholderTextColor={theme.textSecondary}
                     returnKeyType="done"
                     secureTextEntry
                     style={[
                       styles.input,
                       {
-                        backgroundColor: theme.backgroundElement,
-                        borderColor: theme.hairline,
-                        color: theme.text,
+                          backgroundColor: theme.backgroundElement,
+                          borderColor: theme.hairline,
+                          color: theme.text,
+                          textAlign: 'left',
+                          writingDirection: 'ltr',
                       },
                     ]}
                     textContentType={emailIntent === 'signUp' ? 'newPassword' : 'password'}
@@ -289,7 +302,7 @@ export default function SignInScreen() {
                   >
                     <PlatformIcon color={theme.background} name="email-outline" size={20} />
                     <ThemedText style={[styles.authLabel, { color: theme.background }]}>
-                      {emailIntent === 'signUp' ? 'Create account' : 'Sign in with email'}
+                      {emailIntent === 'signUp' ? t('auth.createAccount') : t('auth.signInWithEmail')}
                     </ThemedText>
                   </Pressable>
                   <Pressable
@@ -304,8 +317,8 @@ export default function SignInScreen() {
                   >
                     <ThemedText style={{ color: theme.textSecondary }} type="small">
                       {emailIntent === 'signUp'
-                        ? 'Already have an account? Sign in'
-                        : 'New to Track? Create an account'}
+                        ? t('auth.alreadyHaveAccount')
+                        : t('auth.newToTrack')}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -321,7 +334,7 @@ export default function SignInScreen() {
                   style={styles.emailLink}
                 >
                   <ThemedText style={{ color: theme.textSecondary }} type="smallBold">
-                    Continue with email
+                    {t('auth.continueWithEmail')}
                   </ThemedText>
                 </Pressable>
               )}
@@ -334,7 +347,7 @@ export default function SignInScreen() {
                   style={styles.devBypass}
                 >
                   <ThemedText style={{ color: theme.textSecondary }} type="small">
-                    Dev bypass
+                    {t('auth.devBypass')}
                   </ThemedText>
                 </Pressable>
               ) : null}
@@ -342,7 +355,7 @@ export default function SignInScreen() {
 
             {/* Legal */}
             <ThemedText style={[styles.legal, { color: theme.textTertiary }]} type="caption">
-              By continuing, you agree to our{' '}
+              {t('auth.legalPrefix')}{' '}
               <ThemedText
                 accessibilityRole="link"
                 onPress={() => {
@@ -352,9 +365,9 @@ export default function SignInScreen() {
                 style={[styles.legalLink, { color: theme.textSecondary }]}
                 type="caption"
               >
-                Terms
+                {t('auth.terms')}
               </ThemedText>{' '}
-              and{' '}
+              {t('auth.and')}{' '}
               <ThemedText
                 accessibilityRole="link"
                 onPress={() => {
@@ -364,7 +377,7 @@ export default function SignInScreen() {
                 style={[styles.legalLink, { color: theme.textSecondary }]}
                 type="caption"
               >
-                Privacy Policy
+                {t('auth.privacyPolicy')}
               </ThemedText>
               .
             </ThemedText>
@@ -378,7 +391,7 @@ export default function SignInScreen() {
 async function signInWithNativeApple() {
   const isAvailable = await AppleAuthentication.isAvailableAsync();
   if (!isAvailable) {
-    throw new Error('Sign in with Apple is unavailable on this device.');
+    throw new Error('apple_unavailable');
   }
 
   const credential = await AppleAuthentication.signInAsync({
@@ -389,7 +402,7 @@ async function signInWithNativeApple() {
   });
 
   if (!credential.identityToken) {
-    throw new Error('Apple did not return an identity token.');
+    throw new Error('apple_token_missing');
   }
 
   return await authClient.signIn.social({
@@ -412,7 +425,7 @@ async function waitForSessionReady(refetch: ReturnType<typeof authClient.useSess
     await sleep(250);
   }
 
-  throw new Error('Sign-in completed, but the session was not ready. Please try again.');
+  throw new Error('session_not_ready');
 }
 
 function getAppleUserPayload(credential: AppleAuthentication.AppleAuthenticationCredential) {
@@ -434,6 +447,27 @@ function sleep(ms: number) {
 
 function isAppleCancel(error: unknown) {
   return error instanceof Error && (error as Error & { code?: string }).code === 'ERR_REQUEST_CANCELED';
+}
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+function getValidationErrorMessage(error: string, t: Translate) {
+  if (error === 'Enter a valid email address.') return t('auth.validEmail');
+  if (error === 'Enter your password.') return t('auth.passwordRequired');
+  if (error === 'Enter your name.') return t('auth.nameRequired');
+
+  const match = error.match(/at least (\d+) characters/);
+  return match ? t('auth.passwordLength', { count: match[1] }) : t('auth.signInFailed');
+}
+
+function getAuthErrorMessage(error: unknown, t: Translate, mode: 'signIn' | 'signUp' = 'signIn') {
+  const code = error instanceof Error ? error.message : '';
+  if (code === 'email_or_password_incorrect') return t('auth.emailPasswordIncorrect');
+  if (code === 'account_creation_failed') return t('auth.accountCreationFailed');
+  if (code === 'apple_unavailable') return t('auth.appleUnavailable');
+  if (code === 'apple_token_missing') return t('auth.appleTokenMissing');
+  if (code === 'session_not_ready') return t('auth.sessionNotReady');
+  return mode === 'signUp' ? t('auth.accountCreationFailed') : t('auth.signInFailed');
 }
 
 const styles = StyleSheet.create({
@@ -491,6 +525,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 52,
     paddingHorizontal: Spacing.four,
+  },
+  languageWrap: {
+    alignItems: 'flex-end',
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
   },
   keyboard: {
     flex: 1,

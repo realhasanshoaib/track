@@ -6,12 +6,16 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { Spacing } from '@/constants/theme';
+import { useLocale } from '@/contexts/locale-context';
 import { useTheme } from '@/hooks/use-theme';
 
 export function SkeletonRow() {
   const theme = useTheme();
+  const { direction } = useLocale();
+  const { t } = useTranslation('common');
   const opacity = useSharedValue(0.4);
 
   useEffect(() => {
@@ -22,7 +26,7 @@ export function SkeletonRow() {
   const bg = theme.backgroundElement;
 
   return (
-    <Animated.View style={[styles.row, { backgroundColor: bg }, animStyle]}>
+    <Animated.View accessibilityLabel={t('generic.loading')} accessibilityRole="progressbar" style={[styles.row, { backgroundColor: bg, direction }, animStyle]}>
       <View style={[styles.avatar, { backgroundColor: theme.hairline }]} />
       <View style={styles.lines}>
         <View style={[styles.lineWide, { backgroundColor: theme.hairline }]} />

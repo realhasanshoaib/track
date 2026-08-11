@@ -1,10 +1,12 @@
 import { Children, Fragment } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useLocale } from '@/contexts/locale-context';
 import { Spacing, TouchTarget } from '@/constants/theme';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,6 +21,8 @@ type Props = {
 export function OptionsSheet({ children, onClose, title, visible }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { direction } = useLocale();
+  const { t } = useTranslation('common');
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -26,10 +30,10 @@ export function OptionsSheet({ children, onClose, title, visible }: Props) {
         <Pressable onPress={onClose} style={styles.scrim} />
         <ThemedView style={[styles.sheet, { borderTopColor: theme.hairline }]}>
           <View style={[styles.handle, { backgroundColor: theme.textSecondary }]} />
-          <View style={styles.header}>
+          <View style={[styles.header, { direction }]}>
             <ThemedText type="subtitle">{title}</ThemedText>
             <Pressable
-              accessibilityLabel="Close"
+              accessibilityLabel={t('sheet.close')}
               android_ripple={{ color: theme.backgroundSelected, borderless: true }}
               hitSlop={12}
               onPress={() => { hapticLight(); onClose(); }}
@@ -53,9 +57,10 @@ export function OptionsSheet({ children, onClose, title, visible }: Props) {
 
 export function SheetSection({ children, title }: { children: React.ReactNode; title?: string }) {
   const theme = useTheme();
+  const { direction } = useLocale();
   const items = Children.toArray(children);
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, { direction }]}>
       {title ? (
         <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]} type="code">
           {title.toUpperCase()}
@@ -89,6 +94,7 @@ export function SheetRow({
   trailing?: React.ReactNode;
 }) {
   const theme = useTheme();
+  const { direction } = useLocale();
   const textColor = destructive ? '#b91c1c' : theme.text;
   const iconColor = destructive ? '#b91c1c' : theme.textSecondary;
 
@@ -96,7 +102,7 @@ export function SheetRow({
     <Pressable
       android_ripple={{ color: theme.backgroundSelected }}
       onPress={() => { if (onPress) { hapticLight(); onPress(); } }}
-      style={styles.sheetRow}>
+      style={[styles.sheetRow, { direction }]}>
       {icon ? <PlatformIcon color={iconColor} name={icon} size={20} /> : null}
       <ThemedText style={[styles.sheetRowLabel, { color: textColor }]} type="small">
         {label}
@@ -122,6 +128,7 @@ export function SheetInput({
   value: string;
 }) {
   const theme = useTheme();
+  const { direction } = useLocale();
   return (
     <View style={styles.inputWrap}>
       <ThemedText accessible={false} style={{ color: theme.textSecondary }} type="code">{label}</ThemedText>
@@ -130,7 +137,7 @@ export function SheetInput({
         allowFontScaling={false}
         multiline={multiline}
         onChangeText={onChangeText}
-        style={[styles.input, multiline && styles.inputMulti, styles.inputText, { borderColor: theme.hairline, color: theme.text }, multiline && styles.inputTextMulti]}
+        style={[styles.input, multiline && styles.inputMulti, styles.inputText, { borderColor: theme.hairline, color: theme.text, writingDirection: direction }, multiline && styles.inputTextMulti]}
         value={value}
       />
     </View>

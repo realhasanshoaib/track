@@ -2,6 +2,7 @@ import { FlatList, Linking, Platform, Pressable, RefreshControl, StyleSheet, Vie
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
+import { useTranslation } from 'react-i18next';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Doc } from '../../../../convex/_generated/dataModel';
@@ -15,6 +16,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EmptyState } from '@/components/empty-state';
 import { OptionsSheet, SheetInput, SheetSection, SheetRow } from '@/components/options-sheet';
+import { LanguageSwitcher, formatNumber } from '@/i18n';
+import { useLocale } from '@/contexts/locale-context';
 import { Spacing, TouchTarget } from '@/constants/theme';
 import { hapticLight, hapticDestructive } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
@@ -30,6 +33,8 @@ type MobileProject = {
 export default function ProjectsScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation('common');
+  const { direction, locale } = useLocale();
   const { trackUserId, signOut, openProfileSheet } = useTrackUser();
   const { actingCompanyId, actingCompany, companyModelEnabled } = useCompany();
   const { themeOverride, setThemeOverride } = useThemeOverride();
@@ -86,10 +91,10 @@ export default function ProjectsScreen() {
       router.push(`/groups?projectId=${projectId}`);
     } catch (error) {
       Alert.alert(
-        'Project not created',
+        t('projects.projectNotCreated'),
         error instanceof Error && error.message === 'not_allowed_to_create_project'
-          ? 'Only project owners and admins can create another project.'
-          : 'Please check the project details and try again.',
+          ? t('projects.createProjectRestricted')
+          : t('projects.checkProjectDetails'),
       );
     } finally {
       setCreating(false);
@@ -116,12 +121,12 @@ export default function ProjectsScreen() {
     if (!trackUserId) return;
     hapticDestructive();
     Alert.alert(
-      'Delete account',
-      'Track will remove your profile and disable notifications. Shared Project and Channel content is retained for collaboration integrity.',
+      t('projects.deleteAccount'),
+      t('projects.deleteAccountBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('generic.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('projects.deleteAccountConfirm'),
           style: 'destructive',
           onPress: () => {
             void deleteAccount();
@@ -138,24 +143,24 @@ export default function ProjectsScreen() {
       await requestAccountDeletion({ userId: trackUserId });
       await signOut();
     } catch {
-      Alert.alert('Delete account failed', 'Please try again in a moment.');
+      Alert.alert(t('projects.deleteAccountFailed'), t('projects.deleteAccountRetry'));
     } finally {
       setDeletingAccount(false);
     }
   }
 
   return (
-    <ThemedView style={styles.screen}>
+    <ThemedView style={[styles.screen, { direction }]}>
       <Stack.Screen
         options={{
-          title: 'Projects',
+          title: t('projects.title'),
           headerLargeTitle: Platform.OS === 'ios',
           headerTransparent: Platform.OS === 'ios',
           headerBlurEffect: 'systemMaterial',
           headerRight: () => (
             <View style={styles.headerActions}>
               {companyModelEnabled ? <Pressable
-                accessibilityLabel="Switch Acting Company and manage invitations"
+                accessibilityLabel={t('projects.switchCompany')}
                 android_ripple={{ color: theme.backgroundSelected, borderless: true }}
                 hitSlop={8}
                 onPress={() => router.push('/company')}
@@ -164,7 +169,7 @@ export default function ProjectsScreen() {
               </Pressable> : null}
               {!actingCompanyId ? (
               <Pressable
-                accessibilityLabel="Create project"
+                accessibilityLabel={t('projects.createProject')}
                 android_ripple={{ color: theme.backgroundSelected, borderless: true }}
                 hitSlop={8}
                 onPress={openCreateProject}
@@ -173,7 +178,7 @@ export default function ProjectsScreen() {
               </Pressable>
               ) : null}
               <Pressable
-                accessibilityLabel="Account and settings"
+                accessibilityLabel={t('projects.accountAndSettings')}
                 android_ripple={{ color: theme.backgroundSelected, borderless: true }}
                 hitSlop={8}
                 onPress={openTools}
@@ -185,7 +190,7 @@ export default function ProjectsScreen() {
         }}
       />
 
-      {actingCompanyId ? <View style={[styles.contextBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Representing {actingCompany?.company?.displayName}</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">Project actions use this Company identity.</ThemedText></View> : null}
+      {actingCompanyId ? <View style={[styles.contextBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">{t('projects.representing', { company: actingCompany?.company?.displayName ?? '' })}</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">{t('projects.companyActions')}</ThemedText></View> : null}
 
       {projects === undefined ? (
         <View style={styles.list}>
@@ -205,14 +210,14 @@ export default function ProjectsScreen() {
           )}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <EmptyState icon="briefcase-outline" title="No projects yet" body={actingCompanyId ? 'Accepted shared Projects and retained exit archives will appear here.' : 'Create a project to get started.'} />
+              <EmptyState icon="briefcase-outline" title={t('projects.noProjects')} body={actingCompanyId ? t('projects.sharedProjectsBody') : t('projects.createProjectBody')} />
               {!actingCompanyId ? <Pressable
                 accessibilityRole="button"
                 android_ripple={{ color: theme.backgroundSelected }}
                 onPress={openCreateProject}
                 style={[styles.primaryButton, { backgroundColor: theme.text }]}>
                 <ThemedText style={{ color: theme.background }} type="smallBold">
-                  Create Project
+                  {t('projects.createProject')}
                 </ThemedText>
               </Pressable> : null}
             </View>
@@ -223,15 +228,15 @@ export default function ProjectsScreen() {
         />
       )}
 
-      <OptionsSheet onClose={closeCreateProject} title="Create Project" visible={createOpen}>
+      <OptionsSheet onClose={closeCreateProject} title={t('projects.createProject')} visible={createOpen}>
         <SheetSection>
           <View style={styles.createInputs}>
-            <SheetInput label="Project name" onChangeText={setProjectName} value={projectName} />
-            <SheetInput label="Client label" onChangeText={setProjectClientLabel} value={projectClientLabel} />
+            <SheetInput label={t('projects.projectName')} onChangeText={setProjectName} value={projectName} />
+            <SheetInput label={t('projects.clientLabel')} onChangeText={setProjectClientLabel} value={projectClientLabel} />
           </View>
         </SheetSection>
         <Pressable
-          accessibilityLabel="Submit project creation"
+          accessibilityLabel={t('projects.submitCreateProject')}
           accessibilityRole="button"
           disabled={!projectName.trim() || creating}
           onPress={() => void submitCreateProject()}
@@ -240,25 +245,28 @@ export default function ProjectsScreen() {
             { backgroundColor: !projectName.trim() || creating ? theme.hairline : theme.text },
           ]}>
           <ThemedText style={{ color: theme.background }} type="smallBold">
-            {creating ? 'Creating…' : 'Create Project'}
+            {creating ? t('projects.creating') : t('projects.createProject')}
           </ThemedText>
         </Pressable>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setToolsOpen(false)} title="Account" visible={toolsOpen}>
-        <SheetSection title="Appearance">
-          <SheetRow icon="white-balance-sunny" label="Light" selected={themeOverride === 'light'} onPress={() => setThemeOverride('light')} />
-          <SheetRow icon="theme-light-dark" label="System" selected={themeOverride === 'system'} onPress={() => setThemeOverride('system')} />
-          <SheetRow icon="moon-waning-crescent" label="Dark" selected={themeOverride === 'dark'} onPress={() => setThemeOverride('dark')} />
+      <OptionsSheet onClose={() => setToolsOpen(false)} title={t('account.title')} visible={toolsOpen}>
+        <SheetSection title={t('account.appearance')}>
+          <SheetRow icon="white-balance-sunny" label={t('account.light')} selected={themeOverride === 'light'} onPress={() => setThemeOverride('light')} />
+          <SheetRow icon="theme-light-dark" label={t('account.system')} selected={themeOverride === 'system'} onPress={() => setThemeOverride('system')} />
+          <SheetRow icon="moon-waning-crescent" label={t('account.dark')} selected={themeOverride === 'dark'} onPress={() => setThemeOverride('dark')} />
+        </SheetSection>
+        <SheetSection title={t('language.label')}>
+          <LanguageSwitcher compact />
         </SheetSection>
         <SheetSection>
-          <SheetRow icon="account-edit-outline" label="Edit profile" onPress={() => { setToolsOpen(false); openProfileSheet(); }} />
-          <SheetRow icon="bell-outline" label="Notifications" onPress={() => { setToolsOpen(false); router.push('/notifications'); }} />
-          <SheetRow icon="shield-lock-outline" label="Privacy policy" onPress={() => void Linking.openURL('https://track.q9labs.ai/privacy')} />
-          <SheetRow icon="file-document-outline" label="Terms of Service" onPress={() => void Linking.openURL('https://track.q9labs.ai/terms')} />
-          <SheetRow icon="email-outline" label="Support" onPress={() => void Linking.openURL('mailto:q9labs.ai@gmail.com')} />
-          <SheetRow icon="logout" label="Sign out" onPress={() => { setToolsOpen(false); void signOut(); }} />
-          <SheetRow destructive icon="trash-can-outline" label={deletingAccount ? 'Deleting account…' : 'Delete account'} onPress={() => { setToolsOpen(false); confirmDeletion(); }} />
+          <SheetRow icon="account-edit-outline" label={t('account.editProfile')} onPress={() => { setToolsOpen(false); openProfileSheet(); }} />
+          <SheetRow icon="bell-outline" label={t('account.notifications')} onPress={() => { setToolsOpen(false); router.push('/notifications'); }} />
+          <SheetRow icon="shield-lock-outline" label={t('account.privacyPolicy')} onPress={() => void Linking.openURL('https://track.q9labs.ai/privacy')} />
+          <SheetRow icon="file-document-outline" label={t('account.terms')} onPress={() => void Linking.openURL('https://track.q9labs.ai/terms')} />
+          <SheetRow icon="email-outline" label={t('account.support')} onPress={() => void Linking.openURL('mailto:q9labs.ai@gmail.com')} />
+          <SheetRow icon="logout" label={t('account.signOut')} onPress={() => { setToolsOpen(false); void signOut(); }} />
+          <SheetRow destructive icon="trash-can-outline" label={deletingAccount ? t('projects.deletingAccount') : t('projects.deleteAccount')} onPress={() => { setToolsOpen(false); confirmDeletion(); }} />
         </SheetSection>
       </OptionsSheet>
     </ThemedView>
@@ -267,27 +275,39 @@ export default function ProjectsScreen() {
 
 function ProjectRow({ item, onPress }: { item: MobileProject; onPress: () => void }) {
   const theme = useTheme();
+  const { t } = useTranslation('common');
+  const { direction, locale } = useLocale();
+  const role = item.membership.role === 'owner'
+    ? t('projects.roleOwner')
+    : item.membership.role === 'admin'
+      ? t('projects.roleAdmin')
+      : t('projects.roleMember');
+  const channelLabel = item.groupCount === 1 ? t('projects.channel') : t('projects.channels');
+  const projectMeta = [
+    item.membership.companyDisplayNameSnapshot,
+    role,
+    `${formatNumber(locale, item.groupCount)} ${channelLabel}`,
+    item.membership.status === 'archived' ? t('projects.archive') : null,
+  ].filter(Boolean).join(' · ');
   return (
     <Pressable
       android_ripple={{ color: theme.backgroundSelected }}
       hitSlop={4}
       onPress={() => { hapticLight(); onPress(); }}
-      style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
+      style={[styles.row, { backgroundColor: theme.backgroundElement, direction }]}>
       <ColoredAvatar label={item.project.name} seed={item.project._id} shape="rounded" size={44} />
       <View style={styles.rowBody}>
-        <ThemedText type="smallBold">{item.project.name}</ThemedText>
-        <ThemedText style={{ color: theme.textSecondary }} type="code">
-          {item.membership.companyDisplayNameSnapshot ? `${item.membership.companyDisplayNameSnapshot} · ` : ''}{item.membership.role} · {item.groupCount} {item.groupCount === 1 ? 'Channel' : 'Channels'}{item.membership.status === 'archived' ? ' · archive' : ''}
-        </ThemedText>
+        <ThemedText contentDirection="auto" type="smallBold">{item.project.name}</ThemedText>
+        <ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">{projectMeta}</ThemedText>
       </View>
       {item.unreadCount > 0 ? (
         <View style={[styles.badge, { backgroundColor: theme.accent }]}>
           <ThemedText style={styles.badgeText}>
-            {item.unreadCount > 99 ? '99+' : String(item.unreadCount)}
+            {item.unreadCount > 99 ? `${formatNumber(locale, 99)}+` : formatNumber(locale, item.unreadCount)}
           </ThemedText>
         </View>
       ) : (
-        <PlatformIcon color={theme.hairline} name="chevron-right" size={18} />
+        <PlatformIcon color={theme.hairline} directional name="chevron-right" size={18} />
       )}
     </Pressable>
   );

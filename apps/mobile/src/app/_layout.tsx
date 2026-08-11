@@ -4,6 +4,7 @@ import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, type ComponentProps } from 'react';
 import { Platform } from 'react-native';
@@ -12,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { authClient } from '@/lib/auth-client';
 import { convexClient } from '@/lib/convex-client';
 import { TrackUserProvider } from '@/contexts/track-user-context';
+import { LocaleProvider } from '@/contexts/locale-context';
 import { CompanyProvider } from '@/contexts/company-context';
 import { ThemeOverrideProvider, useThemeOverride } from '@/contexts/theme-override-context';
 import { Colors } from '@/constants/theme';
@@ -49,15 +51,18 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeOverrideProvider>
-        <AppLayout />
-      </ThemeOverrideProvider>
+      <LocaleProvider>
+        <ThemeOverrideProvider>
+          <AppLayout />
+        </ThemeOverrideProvider>
+      </LocaleProvider>
     </GestureHandlerRootView>
   );
 }
 
 function AppLayout() {
   const { theme } = useThemeOverride();
+  const { t } = useTranslation('common');
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -77,7 +82,7 @@ function AppLayout() {
               <Stack
                 screenOptions={{
                   headerShown: true,
-                  headerBackTitle: 'Back',
+                  headerBackTitle: t('navigation.back'),
                   headerShadowVisible: Platform.OS === 'android',
                   headerStyle: {
                     backgroundColor: Colors[theme].background,
@@ -89,15 +94,15 @@ function AppLayout() {
                 }}>
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-                <Stack.Screen name="projects" options={{ title: 'Projects' }} />
-                <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
-                <Stack.Screen name="company" options={{ title: 'Companies' }} />
-                <Stack.Screen name="groups" options={{ title: 'Channels' }} />
-                <Stack.Screen name="conversation" options={{ title: 'Conversation' }} />
-                <Stack.Screen name="tasks" options={{ title: 'Tasks' }} />
-                <Stack.Screen name="task" options={{ title: 'Task' }} />
-                <Stack.Screen name="threads" options={{ title: 'Threads' }} />
-                <Stack.Screen name="thread" options={{ title: 'Thread' }} />
+                <Stack.Screen name="projects" options={{ title: t('navigation.projects') }} />
+                <Stack.Screen name="notifications" options={{ title: t('navigation.notifications') }} />
+                <Stack.Screen name="company" options={{ title: t('navigation.companies') }} />
+                <Stack.Screen name="groups" options={{ title: t('navigation.channels') }} />
+                <Stack.Screen name="conversation" options={{ title: t('navigation.conversation') }} />
+                <Stack.Screen name="tasks" options={{ title: t('navigation.tasks') }} />
+                <Stack.Screen name="task" options={{ title: t('navigation.task') }} />
+                <Stack.Screen name="threads" options={{ title: t('navigation.threads') }} />
+                <Stack.Screen name="thread" options={{ title: t('navigation.thread') }} />
               </Stack>
             </CompanyProvider>
           </PushNotificationBridge>

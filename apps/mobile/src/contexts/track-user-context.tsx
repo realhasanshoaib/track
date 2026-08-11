@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery } from 'convex/react';
+import { useTranslation } from 'react-i18next';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -9,6 +10,7 @@ import { authClient, setTwoFactorRedirectHandler } from '@/lib/auth-client';
 import { clearStoredAuthSession } from '@/lib/auth-storage';
 import { useDevAuthBypass } from '@/lib/dev-auth-bypass';
 import { getStoredPushInstallationId } from '@/lib/push-installation';
+import { useLocale } from '@/contexts/locale-context';
 import { OptionsSheet, SheetInput, SheetSection } from '@/components/options-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -32,6 +34,8 @@ export function useTrackUser() {
 
 export function TrackUserProvider({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
+  const { t } = useTranslation('common');
+  const { direction } = useLocale();
   const router = useRouter();
   const devAuthBypass = useDevAuthBypass();
   const session = authClient.useSession();
@@ -130,8 +134,8 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
       await fn();
     } catch {
       setActionError(key === 'profile'
-        ? 'We could not save your profile. Check your connection and try again.'
-        : 'We could not verify that code. Check it and try again.');
+        ? t('errors.profileSave')
+        : t('errors.twoFactorVerify'));
     } finally {
       setBusyAction(null);
     }
@@ -162,7 +166,7 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
         const installationId = await getStoredPushInstallationId();
         if (installationId) await detachPushInstallation({ installationId });
       } catch {
-        setSignOutError('Could not safely disconnect this device from notifications. Check your connection and try signing out again.');
+        setSignOutError(t('errors.signOutDisconnect'));
         setBusyAction(null);
         return;
       }
@@ -240,55 +244,53 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       {bootstrapError ? (
-        <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.backgroundElement }]}>
+        <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.backgroundElement, direction }]}>
           <ThemedText type="smallBold">
-            {bootstrapError === 'account'
-              ? 'We could not finish setting up your account.'
-              : 'Your account is ready, but pending invitations could not be accepted.'}
+            {bootstrapError === 'account' ? t('errors.accountSetup') : t('errors.pendingInvites')}
           </ThemedText>
-          <ThemedText type="small">Check your connection, then try again.</ThemedText>
+          <ThemedText type="small">{t('errors.connectionRetry')}</ThemedText>
           <Pressable
             accessibilityRole="button"
             disabled={busyAction === 'invites'}
             onPress={() => void retryBootstrap()}
             style={[styles.retryButton, { borderColor: theme.hairline }]}>
-            <ThemedText type="smallBold">{busyAction === 'invites' ? 'Trying…' : 'Try Again'}</ThemedText>
+            <ThemedText type="smallBold">{busyAction === 'invites' ? t('generic.trying') : t('generic.retry')}</ThemedText>
           </Pressable>
         </View>
       ) : null}
 
       {signOutError ? (
-        <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.backgroundElement }]}>
-          <ThemedText type="smallBold">Sign out was stopped to keep notifications private.</ThemedText>
+        <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: theme.backgroundElement, direction }]}>
+          <ThemedText type="smallBold">{t('errors.signOutPrivate')}</ThemedText>
           <ThemedText type="small">{signOutError}</ThemedText>
           <Pressable
             accessibilityRole="button"
             disabled={busyAction === 'sign-out'}
             onPress={() => void signOut()}
             style={[styles.retryButton, { borderColor: theme.hairline }]}>
-            <ThemedText type="smallBold">{busyAction === 'sign-out' ? 'Trying…' : 'Try Again'}</ThemedText>
+            <ThemedText type="smallBold">{busyAction === 'sign-out' ? t('generic.trying') : t('generic.retry')}</ThemedText>
           </Pressable>
         </View>
       ) : null}
 
       <OptionsSheet
         onClose={() => profileStatus?.complete ? setSheet(null) : undefined}
-        title="Profile"
+        title={t('profile.title')}
         visible={sheet === 'profile'}>
         <SheetSection>
           <View style={styles.profileInputs}>
             <SheetInput
-              label="Name"
+              label={t('profile.name')}
               onChangeText={(displayName) => setProfileDraft((d) => ({ ...d, displayName }))}
               value={profileDraft.displayName}
             />
             <SheetInput
-              label="Designation"
+              label={t('profile.designation')}
               onChangeText={(profileDesignation) => setProfileDraft((d) => ({ ...d, profileDesignation }))}
               value={profileDraft.profileDesignation}
             />
             <SheetInput
-              label="Timezone"
+              label={t('profile.timezone')}
               onChangeText={(timezone) => setProfileDraft((d) => ({ ...d, timezone }))}
               value={profileDraft.timezone}
             />
@@ -300,12 +302,12 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
           onPress={() => void submitProfile()}
           style={[styles.primaryButton, { backgroundColor: busyAction === 'profile' ? theme.hairline : theme.text }]}>
           <ThemedText style={{ color: theme.background }} type="smallBold">
-            {busyAction === 'profile' ? 'Saving…' : 'Save Profile'}
+            {busyAction === 'profile' ? t('profile.saving') : t('profile.save')}
           </ThemedText>
         </Pressable>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setSheet(null)} title="Two-Factor Auth" visible={sheet === 'two-factor'}>
+      <OptionsSheet onClose={() => setSheet(null)} title={t('twoFactor.title')} visible={sheet === 'two-factor'}>
         <SheetSection>
           <View style={styles.segmented}>
             {(['totp', 'backup_code'] as const).map((method) => (
@@ -316,11 +318,11 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
                   styles.segment,
                   { backgroundColor: twoFactorMethod === method ? theme.backgroundSelected : theme.backgroundElement },
                 ]}>
-                <ThemedText type="code">{method === 'totp' ? 'Authenticator' : 'Backup Code'}</ThemedText>
+                <ThemedText type="code">{method === 'totp' ? t('twoFactor.authenticator') : t('twoFactor.backupCode')}</ThemedText>
               </Pressable>
             ))}
           </View>
-          <SheetInput label="Code" onChangeText={setTwoFactorCode} value={twoFactorCode} />
+          <SheetInput label={t('twoFactor.code')} onChangeText={setTwoFactorCode} value={twoFactorCode} />
         </SheetSection>
         {actionError ? <ThemedText accessibilityRole="alert" style={styles.errorText} type="small">{actionError}</ThemedText> : null}
         <Pressable
@@ -328,7 +330,7 @@ export function TrackUserProvider({ children }: { children: React.ReactNode }) {
           onPress={() => void submitTwoFactor()}
           style={[styles.primaryButton, { backgroundColor: busyAction === 'two-factor' ? theme.hairline : theme.text }]}>
           <ThemedText style={{ color: theme.background }} type="smallBold">
-            {busyAction === 'two-factor' ? 'Verifying…' : 'Verify'}
+            {busyAction === 'two-factor' ? t('twoFactor.verifying') : t('twoFactor.verify')}
           </ThemedText>
         </Pressable>
       </OptionsSheet>
