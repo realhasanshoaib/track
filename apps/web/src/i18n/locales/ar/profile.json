@@ -1,0 +1,115 @@
+{
+  "loading": "جارٍ تحميل الملف الشخصي",
+  "sidebar": {
+    "ariaLabel": "أقسام إعدادات الملف الشخصي",
+    "backToWorkspace": "العودة إلى مساحة العمل",
+    "onboardingTitle": "أكمل ملفك الشخصي",
+    "onboardingDescription": "يلزم إدخال اسم العرض والمسمى والمنطقة الزمنية قبل دخول مساحة العمل.",
+    "settingsTitle": "إعدادات الملف الشخصي",
+    "settingsDescription": "أدر ملفك الشخصي العام كزميل وطرق تسجيل الدخول وإعدادات الأمان."
+  },
+  "tabs": {
+    "profile": "الملف الشخصي",
+    "security": "الأمان",
+    "methods": "طرق تسجيل الدخول"
+  },
+  "profile": {
+    "sectionTitle": "بطاقة الزميل",
+    "uploadAvatar": "رفع الصورة الرمزية",
+    "fields": {
+      "displayName": "اسم العرض",
+      "designation": "المسمى",
+      "timezone": "المنطقة الزمنية",
+      "timezoneSearch": "البحث عن منطقة زمنية",
+      "bio": "النبذة",
+      "bannerStyle": "نمط الشعار"
+    },
+    "bannerStyles": {
+      "silk": "نسيج حريري",
+      "velvet-flow": "تدفق مخملي",
+      "midnight-veil": "حجاب منتصف الليل",
+      "luminous-beams": "حزم مضيئة",
+      "aurora-wash": "وهج الشفق",
+      "soft-aurora": "شفق ناعم",
+      "grain-haze": "ضباب حبيبي",
+      "signal-glitch": "خلل الإشارة",
+      "grid-scan": "مسح الشبكة",
+      "pearl-shift": "تحول اللؤلؤ",
+      "light-rays": "أشعة الضوء",
+      "storm-flash": "وميض العاصفة",
+      "crystal-prism": "منشور بلوري"
+    },
+    "counts": {
+      "designation": "{{count}}/60",
+      "bio": "{{count}}/180"
+    },
+    "preview": "معاينة بطاقة الفريق",
+    "actions": {
+      "saveAndEnter": "حفظ ودخول Track",
+      "saveChanges": "حفظ التغييرات"
+    },
+    "validation": "اسم العرض والمسمى والمنطقة الزمنية مطلوبة.",
+    "saved": "تم حفظ الملف الشخصي.",
+    "avatar": {
+      "invalidType": "استخدم PNG أو JPEG أو WebP.",
+      "tooLarge": "يجب ألا يتجاوز حجم الصورة الرمزية 2MB.",
+      "saved": "تم حفظ الصورة الرمزية.",
+      "uploadFailed": "تعذّر رفع الصورة الرمزية."
+    },
+    "saveFailed": "تعذّر حفظ الملف الشخصي."
+  },
+  "security": {
+    "title": "المصادقة الثنائية",
+    "description": "يمكن أن يستخدم تسجيل الدخول العادي عاملًا واحدًا. تتطلب الإجراءات المحمية تحققًا إضافيًا جديدًا وتبقى موثوقة لمدة 10 دقائق. تستمر الأجهزة الموثوقة 30 يومًا.",
+    "statusOn": "مفعّلة",
+    "statusOff": "متوقفة",
+    "actions": {
+      "setup": "إعداد تطبيق المصادقة",
+      "generateBackupCodes": "إنشاء رموز احتياطية",
+      "resetGracePeriod": "إعادة ضبط فترة السماح",
+      "turnOff": "إيقاف المصادقة الثنائية"
+    },
+    "summary": {
+      "authenticator": "تطبيق المصادقة",
+      "authenticatorRequired": "مطلوب للإجراءات المحمية",
+      "authenticatorNotConfigured": "لم يُعدّ بعد",
+      "backupCodes": "الرموز الاحتياطية",
+      "backupCodesAvailable": "متاحة للعرض",
+      "backupCodesGenerate": "أنشئها بعد الإعداد",
+      "trustedDevice": "الجهاز الموثوق",
+      "trustedDeviceWindow": "فترة تذكّر 30 يومًا"
+    },
+    "signInRequired": "سجّل الدخول باستخدام Google أو البريد الإلكتروني وكلمة المرور لإدارة المصادقة الثنائية من جلسة هذا المتصفح.",
+    "accountPassword": "كلمة مرور الحساب",
+    "accountPasswordPlaceholder": "مطلوبة لحسابات البريد الإلكتروني وكلمة المرور",
+    "setupHint": "استخدم إجراء الإعداد أعلاه لإضافة تطبيق مصادقة.",
+    "qrAlt": "رمز QR لتطبيق المصادقة",
+    "codePlaceholder": "123456",
+    "verifyCode": "التحقق من الرمز",
+    "backupCodes": {
+      "hide": "إخفاء الرموز الاحتياطية",
+      "show": "إظهار الرموز الاحتياطية"
+    },
+    "messages": {
+      "setupInstructions": "امسح الرمز، ثم أدخل رمز مصادقة واحدًا لإكمال الإعداد.",
+      "setupFailed": "تعذّر بدء إعداد المصادقة الثنائية.",
+      "invalidCode": "رمز تطبيق المصادقة غير صالح.",
+      "enabled": "المصادقة الثنائية مفعّلة.",
+      "verifyFailed": "تعذّر التحقق من إعداد المصادقة الثنائية.",
+      "codesFailed": "تعذّر إنشاء الرموز الاحتياطية.",
+      "codesGenerated": "تم إنشاء رموز احتياطية جديدة. خزّنها في مكان آمن.",
+      "disableFailed": "تعذّر إيقاف المصادقة الثنائية.",
+      "disabled": "المصادقة الثنائية متوقفة.",
+      "graceReset": "تمت إعادة ضبط فترة سماح المصادقة الثنائية. سيطلب الإجراء المحمي التالي التحقق مرة أخرى.",
+      "noGracePeriod": "لم يُعثر على فترة سماح نشطة للمصادقة الثنائية.",
+      "resetFailed": "تعذّرت إعادة ضبط فترة سماح المصادقة الثنائية.",
+      "syncFailed": "تعذّر على Track مزامنة تغيير الأمان. حدّث الصفحة وحاول مرة أخرى من جلسة تسجيل دخول عادية."
+    }
+  },
+  "methods": {
+    "title": "طرق تسجيل الدخول",
+    "connected": "متصل",
+    "currentAccount": "الحساب الحالي",
+    "emailPassword": "البريد الإلكتروني وكلمة المرور"
+  }
+}

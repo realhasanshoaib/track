@@ -1,4 +1,5 @@
 import { Download, Share2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 
 const DISMISS_KEY = 'track:pwa-install-dismissed'
@@ -20,16 +21,33 @@ function isIosSafari() {
   return /iphone|ipad|ipod/.test(userAgent) && /safari/.test(userAgent) && !/crios|fxios|edgios/.test(userAgent)
 }
 
+function wasDismissed() {
+  try {
+    return window.localStorage.getItem(DISMISS_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function rememberDismissed() {
+  try {
+    window.localStorage.setItem(DISMISS_KEY, 'true')
+  } catch {
+    // Storage may be unavailable in privacy mode; the current tab still dismisses.
+  }
+}
+
 export default function PwaInstallPrompt() {
+  const { t } = useTranslation('shell')
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null)
   const [showIosPrompt, setShowIosPrompt] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    const wasDismissed = window.localStorage.getItem(DISMISS_KEY) === 'true'
-    setDismissed(wasDismissed)
+    const dismissedInStorage = wasDismissed()
+    setDismissed(dismissedInStorage)
 
-    if (wasDismissed || isStandalone()) return
+    if (dismissedInStorage || isStandalone()) return
 
     setShowIosPrompt(isIosSafari())
 
@@ -46,7 +64,7 @@ export default function PwaInstallPrompt() {
   if (dismissed || (!installEvent && !showIosPrompt)) return null
 
   const dismiss = () => {
-    window.localStorage.setItem(DISMISS_KEY, 'true')
+    rememberDismissed()
     setDismissed(true)
   }
 
@@ -55,27 +73,27 @@ export default function PwaInstallPrompt() {
     await installEvent.prompt()
     const choice = await installEvent.userChoice
     if (choice.outcome === 'accepted') {
-      window.localStorage.setItem(DISMISS_KEY, 'true')
+      rememberDismissed()
       setDismissed(true)
     }
     setInstallEvent(null)
   }
 
   return (
-    <aside className="track-pwa-install" aria-label="Install Track">
+    <aside className="track-pwa-install" aria-label={t('pwa.ariaLabel')}>
       <div className="track-pwa-install-icon" aria-hidden="true">
         {showIosPrompt ? <Share2 size={17} /> : <Download size={17} />}
       </div>
       <div className="track-pwa-install-copy">
-        <p>Install Track</p>
-        {showIosPrompt ? <span>Share, then Add to Home Screen.</span> : <span>Open faster from your home screen.</span>}
+        <p>{t('pwa.title')}</p>
+        {showIosPrompt ? <span>{t('pwa.iosDescription')}</span> : <span>{t('pwa.defaultDescription')}</span>}
       </div>
       {installEvent ? (
         <button className="track-pwa-install-action" type="button" onClick={install}>
-          Install
+          {t('pwa.install')}
         </button>
       ) : null}
-      <button className="track-pwa-install-dismiss" type="button" onClick={dismiss} aria-label="Dismiss install prompt">
+      <button className="track-pwa-install-dismiss" type="button" onClick={dismiss} aria-label={t('pwa.dismiss')}>
         <X size={16} />
       </button>
     </aside>

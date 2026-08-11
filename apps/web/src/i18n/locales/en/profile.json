@@ -1,0 +1,115 @@
+{
+  "loading": "Loading profile",
+  "sidebar": {
+    "ariaLabel": "Profile settings sections",
+    "backToWorkspace": "Back to workspace",
+    "onboardingTitle": "Complete your profile",
+    "onboardingDescription": "Display name, designation, and timezone are required before entering the workspace.",
+    "settingsTitle": "Profile Settings",
+    "settingsDescription": "Manage your public teammate profile, login methods, and security."
+  },
+  "tabs": {
+    "profile": "Profile",
+    "security": "Security",
+    "methods": "Login methods"
+  },
+  "profile": {
+    "sectionTitle": "Teammate card",
+    "uploadAvatar": "Upload avatar",
+    "fields": {
+      "displayName": "Display name",
+      "designation": "Designation",
+      "timezone": "Timezone",
+      "timezoneSearch": "Search timezone",
+      "bio": "Bio",
+      "bannerStyle": "Banner style"
+    },
+    "bannerStyles": {
+      "silk": "Silk Weave",
+      "velvet-flow": "Velvet Flow",
+      "midnight-veil": "Midnight Veil",
+      "luminous-beams": "Luminous Beams",
+      "aurora-wash": "Aurora Wash",
+      "soft-aurora": "Soft Aurora",
+      "grain-haze": "Grain Haze",
+      "signal-glitch": "Signal Glitch",
+      "grid-scan": "Grid Scan",
+      "pearl-shift": "Pearl Shift",
+      "light-rays": "Light Rays",
+      "storm-flash": "Storm Flash",
+      "crystal-prism": "Crystal Prism"
+    },
+    "counts": {
+      "designation": "{{count}}/60",
+      "bio": "{{count}}/180"
+    },
+    "preview": "Team card preview",
+    "actions": {
+      "saveAndEnter": "Save and enter Track",
+      "saveChanges": "Save changes"
+    },
+    "validation": "Display name, designation, and timezone are required.",
+    "saved": "Profile saved.",
+    "avatar": {
+      "invalidType": "Use PNG, JPEG, or WebP.",
+      "tooLarge": "Avatar must be 2MB or smaller.",
+      "saved": "Avatar saved.",
+      "uploadFailed": "Could not upload avatar."
+    },
+    "saveFailed": "Could not save profile."
+  },
+  "security": {
+    "title": "Two-factor authentication",
+    "description": "Normal sign-in can use one factor. Protected actions require a fresh step-up and stay trusted for 10 minutes. Trusted devices last 30 days.",
+    "statusOn": "On",
+    "statusOff": "Off",
+    "actions": {
+      "setup": "Set up authenticator app",
+      "generateBackupCodes": "Generate backup codes",
+      "resetGracePeriod": "Reset grace period",
+      "turnOff": "Turn off 2FA"
+    },
+    "summary": {
+      "authenticator": "Authenticator app",
+      "authenticatorRequired": "Required for protected actions",
+      "authenticatorNotConfigured": "Not configured yet",
+      "backupCodes": "Backup codes",
+      "backupCodesAvailable": "Available to view",
+      "backupCodesGenerate": "Generate after setup",
+      "trustedDevice": "Trusted device",
+      "trustedDeviceWindow": "30-day remember window"
+    },
+    "signInRequired": "Sign in with Google or email/password to manage two-factor authentication from this browser session.",
+    "accountPassword": "Account password",
+    "accountPasswordPlaceholder": "Required for email/password accounts",
+    "setupHint": "Use the setup action above to add an authenticator app.",
+    "qrAlt": "Authenticator QR code",
+    "codePlaceholder": "123456",
+    "verifyCode": "Verify code",
+    "backupCodes": {
+      "hide": "Hide backup codes",
+      "show": "Show backup codes"
+    },
+    "messages": {
+      "setupInstructions": "Scan the code, then enter one authenticator code to finish setup.",
+      "setupFailed": "Could not start two-factor setup.",
+      "invalidCode": "Invalid authenticator code.",
+      "enabled": "Two-factor authentication is on.",
+      "verifyFailed": "Could not verify two-factor setup.",
+      "codesFailed": "Could not generate backup codes.",
+      "codesGenerated": "New backup codes generated. Store them somewhere safe.",
+      "disableFailed": "Could not disable two-factor authentication.",
+      "disabled": "Two-factor authentication is off.",
+      "graceReset": "Two-factor grace period reset. The next protected action will ask again.",
+      "noGracePeriod": "No active two-factor grace period was found.",
+      "resetFailed": "Could not reset the two-factor grace period.",
+      "syncFailed": "Track could not sync the security change. Refresh and try again from a normal signed-in session."
+    }
+  },
+  "methods": {
+    "title": "Login methods",
+    "connected": "Connected",
+    "currentAccount": "Current account",
+    "emailPassword": "Email password"
+  }
+}

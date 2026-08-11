@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import '#/i18n'
+
 import PwaInstallPrompt from './PwaInstallPrompt'
 
 function setUserAgent(userAgent: string) {

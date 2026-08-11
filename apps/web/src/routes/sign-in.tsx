@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvex } from 'convex/react'
 import { Eye, EyeOff, KeyRound, Lock, Mail, MessageSquareText, Search, ShieldCheck } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useMemo, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 
 import { api } from '../../../../convex/_generated/api'
+import { PublicLocaleControl } from '#/components/PublicLocaleControl'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { enableDevAuthBypass, isDevAuthBypassAllowed } from '#/lib/dev-auth-bypass'
@@ -103,16 +105,8 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-function getPasswordMessage(error: unknown) {
-  if (!error) return ''
-  if (typeof error === 'object' && 'message' in error) {
-    const message = String(error.message)
-    if (message) return message
-  }
-  return 'Could not continue. Check the details and try again.'
-}
-
 export function SignInExperience({ variant }: { variant: SignInVariant }) {
+  const { t } = useTranslation('auth')
   const convex = useConvex()
   const navigate = useNavigate()
   const session = authClient.useSession()
@@ -139,7 +133,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
       await enableDevAuthBypass()
       await navigate({ to: '/workspace' })
     } catch {
-      setMessage('Demo sign-in is unavailable in this development environment.')
+      setMessage(t('signIn.errors.demoUnavailable'))
     } finally {
       setBusy(false)
     }
@@ -157,14 +151,14 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
         callbackURL: mode === 'google-proof' ? '/auth/callback?next=/sign-in' : '/auth/callback',
       })
       if (result.error) {
-        setMessage(getPasswordMessage(result.error))
+        setMessage(t('signIn.errors.generic'))
         return
       }
       if (result.data?.url) {
         window.location.href = result.data.url
       }
-    } catch (error) {
-      setMessage(getPasswordMessage(error))
+    } catch {
+      setMessage(t('signIn.errors.generic'))
     } finally {
       setBusy(false)
     }
@@ -177,15 +171,15 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
     setMessage('')
 
     if (!normalizedEmail.includes('@')) {
-      setMessage('Enter a valid email address.')
+      setMessage(t('signIn.errors.validEmail'))
       return
     }
     if (passwordValue.length < 10) {
-      setMessage('Password must be at least 10 characters.')
+      setMessage(t('signIn.errors.passwordLength'))
       return
     }
     if ((mode === 'confirm-new' || mode === 'set-password') && passwordValue !== confirmPassword.trim()) {
-      setMessage('Passwords do not match.')
+      setMessage(t('signIn.errors.passwordMismatch'))
       return
     }
 
@@ -193,7 +187,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
     try {
       if (mode === 'set-password') {
         if (!session.data) {
-          setMessage('Continue with Google first, then add a password.')
+          setMessage(t('signIn.errors.googleFirst'))
           setMode('google-proof')
           return
         }
@@ -202,7 +196,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
         }
         const result = await client.setPassword({ newPassword: passwordValue })
         if (result.error) {
-          setMessage(getPasswordMessage(result.error))
+          setMessage(t('signIn.errors.generic'))
           return
         }
         window.localStorage.removeItem(pendingSetPasswordEmailKey)
@@ -218,7 +212,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
           callbackURL: '/workspace',
         })
         if (result.error) {
-          setMessage(getPasswordMessage(result.error))
+          setMessage(t('signIn.errors.generic'))
           return
         }
         await navigate({ to: '/workspace' })
@@ -236,7 +230,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
         return
       }
       if (hint.status === 'invalid') {
-        setMessage('Enter a valid email address.')
+        setMessage(t('signIn.errors.validEmail'))
         return
       }
 
@@ -247,10 +241,10 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
         callbackURL: '/workspace',
       })
       if (result.error) {
-        setMessage('Email or password is incorrect.')
+        setMessage(t('signIn.errors.incorrectCredentials'))
       }
-    } catch (error) {
-      setMessage(getPasswordMessage(error))
+    } catch {
+      setMessage(t('signIn.errors.generic'))
     } finally {
       setBusy(false)
     }
@@ -258,35 +252,36 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
 
   const title =
     mode === 'confirm-new'
-      ? 'Create your Track account'
+      ? t('signIn.titles.confirmNew')
       : mode === 'google-proof'
-        ? 'Confirm this Google account'
+        ? t('signIn.titles.googleProof')
         : mode === 'set-password'
-          ? 'Add email password'
-          : 'Sign in to continue'
+          ? t('signIn.titles.setPassword')
+          : t('signIn.titles.continue')
   const copy =
     mode === 'confirm-new'
-      ? `${normalizeEmail(email)} is new. Confirm your password before we create it.`
+      ? <><bdi dir="ltr">{normalizeEmail(email)}</bdi>{' '}{t('signIn.copy.confirmNewLead')}</>
       : mode === 'google-proof'
-        ? 'This email already uses Google. Continue with Google first, then add a password to the same Track profile.'
+        ? t('signIn.copy.googleProof')
         : mode === 'set-password'
-          ? `Set a password for ${pendingSetPasswordEmail || 'this email'} after confirming your Google account.`
-          : 'Use email and password, or continue with Google. New email accounts are created after confirmation.'
+          ? <>{t('signIn.copy.setPasswordLead')}{' '}<bdi dir="ltr">{pendingSetPasswordEmail || t('signIn.fields.email')}</bdi>{' '}{t('signIn.copy.setPasswordTail')}</>
+          : t('signIn.copy.continue')
   const emailButtonLabel =
     mode === 'confirm-new'
-      ? 'Create account'
+      ? t('signIn.buttons.createAccount')
       : mode === 'set-password'
-        ? 'Add password'
-        : 'Continue with Email'
+        ? t('signIn.buttons.addPassword')
+        : t('signIn.buttons.continueEmail')
 
   const isConversationVariant = variant !== 'default'
 
   return (
-    <main className={isConversationVariant ? `track-auth-page track-auth-page-${variant}` : 'track-auth-page'}>
+    <main className={`relative ${isConversationVariant ? `track-auth-page track-auth-page-${variant}` : 'track-auth-page'}`}>
+      <PublicLocaleControl className="fixed end-4 top-4 z-10" />
       <section className="track-auth-shell">
         <div className={isConversationVariant ? 'track-auth-story track-auth-story-conversation' : 'track-auth-story'}>
           <img
-            alt="Track"
+            alt={t('signIn.labels.logo')}
             className="track-auth-logo track-auth-logo-light"
             height={70}
             src="/track-logo.svg"
@@ -305,16 +300,15 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
           ) : (
             <>
               <div>
-                <h1>Keep project conversation and evidence connected.</h1>
+                <h1>{t('signIn.proof.heading')}</h1>
                 <p>
-                  Track keeps project teams aligned around decisions,
-                  source context, shared memory, and permission-aware answers.
+                  {t('signIn.proof.description')}
                 </p>
               </div>
               <div className="track-auth-proof">
-                <span><MessageSquareText size={16} /> Shared conversation</span>
-                <span><Search size={16} /> Searchable evidence</span>
-                <span><ShieldCheck size={16} /> Permissioned access</span>
+                <span><MessageSquareText size={16} /> {t('signIn.proof.sharedConversation')}</span>
+                <span><Search size={16} /> {t('signIn.proof.searchableEvidence')}</span>
+                <span><ShieldCheck size={16} /> {t('signIn.proof.permissionedAccess')}</span>
               </div>
             </>
           )}
@@ -332,18 +326,18 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
               type="button"
             >
               <img alt="" height={18} src="/google-g.svg" width={18} />
-              Continue with Google
+              {t('signIn.buttons.continueGoogle')}
             </Button>
           ) : (
             <form className="track-auth-email-form" onSubmit={(event) => void handleEmailSubmit(event)}>
               {mode !== 'set-password' ? (
                 <label>
-                  <span>Email</span>
+                  <span>{t('signIn.fields.email')}</span>
                   <Input
                     autoComplete="email"
                     className="track-auth-input-with-icon"
                     onChange={(event) => setEmail(event.currentTarget.value)}
-                    placeholder="you@example.com"
+                    placeholder={t('signIn.placeholders.email')}
                     type="email"
                     value={email}
                   />
@@ -351,18 +345,18 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
                 </label>
               ) : null}
               <label>
-                <span>Password</span>
+                <span>{t('signIn.fields.password')}</span>
                 <Input
                   autoComplete={mode === 'continue' ? 'current-password' : 'new-password'}
                   className="track-auth-input-with-icon track-auth-input-with-action"
                   onChange={(event) => setPassword(event.currentTarget.value)}
-                  placeholder="At least 10 characters"
+                  placeholder={t('signIn.placeholders.password')}
                   type={passwordVisible ? 'text' : 'password'}
                   value={password}
                 />
                 <Lock className="track-auth-field-icon" size={17} />
                 <button
-                  aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                  aria-label={passwordVisible ? t('signIn.labels.hidePassword') : t('signIn.labels.showPassword')}
                   className="track-auth-input-action"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
@@ -372,18 +366,18 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
               </label>
               {mode === 'confirm-new' || mode === 'set-password' ? (
                 <label>
-                  <span>Confirm password</span>
+                  <span>{t('signIn.fields.confirmPassword')}</span>
                   <Input
                     autoComplete="new-password"
                     className="track-auth-input-with-icon track-auth-input-with-action"
                     onChange={(event) => setConfirmPassword(event.currentTarget.value)}
-                    placeholder="Repeat password"
+                    placeholder={t('signIn.placeholders.confirmPassword')}
                     type={confirmPasswordVisible ? 'text' : 'password'}
                     value={confirmPassword}
                   />
                   <Lock className="track-auth-field-icon" size={17} />
                   <button
-                    aria-label={confirmPasswordVisible ? 'Hide password' : 'Show password'}
+                    aria-label={confirmPasswordVisible ? t('signIn.labels.hidePassword') : t('signIn.labels.showPassword')}
                     className="track-auth-input-action"
                     onClick={() => setConfirmPasswordVisible((visible) => !visible)}
                     type="button"
@@ -405,7 +399,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
 
           {mode === 'continue' ? (
             <>
-              <div className="track-auth-divider">or</div>
+              <div className="track-auth-divider">{t('signIn.proof.or')}</div>
               <Button
                 className="track-button track-auth-button"
                 disabled={busy}
@@ -414,7 +408,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
                 variant="outline"
               >
                 <img alt="" height={18} src="/google-g.svg" width={18} />
-                Continue with Google
+                {t('signIn.buttons.continueGoogle')}
               </Button>
             </>
           ) : (
@@ -429,7 +423,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
               type="button"
               variant="outline"
             >
-              Back
+              {t('signIn.buttons.back')}
             </Button>
           )}
 
@@ -443,7 +437,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
               variant="outline"
             >
               <KeyRound size={16} />
-              Use Hasan Demo
+              {t('signIn.buttons.useDemo')}
             </Button>
           ) : null}
 
@@ -451,7 +445,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
 
           <div className="track-auth-note">
             <ShieldCheck size={16} />
-            <span>Need access or password help? Contact {supportEmail}.</span>
+            <span>{t('signIn.accessHelpPrefix')}{' '}<bdi dir="ltr">{supportEmail}</bdi>{t('signIn.accessHelpSuffix')}</span>
           </div>
         </div>
       </section>
@@ -460,6 +454,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
 }
 
 function ConversationPreview({ variant }: { variant: Exclude<SignInVariant, 'default'> }) {
+  const { t } = useTranslation('auth')
   const baseMessages = variant === 'conversation-a' ? previewMessages.slice(0, 6) : previewMessages
   const messages = variant === 'conversation-b' ? [...baseMessages, ...baseMessages] : baseMessages
   const repeatedMessageCount = variant === 'conversation-b' ? baseMessages.length : messages.length
@@ -469,7 +464,7 @@ function ConversationPreview({ variant }: { variant: Exclude<SignInVariant, 'def
       {variant === 'conversation-a' ? (
         <div className="track-auth-live-status">
           <span />
-          Live conversation
+          {t('signIn.proof.liveConversation')}
         </div>
       ) : null}
       <div className="track-auth-conversation-thread">
@@ -483,11 +478,11 @@ function ConversationPreview({ variant }: { variant: Exclude<SignInVariant, 'def
             <div className={`track-message-avatar ${message.tone}`}>{message.initials}</div>
             <div className="track-auth-preview-body">
               <div className="track-message-meta">
-                <strong>{message.name}</strong>
-                <time>{message.time}</time>
+                <strong dir="auto">{message.name}</strong>
+                <time dir="ltr">{message.time}</time>
               </div>
-              <p>
-                {message.mention ? <span className="track-auth-mention">{message.mention}</span> : null}
+              <p dir="auto">
+                {message.mention ? <bdi className="track-auth-mention" dir="ltr">{message.mention}</bdi> : null}
                 {message.body}
               </p>
             </div>
