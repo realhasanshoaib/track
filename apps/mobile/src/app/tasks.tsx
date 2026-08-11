@@ -31,6 +31,8 @@ import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { useReleaseConfig } from '@/lib/release-config';
 import { groupMobileTasksByState, taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
 import { taskPriorityLabel } from '@/lib/task-presentation';
+import { formatNumber, useLocale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 
 type AssigneeView = {
   member: Doc<'projectMembers'>;
@@ -41,21 +43,19 @@ type AssigneeView = {
 type PrimaryTaskTab = 'board' | 'my' | 'all';
 type TaskTab = PrimaryTaskTab | 'inbox';
 const priorities: TaskPriority[] = ['none', 'urgent', 'high', 'medium', 'low'];
-const primaryTabs: Array<{ label: string; value: PrimaryTaskTab }> = [
-  { label: 'Board', value: 'board' },
-  { label: 'My tasks', value: 'my' },
-  { label: 'All', value: 'all' },
-];
+const primaryTabs: PrimaryTaskTab[] = ['board', 'my', 'all'];
 
-function readableError(failure: unknown) {
-  if (!(failure instanceof Error)) return 'The task action failed.';
-  if (failure.message.includes('task_access_changed')) return 'Your access changed. Refresh and try again.';
-  if (failure.message.includes('task_duplicate_decision_required')) return 'Choose whether to add a reference or create a separate task.';
-  return failure.message.replaceAll('_', ' ');
+function readableError(failure: unknown, t: (key: string) => string) {
+  if (!(failure instanceof Error)) return t('tasks.errorsActionFailed');
+  if (failure.message.includes('task_access_changed')) return t('tasks.errorsAccessChanged');
+  if (failure.message.includes('task_duplicate_decision_required')) return t('tasks.errorsDuplicateDecision');
+  return t('tasks.errorsActionFailed');
 }
 
 export default function TasksScreen() {
   const theme = useTheme();
+  const { locale } = useLocale();
+  const { t } = useTranslation('work');
   const router = useRouter();
   const release = useReleaseConfig();
   const network = useNetworkState();
@@ -155,7 +155,7 @@ export default function TasksScreen() {
   function assigneeName(item: MobileTaskView) {
     if (!item.task.assigneeProjectMemberId) return undefined;
     return assignees?.find((candidate) => candidate.member._id === item.task.assigneeProjectMemberId)?.user.displayName
-      ?? (item.assignee ? 'Assigned member' : undefined);
+      ?? (item.assignee ? t('common.assignedMember') : undefined);
   }
 
   async function create() {
@@ -185,7 +185,7 @@ export default function TasksScreen() {
       setAssigneeId('');
       router.push(taskDetailHref(project, result.publicKey, identity));
     } catch (failure) {
-      setError(readableError(failure));
+      setError(readableError(failure, t));
     } finally {
       setBusy(false);
     }
@@ -197,7 +197,7 @@ export default function TasksScreen() {
       await action();
       hapticMedium();
     } catch (failure) {
-      setError(readableError(failure));
+      setError(readableError(failure, t));
     }
   }
 
@@ -209,7 +209,7 @@ export default function TasksScreen() {
   function accept(row: MobileSuggestionView) {
     const destination = suggestionDestination(row);
     if (!destination) {
-      setError('No compatible board is available for this suggestion.');
+      setError(t('tasks.errorsBoardUnavailable'));
       return;
     }
     void runSuggestion(() => acceptSuggestion({
@@ -229,8 +229,8 @@ export default function TasksScreen() {
   if (!release.tasks) {
     return (
       <ThemedView style={styles.screen}>
-        <Stack.Screen options={{ title: 'Tasks unavailable' }} />
-        <EmptyState icon="file-document-outline" title="Tasks unavailable" body="Conversation remains available while the task release is disabled." />
+        <Stack.Screen options={{ title: t('tasks.unavailable') }} />
+        <EmptyState icon="file-document-outline" title={t('tasks.unavailable')} body={t('tasks.unavailableBody')} />
       </ThemedView>
     );
   }
@@ -238,7 +238,7 @@ export default function TasksScreen() {
   return (
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{
-        title: tab === 'inbox' ? 'Task inbox' : 'Tasks',
+        title: tab === 'inbox' ? t('tasks.inbox') : t('tasks.tasks'),
         headerLargeTitle: Platform.OS === 'ios',
         headerTransparent: Platform.OS === 'ios',
         headerBlurEffect: 'systemMaterial',
@@ -246,7 +246,7 @@ export default function TasksScreen() {
           <View style={styles.headerActions}>
             {!readOnly ? (
               <Pressable
-                accessibilityLabel={tab === 'inbox' ? 'Return to tasks' : 'Open task inbox'}
+                accessibilityLabel={tab === 'inbox' ? t('tasks.returnToTasks') : t('tasks.openInbox')}
                 onPress={() => {
                   hapticLight();
                   setTab((current) => current === 'inbox' ? 'board' : 'inbox');
@@ -256,7 +256,7 @@ export default function TasksScreen() {
               </Pressable>
             ) : null}
             {!readOnly ? (
-              <Pressable accessibilityLabel="Create task" onPress={() => setCreateOpen(true)} style={styles.headerButton}>
+              <Pressable accessibilityLabel={t('tasks.createTaskAccessibility')} onPress={() => setCreateOpen(true)} style={styles.headerButton}>
                 <PlatformIcon color={theme.accent} name="plus" size={24} />
               </Pressable>
             ) : null}
@@ -269,31 +269,38 @@ export default function TasksScreen() {
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled">
-        {offline ? <TaskStateBanner icon="cloud-off" message="Offline — showing saved tasks" tone="offline" /> : null}
-        {readOnly ? <TaskStateBanner icon="shield-lock-outline" message="Read-only Company exit archive" /> : null}
+        {offline ? <TaskStateBanner icon="cloud-off" message={t('tasks.offline')} tone="offline" /> : null}
+        {readOnly ? <TaskStateBanner icon="shield-lock-outline" message={t('tasks.readOnlyArchive')} /> : null}
         {tab !== 'inbox' ? (
           <>
             <View style={styles.contextHeading}>
               <View style={styles.contextTitle}>
-                <ThemedText numberOfLines={1} type="subtitle">
+                <ThemedText contentDirection="auto" numberOfLines={1} type="subtitle">
                   {tab === 'board'
-                    ? selectedBoard?.board.name ?? 'Project tasks'
-                    : tab === 'my' ? 'My tasks' : 'All project tasks'}
+                    ? selectedBoard?.board.name ?? t('tasks.projectTasks')
+                    : tab === 'my' ? t('tasks.myTasks') : t('tasks.allProjectTasks')}
                 </ThemedText>
                 <ThemedText style={{ color: theme.textSecondary }} type="small">
-                  {tasks ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}` : 'Loading work…'}
+                  {tasks ? t(tasks.length === 1 ? 'tasks.count_one' : 'tasks.count_other', { count: formatNumber(locale, tasks.length) }) : t('tasks.loadingWork')}
                 </ThemedText>
               </View>
               {tab === 'board' && boards && boards.length > 1 ? (
                 <Pressable
-                  accessibilityLabel="Change board"
+                  accessibilityLabel={t('tasks.contextChangeBoard')}
                   onPress={() => setBoardOpen(true)}
                   style={[styles.boardPicker, { backgroundColor: theme.backgroundElement }]}>
                   <PlatformIcon color={theme.textSecondary} name="chevron-down" size={18} />
                 </Pressable>
               ) : null}
             </View>
-            <TaskSegmentedControl onChange={setPrimaryTab} segments={primaryTabs} value={tab} />
+            <TaskSegmentedControl
+              onChange={setPrimaryTab}
+              segments={primaryTabs.map((value) => ({
+                value,
+                label: value === 'board' ? t('tasks.board') : value === 'my' ? t('tasks.myTasks') : t('tasks.all'),
+              }))}
+              value={tab}
+            />
             {tab === 'board' && tasks?.length ? (
               <ScrollView
                 contentContainerStyle={styles.summary}
@@ -302,7 +309,7 @@ export default function TasksScreen() {
                 {selectedBoard?.states.map((state) => (
                   <View key={state._id} style={styles.summaryItem}>
                     <TaskStatusPill category={state.category} label={state.name} />
-                    <ThemedText style={{ color: theme.textSecondary }} type="code">{counts[state._id] ?? 0}</ThemedText>
+                    <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">{formatNumber(locale, counts[state._id] ?? 0)}</ThemedText>
                   </View>
                 ))}
               </ScrollView>
@@ -310,14 +317,14 @@ export default function TasksScreen() {
           </>
         ) : (
           <View style={styles.inboxHeading}>
-            <ThemedText type="subtitle">Conversation suggestions</ThemedText>
+            <ThemedText type="subtitle">{t('tasks.conversationSuggestions')}</ThemedText>
             <ThemedText style={{ color: theme.textSecondary }} type="small">
-              Review grounded work detected from the conversations you can access.
+              {t('tasks.suggestionsBody')}
             </ThemedText>
           </View>
         )}
 
-        {error ? <TaskStateBanner action={{ label: 'Dismiss', onPress: () => setError('') }} icon="refresh" message={error} tone="danger" /> : null}
+        {error ? <TaskStateBanner action={{ label: t('tasks.dismissError'), onPress: () => setError('') }} icon="refresh" message={error} tone="danger" /> : null}
 
         {tab === 'inbox'
           ? <SuggestionInbox
@@ -367,7 +374,7 @@ export default function TasksScreen() {
               />}
       </ScrollView>
 
-      <OptionsSheet onClose={() => setBoardOpen(false)} title="Choose board" visible={boardOpen}>
+      <OptionsSheet onClose={() => setBoardOpen(false)} title={t('tasks.chooseBoard')} visible={boardOpen}>
         <SheetSection>
           {boards?.map((item) => (
             <SheetRow
@@ -384,18 +391,18 @@ export default function TasksScreen() {
         </SheetSection>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setCreateOpen(false)} title="Create task" visible={createOpen}>
+      <OptionsSheet onClose={() => setCreateOpen(false)} title={t('tasks.createTitle')} visible={createOpen}>
         <View style={styles.sheetIntro}>
-          <ThemedText type="subtitle">Turn work into a clear next step</ThemedText>
+          <ThemedText type="subtitle">{t('tasks.createIntro')}</ThemedText>
           <ThemedText style={{ color: theme.textSecondary }} type="small">
-            Keep the title actionable; the details can evolve with the conversation.
+            {t('tasks.createBody')}
           </ThemedText>
         </View>
-        <SheetInput label="Title" onChangeText={setTitle} value={title} />
-        <SheetInput label="Description" multiline onChangeText={setDescription} value={description} />
-        <SheetInput label="Due date (YYYY-MM-DD)" onChangeText={setDueDate} value={dueDate} />
+        <SheetInput label={t('common.title')} onChangeText={setTitle} value={title} />
+        <SheetInput label={t('common.description')} multiline onChangeText={setDescription} value={description} />
+        <SheetInput label={t('common.dueDateInput')} onChangeText={setDueDate} value={dueDate} />
         {boards && boards.length > 1 ? (
-          <SheetSection title="Board">
+          <SheetSection title={t('common.board')}>
             {boards.map((item) => (
               <SheetRow
                 icon="view-column"
@@ -407,19 +414,19 @@ export default function TasksScreen() {
             ))}
           </SheetSection>
         ) : null}
-        <SheetSection title="Priority">
+        <SheetSection title={t('tasks.priority')}>
           {priorities.map((value) => (
             <SheetRow
               icon="flag"
               key={value}
-              label={taskPriorityLabel(value)}
+              label={taskPriorityLabel(value, t)}
               selected={priority === value}
               onPress={() => setPriority(value)}
             />
           ))}
         </SheetSection>
-        <SheetSection title="Assignee">
-          <SheetRow icon="person" label="Unassigned" selected={!selectedCreateAssigneeId} onPress={() => setAssigneeId('')} />
+        <SheetSection title={t('tasks.assignee')}>
+          <SheetRow icon="person" label={t('common.unassigned')} selected={!selectedCreateAssigneeId} onPress={() => setAssigneeId('')} />
           {assignableCreateAssignees?.map((item) => (
             <SheetRow
               icon="person"
@@ -431,7 +438,7 @@ export default function TasksScreen() {
           ))}
         </SheetSection>
         {error ? <ThemedText style={{ color: theme.danger }} type="small">{error}</ThemedText> : null}
-        <TaskAction disabled={busy || !title.trim()} label={busy ? 'Creating…' : 'Create task'} onPress={() => void create()} primary />
+        <TaskAction disabled={busy || !title.trim()} label={busy ? t('tasks.creating') : t('tasks.createAction')} onPress={() => void create()} primary />
       </OptionsSheet>
     </ThemedView>
   );
@@ -447,6 +454,6 @@ const styles = StyleSheet.create({
   inboxHeading: { gap: Spacing.one },
   screen: { flex: 1 },
   sheetIntro: { gap: Spacing.one },
-  summary: { gap: Spacing.three, paddingRight: Spacing.three },
+  summary: { gap: Spacing.three, paddingEnd: Spacing.three },
   summaryItem: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
 });

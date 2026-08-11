@@ -11,6 +11,7 @@ import { useTrackUser } from '@/contexts/track-user-context';
 import { consumePushResponseId, getPushInstallationId } from '@/lib/push-installation';
 import { shouldPresentPush } from '@/lib/push-presentation';
 import { resolvePushHref } from '@/lib/push-routing';
+import { useTranslation } from 'react-i18next';
 
 export type PushPermissionState = 'not_determined' | 'denied' | 'granted' | 'provisional';
 
@@ -64,6 +65,7 @@ export function usePushNotifications() {
 export function PushNotificationBridge({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { trackUserId } = useTrackUser();
+  const { t } = useTranslation('work');
   const registerInstallation = useMutation(api.notifications.registerNativeInstallation);
   const reportPermission = useMutation(api.notifications.reportNativePermission);
   const recordOpen = useMutation(api.notifications.recordPushOpen);
@@ -87,13 +89,13 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('track-default', {
           importance: Notifications.AndroidImportance.HIGH,
-          name: 'Track notifications',
+          name: t('notifications.channelName'),
           sound: 'default',
           vibrationPattern: [0, 180, 80, 180],
         });
         await Notifications.setNotificationChannelAsync('track-silent', {
           importance: Notifications.AndroidImportance.HIGH,
-          name: 'Track notifications (silent)',
+          name: t('notifications.silentChannelName'),
           sound: null,
           vibrationPattern: [0, 180, 80, 180],
         });
@@ -123,7 +125,7 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
     } finally {
       setSyncing(false);
     }
-  }, [installationId, registerInstallation, reportPermission, trackUserId]);
+  }, [installationId, registerInstallation, reportPermission, t, trackUserId]);
 
   useEffect(() => {
     if (!trackUserId || Platform.OS === 'web') return;
@@ -190,8 +192,8 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
       if (__DEV__ && (localPermission === 'granted' || localPermission === 'provisional')) {
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Track simulator test',
-            body: 'Local notification presentation and routing are connected.',
+            title: t('notifications.localTestTitle'),
+            body: t('notifications.localTestBody'),
             data: { schemaVersion: '1', eventKind: 'test', url: '/projects' },
           },
           trigger: null,
@@ -201,7 +203,7 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
       return await sendTest({ userId: trackUserId });
     },
     syncing,
-  }), [error, installationId, localPermission, sendTest, serverStatus, sync, syncing, trackUserId]);
+  }), [error, installationId, localPermission, sendTest, serverStatus, sync, syncing, t, trackUserId]);
 
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 }

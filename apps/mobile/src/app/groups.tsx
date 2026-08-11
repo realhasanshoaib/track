@@ -15,10 +15,12 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
-import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
+import { channelHref } from '@/lib/company-navigation';
 import { useReleaseConfig } from '@/lib/release-config';
 import { taskListHref } from '@/lib/task-navigation';
 import { usePushNotifications } from '@/lib/push-notifications';
+import { formatNumber, useLocale } from '@/i18n';
+import { useTranslation } from 'react-i18next';
 
 type MobileGroup = {
   group: Doc<'groups'>;
@@ -29,6 +31,8 @@ type MobileGroup = {
 
 export default function GroupsScreen() {
   const theme = useTheme();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('work');
   const router = useRouter();
   const release = useReleaseConfig();
   const { trackUserId } = useTrackUser();
@@ -58,7 +62,7 @@ export default function GroupsScreen() {
 
   const groupItems = (groups ?? []) as MobileGroup[];
   const projectName = (projects as { project: Doc<'projects'> }[] | undefined)
-    ?.find((p) => p.project._id === projectId)?.project.name ?? 'Channels';
+    ?.find((p) => p.project._id === projectId)?.project.name ?? t('channels.projectFallback');
 
   function onRefresh() {
     setRefreshing(true);
@@ -84,7 +88,7 @@ export default function GroupsScreen() {
           headerBlurEffect: 'systemMaterial',
           headerRight: () => release.tasks ? (
             <Pressable
-              accessibilityLabel="Open tasks"
+              accessibilityLabel={t('tasks.openInbox')}
               hitSlop={8}
               onPress={() => router.push(taskListHref(projectId as Id<'projects'>, companyId && membershipId ? {
                 archived: archive === '1',
@@ -98,7 +102,7 @@ export default function GroupsScreen() {
         }}
       />
 
-      {navigation && !navigation.available ? <View style={styles.list}><EmptyState icon="shield-lock-outline" title="Project unavailable" body={navigationUnavailableCopy(Boolean(companyId))} /></View> : null}
+      {navigation && !navigation.available ? <View style={styles.list}><EmptyState icon="shield-lock-outline" title={t('channels.projectUnavailable')} body={companyId ? t('channels.representedUnavailable') : t('channels.projectAccessEnded')} /></View> : null}
 
       {!navigation || navigation.available && groups === undefined ? (
         <View style={styles.list}>
@@ -118,16 +122,16 @@ export default function GroupsScreen() {
             <View style={[styles.notificationCard, { backgroundColor: theme.backgroundElement }]}>
               <PlatformIcon color={theme.accent} name="bell-outline" size={24} />
               <View style={styles.notificationCopy}>
-                <ThemedText type="smallBold">Keep up with {projectName}</ThemedText>
-                <ThemedText style={{ color: theme.textSecondary }} type="small">Get timely Project activity with full, context-only, or hidden previews you control.</ThemedText>
+                <ThemedText contentDirection="auto" type="smallBold">{t('channels.keepUp', { project: projectName })}</ThemedText>
+                <ThemedText style={{ color: theme.textSecondary }} type="small">{t('channels.notificationBody')}</ThemedText>
               </View>
               <Pressable accessibilityRole="button" disabled={push.syncing} onPress={() => void push.requestPermission()} style={[styles.enableButton, { backgroundColor: theme.text }]}>
-                <ThemedText style={{ color: theme.background }} type="smallBold">Enable</ThemedText>
+                <ThemedText style={{ color: theme.background }} type="smallBold">{t('channels.enable')}</ThemedText>
               </Pressable>
             </View>
           ) : null}
           ListEmptyComponent={
-            <EmptyState icon="forum-outline" title="No Channels visible" body="Only Channels explicitly granted to this represented membership appear here." />
+            <EmptyState icon="forum-outline" title={t('channels.noChannels')} body={t('channels.noChannelsBody')} />
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} colors={[theme.accent]} />
@@ -140,6 +144,8 @@ export default function GroupsScreen() {
 
 function GroupRow({ item, onPress }: { item: MobileGroup; onPress: () => void }) {
   const theme = useTheme();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('work');
   return (
     <Pressable
       android_ripple={{ color: theme.backgroundSelected }}
@@ -148,20 +154,20 @@ function GroupRow({ item, onPress }: { item: MobileGroup; onPress: () => void })
       style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
       <ColoredAvatar label={item.group.name} seed={item.group._id} shape="rounded" size={44} />
       <View style={styles.rowBody}>
-        <ThemedText type="smallBold">{item.group.name}</ThemedText>
-        <ThemedText numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
-          {item.lastMessage?.body || 'No messages yet'}
-          {item.group.status === 'archived' ? ' · read-only archive' : ''}
+        <ThemedText contentDirection="auto" type="smallBold">{item.group.name}</ThemedText>
+        <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
+          {item.lastMessage?.body || t('channels.noMessages')}
+          {item.group.status === 'archived' ? ` · ${t('channels.archivedReadOnly')}` : ''}
         </ThemedText>
       </View>
       {item.unreadCount > 0 ? (
         <View style={[styles.badge, { backgroundColor: theme.accent }]}>
-          <ThemedText style={styles.badgeText}>
-            {item.unreadCount > 99 ? '99+' : String(item.unreadCount)}
+          <ThemedText contentDirection="ltr" style={styles.badgeText}>
+            {item.unreadCount > 99 ? '99+' : formatNumber(locale, item.unreadCount)}
           </ThemedText>
         </View>
       ) : (
-        <PlatformIcon color={theme.hairline} name="chevron-right" size={18} />
+        <PlatformIcon color={theme.hairline} name={direction === 'rtl' ? 'chevron-left' : 'chevron-right'} size={18} />
       )}
     </Pressable>
   );

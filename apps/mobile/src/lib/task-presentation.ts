@@ -1,8 +1,44 @@
 import type { TaskActivityAction, TaskPriority, TaskStateCategory } from '@track/shared/tasks';
 
-export function taskPriorityLabel(priority: TaskPriority) {
-  if (priority === 'none') return 'No priority';
-  return priority[0].toUpperCase() + priority.slice(1);
+export type TaskTranslate = (key: string, options?: Record<string, unknown>) => string;
+type FormatterLocale = 'en' | 'ar';
+
+const englishLabels: Record<string, string> = {
+  'priority.none': 'No priority',
+  'priority.urgent': 'Urgent',
+  'priority.high': 'High',
+  'priority.medium': 'Medium',
+  'priority.low': 'Low',
+  'task.dueToday': 'Due today',
+  'task.overdue': 'Overdue · {{date}}',
+  'task.due': 'Due {{date}}',
+  'task.activityUnknown': 'Updated the task',
+  'task.activityCreated': 'Created this task',
+  'task.activityTitleChanged': 'Renamed this task',
+  'task.activityDescriptionChanged': 'Updated the description',
+  'task.activityStateChanged': 'Changed the status',
+  'task.activityAssigneeChanged': 'Changed the assignee',
+  'task.activityPriorityChanged': 'Changed the priority',
+  'task.activityDueDateChanged': 'Changed the due date',
+  'task.activityLabelsChanged': 'Updated the labels',
+  'task.activityBoardChanged': 'Moved this task to another board',
+  'task.activityScopeChanged': 'Changed the task scope',
+  'task.activityCommented': 'Added a comment',
+  'task.activityArchived': 'Archived this task',
+  'task.activityRestored': 'Restored this task',
+};
+
+function label(t: TaskTranslate | undefined, key: string, options?: Record<string, unknown>) {
+  if (t) return t(key, options);
+  const template = englishLabels[key] ?? key;
+  return Object.entries(options ?? {}).reduce(
+    (result, [name, value]) => result.replaceAll(`{{${name}}}`, String(value)),
+    template,
+  );
+}
+
+export function taskPriorityLabel(priority: TaskPriority, t?: TaskTranslate) {
+  return label(t, `priority.${priority}`);
 }
 
 export function taskPriorityGlyph(priority: TaskPriority) {
@@ -32,19 +68,33 @@ export function taskDueLabel(
   dueDate?: string,
   today = localTaskDate(),
   category?: TaskStateCategory,
+  options?: {
+    formatDate?: TaskDateFormatter;
+    locale?: string;
+    t?: TaskTranslate;
+  },
 ) {
   if (!dueDate) return null;
-  if (dueDate === today) return 'Due today';
+  if (dueDate === today) return label(options?.t, 'task.dueToday');
+  const formatted = formatTaskDate(dueDate, options?.locale, options?.formatDate);
   if (dueDate < today && category !== 'completed' && category !== 'canceled') {
-    return `Overdue · ${formatTaskDate(dueDate)}`;
+    return label(options?.t, 'task.overdue', { date: formatted });
   }
-  return `Due ${formatTaskDate(dueDate)}`;
+  return label(options?.t, 'task.due', { date: formatted });
 }
 
-export function formatTaskDate(value: string) {
+export type TaskDateFormatter = (
+  locale: FormatterLocale,
+  value: Date,
+  options?: Intl.DateTimeFormatOptions,
+) => string;
+
+export function formatTaskDate(value: string, locale = 'en-US', formatter?: TaskDateFormatter) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return formatter
+    ? formatter(locale as FormatterLocale, parsed, { day: 'numeric', month: 'short' })
+    : parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 export function taskLabelColor(token: string, fallback: string) {
@@ -59,22 +109,22 @@ export function taskLabelColor(token: string, fallback: string) {
   return colors[token] ?? fallback;
 }
 
-const activityLabels: Record<TaskActivityAction, string> = {
-  archived: 'Archived this task',
-  assignee_changed: 'Changed the assignee',
-  board_changed: 'Moved this task to another board',
-  commented: 'Added a comment',
-  created: 'Created this task',
-  description_changed: 'Updated the description',
-  due_date_changed: 'Changed the due date',
-  labels_changed: 'Updated the labels',
-  priority_changed: 'Changed the priority',
-  restored: 'Restored this task',
-  scope_changed: 'Changed the task scope',
-  state_changed: 'Changed the status',
-  title_changed: 'Renamed this task',
+const activityKeys: Record<TaskActivityAction, string> = {
+  archived: 'task.activityArchived',
+  assignee_changed: 'task.activityAssigneeChanged',
+  board_changed: 'task.activityBoardChanged',
+  commented: 'task.activityCommented',
+  created: 'task.activityCreated',
+  description_changed: 'task.activityDescriptionChanged',
+  due_date_changed: 'task.activityDueDateChanged',
+  labels_changed: 'task.activityLabelsChanged',
+  priority_changed: 'task.activityPriorityChanged',
+  restored: 'task.activityRestored',
+  scope_changed: 'task.activityScopeChanged',
+  state_changed: 'task.activityStateChanged',
+  title_changed: 'task.activityTitleChanged',
 };
 
-export function taskActivityLabel(action: TaskActivityAction) {
-  return activityLabels[action] ?? action.replaceAll('_', ' ');
+export function taskActivityLabel(action: TaskActivityAction, t?: TaskTranslate) {
+  return label(t, activityKeys[action] ?? 'task.activityUnknown');
 }
