@@ -57,7 +57,7 @@
 .task-column-list { display: flex; flex-direction: column; gap: 7px; min-height: 80px; }
 .task-card { background: var(--card); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 1px 2px rgb(0 0 0 / .035); overflow: hidden; position: relative; transition: border-color .14s, transform .14s; }
 .task-card:hover { border-color: color-mix(in srgb, var(--foreground) 22%, var(--border)); transform: translateY(-1px); }
-.task-card-open { display: flex; flex-direction: column; gap: 7px; padding: 10px; text-align: left; width: 100%; }
+.task-card-open { display: flex; flex-direction: column; gap: 7px; padding: 10px; text-align: start; width: 100%; }
 .task-card-open strong { font-size: .76rem; line-height: 1.35; }
 .task-card-key { color: var(--muted-foreground); font: 600 .61rem/1 var(--font-mono); letter-spacing: .025em; }
 .task-card-key svg { display: inline; vertical-align: -2px; }
@@ -69,7 +69,7 @@
 .task-card-moves { border-top: 1px solid var(--border); display: flex; justify-content: flex-end; padding: 2px 4px; }
 .task-column-empty { color: var(--muted-foreground); font-size: .68rem; padding: 20px 8px; text-align: center; }
 .task-dense-list { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.task-dense-list button { display: grid; grid-template-columns: 90px minmax(180px, 1fr) 150px 90px; gap: 12px; padding: 10px 12px; text-align: left; width: 100%; }
+.task-dense-list button { display: grid; grid-template-columns: 90px minmax(180px, 1fr) 150px 90px; gap: 12px; padding: 10px 12px; text-align: start; width: 100%; }
 .task-dense-list button + button { border-top: 1px solid var(--border); }
 .task-dense-list button:hover { background: var(--muted); }
 .task-dense-list span { color: var(--muted-foreground); }
@@ -94,7 +94,7 @@
 .task-detail-section h3 { font-size: .74rem; gap: 6px; margin: 0 0 10px; }
 .task-subtask { align-items: center; display: grid; grid-template-columns: 90px 1fr; gap: 8px; padding: 7px 0; }
 .task-subtask span, .task-activity time, .task-activity-list time { color: var(--muted-foreground); font-size: .62rem; }
-.task-detail-section blockquote, .task-suggestion-card blockquote { background: var(--muted); border-left: 2px solid var(--border); border-radius: 0 6px 6px 0; margin: 6px 0; padding: 8px 10px; }
+.task-detail-section blockquote, .task-suggestion-card blockquote { background: var(--muted); border-inline-start: 2px solid var(--border); border-start-start-radius: 0; border-start-end-radius: 6px; border-end-end-radius: 6px; border-end-start-radius: 0; margin: 6px 0; padding: 8px 10px; }
 .task-detail-section blockquote span { color: var(--muted-foreground); display: block; font-size: .6rem; margin-top: 5px; text-transform: capitalize; }
 .task-restricted-context, .task-read-only { color: var(--muted-foreground); font-style: italic; }
 .task-activity-list { display: grid; gap: 8px; }
@@ -143,7 +143,7 @@
 .task-channel-panel { align-items: center; background: var(--card); border-bottom: 1px solid var(--border); display: flex; gap: 12px; min-height: 38px; overflow-x: auto; padding: 5px 14px; }
 .task-channel-panel > div { display: flex; gap: 8px; white-space: nowrap; }
 .task-channel-panel a { color: var(--muted-foreground); font-size: .65rem; white-space: nowrap; }
-.task-channel-panel > a:last-child { margin-left: auto; }
+.task-channel-panel > a:last-child { margin-inline-start: auto; }
 
 @media (max-width: 760px) {
   .task-page { padding: 18px 12px 32px; }
@@ -527,7 +527,7 @@
 .company-channel-sidebar,
 .company-project-admin {
   background: var(--sidebar);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -535,8 +535,8 @@
 }
 
 .company-project-admin {
-  border-left: 1px solid var(--border);
-  border-right: 0;
+  border-inline-start: 1px solid var(--border);
+  border-inline-end: 0;
 }
 
 .company-channel-sidebar nav {
@@ -551,7 +551,7 @@
   color: inherit;
   min-height: 40px;
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
 }
 
 .company-channel-sidebar nav button.active {
@@ -821,7 +821,7 @@ button {
 
 .track-pwa-install {
   position: fixed;
-  right: max(14px, env(safe-area-inset-right));
+  inset-inline-end: max(14px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
   z-index: 60;
   display: none;
@@ -964,7 +964,7 @@ button {
   background: var(--paper);
   cursor: pointer;
   padding: 9px 10px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -1333,16 +1333,16 @@ button {
   }
 
 .track-auth-input-with-icon {
-  padding-left: 44px !important;
+  padding-inline-start: 44px !important;
 }
 
 .track-auth-input-with-action {
-  padding-right: 44px !important;
+  padding-inline-end: 44px !important;
 }
 
 .track-auth-field-icon {
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   bottom: 13px;
   color: var(--ink-3);
   pointer-events: none;
@@ -1350,7 +1350,7 @@ button {
 
 .track-auth-input-action {
   position: absolute;
-  right: 7px;
+  inset-inline-end: 7px;
   bottom: 5px;
   display: inline-flex;
   width: 34px;
@@ -1442,7 +1442,7 @@ button {
 
 .track-auth-preview-body .track-message-meta {
   margin-bottom: 5px;
-  padding-right: 0;
+  padding-inline-end: 0;
 }
 
 .track-auth-preview-body .track-message-meta strong {
@@ -1466,7 +1466,7 @@ button {
 .track-auth-mention {
   display: inline-flex;
   align-items: center;
-  margin-right: 7px;
+  margin-inline-end: 7px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 22%, var(--paper-3));
   color: var(--accent);
@@ -1480,7 +1480,7 @@ button {
   align-items: center;
   gap: 7px;
   margin-top: 22px;
-  margin-right: 18px;
+  margin-inline-end: 18px;
   color: var(--ink-3);
   font-size: 12px;
   font-weight: 650;
@@ -1502,7 +1502,7 @@ button {
 .track-auth-conversation-conversation-a .track-auth-preview-row:last-child::before {
   position: absolute;
   top: 14px;
-  left: -18px;
+  inset-inline-start: -18px;
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -1540,11 +1540,16 @@ button {
 
 .track-auth-conversation-conversation-b .track-auth-preview-row:nth-child(3),
 .track-auth-conversation-conversation-b .track-auth-preview-row:nth-child(14) {
-  border-left: 2px solid color-mix(in srgb, var(--accent) 68%, var(--hairline));
+  border-inline-start: 2px solid color-mix(in srgb, var(--accent) 68%, var(--hairline));
   background: color-mix(in srgb, var(--paper-2) 34%, transparent);
-  border-radius: 0 8px 8px 0;
-  margin-left: -16px;
-  padding: 10px 12px 10px 14px;
+  border-start-start-radius: 0;
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
+  border-end-start-radius: 0;
+  margin-inline-start: -16px;
+  padding-block: 10px;
+  padding-inline-start: 14px;
+  padding-inline-end: 12px;
 }
 
 @keyframes track-auth-row-enter {
@@ -1625,7 +1630,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 26px;
-  border-right: 1px solid var(--hairline);
+  border-inline-end: 1px solid var(--hairline);
   background: var(--paper-2);
   padding: 24px;
 }
@@ -1697,7 +1702,7 @@ button {
   background: transparent;
   color: var(--ink);
   box-shadow: inset 2px 0 0 var(--accent);
-  padding-left: 10px;
+  padding-inline-start: 10px;
 }
 
 .track-profile-content {
@@ -1770,7 +1775,7 @@ button {
 }
 
 .track-security-action-bar .track-button-danger {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .track-profile-avatar-row {
@@ -1924,7 +1929,7 @@ button {
   cursor: pointer;
   font: inherit;
   padding: 7px;
-  text-align: left;
+  text-align: start;
 }
 
 .track-profile-banner-grid button:hover,
@@ -1970,7 +1975,7 @@ button {
   font-size: 14px;
   font-weight: 620;
   padding: 0 11px;
-  text-align: left;
+  text-align: start;
   box-shadow: inset 0 1px 0 rgba(27, 25, 23, 0.05);
 }
 
@@ -1992,8 +1997,7 @@ button {
   position: absolute;
   z-index: 20;
   top: calc(100% + 6px);
-  right: 0;
-  left: 0;
+  inset-inline: 0;
   display: grid;
   gap: 8px;
   border: 1px solid var(--hairline-strong);
@@ -2022,7 +2026,7 @@ button {
   cursor: pointer;
   font: inherit;
   padding: 8px;
-  text-align: left;
+  text-align: start;
 }
 
 .track-timezone-options button:hover,
@@ -2214,7 +2218,7 @@ button {
 .track-step-up-float {
   position: fixed;
   top: 18px;
-  right: 18px;
+  inset-inline-end: 18px;
   z-index: 50;
   width: min(380px, calc(100vw - 28px));
   pointer-events: none;
@@ -2243,7 +2247,7 @@ button {
 .track-step-up-copy {
   display: grid;
   gap: 4px;
-  padding-right: 26px;
+  padding-inline-end: 26px;
 }
 
 .track-step-up-copy strong {
@@ -2262,7 +2266,7 @@ button {
 .track-step-up-close {
   position: absolute;
   top: 12px;
-  right: 12px;
+  inset-inline-end: 12px;
   display: inline-flex;
   width: 28px;
   height: 28px;
@@ -2481,7 +2485,7 @@ button {
 
 .track-nav {
   position: relative;
-  border-right: 1px solid var(--hairline);
+  border-inline-end: 1px solid var(--hairline);
   transition: width 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -2502,7 +2506,7 @@ button {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-left: 1px solid var(--hairline);
+  border-inline-start: 1px solid var(--hairline);
   background: var(--paper-2);
 }
 
@@ -2560,9 +2564,11 @@ button {
   z-index: 4;
   top: 0;
   bottom: 0;
-  left: -14px;
+  inset-inline-start: -14px;
   width: 28px;
-  border-width: 0 1px 0 0;
+  border-block-width: 0;
+  border-inline-start-width: 0;
+  border-inline-end-width: 1px;
   border-color: transparent;
   border-radius: 0;
   background: transparent;
@@ -2644,7 +2650,7 @@ button {
   height: 28px;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   border: 1px solid var(--hairline-strong);
   border-radius: 6px;
   background: var(--paper);
@@ -2693,7 +2699,7 @@ button {
   height: 24px;
   min-width: 24px;
   flex: 0 0 24px;
-  margin-left: 0;
+  margin-inline-start: 0;
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
@@ -2760,7 +2766,7 @@ button {
   color: var(--ink);
   cursor: pointer;
   padding: 5px 8px;
-  text-align: left;
+  text-align: start;
   box-shadow: none;
   font: inherit;
   white-space: normal;
@@ -2799,7 +2805,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 10px 4px 16px;
+  padding-block: 13px 4px;
+  padding-inline-start: 16px;
+  padding-inline-end: 10px;
   color: var(--ink-4);
   font-family: var(--font-meta);
   font-size: 10.5px;
@@ -2902,7 +2910,7 @@ button {
   color: var(--ink-2);
   cursor: pointer;
   padding: 5px 9px;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   transition:
     background-color 140ms ease,
@@ -3090,7 +3098,7 @@ button {
 }
 
 .track-nav-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: 1px solid var(--hairline-strong);
   border-radius: 6px;
   padding: 1px 5px;
@@ -3104,7 +3112,7 @@ button {
 .track-nav.collapsed .track-nav-count {
   position: absolute;
   top: -2px;
-  right: -2px;
+  inset-inline-end: -2px;
   min-width: 15px;
   padding: 0 3px;
   background: var(--paper);
@@ -3297,12 +3305,12 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .track-nav.collapsed .track-nav-footer-actions {
   flex-direction: column;
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .track-theme-toggle,
@@ -3352,7 +3360,7 @@ button {
 .track-account-menu {
   position: absolute;
   bottom: 12px;
-  left: calc(100% + 8px);
+  inset-inline-start: calc(100% + 8px);
   z-index: 50;
   width: 190px;
   border: 1px solid var(--hairline-strong);
@@ -3389,7 +3397,7 @@ button {
 
 .track-logout-confirm {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   bottom: calc(100% + 8px);
   z-index: 40;
   width: 190px;
@@ -3897,7 +3905,7 @@ button {
 .track-header-members {
   display: flex;
   align-items: center;
-  margin-right: 6px;
+  margin-inline-end: 6px;
 }
 
 .track-header-members .track-avatar-tooltip-trigger,
@@ -3906,11 +3914,11 @@ button {
   height: 22px;
   min-width: 22px;
   box-shadow: 0 0 0 2px var(--paper);
-  margin-left: -5px;
+  margin-inline-start: -5px;
 }
 
 .track-header-members .track-avatar-tooltip-trigger:first-child {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .track-header-members .track-avatar {
@@ -3949,7 +3957,7 @@ button {
   position: absolute;
   z-index: 30;
   top: 66px;
-  right: max(24px, calc((100% - 760px) / 2));
+  inset-inline-end: max(24px, calc((100% - 760px) / 2));
   display: grid;
   width: min(380px, calc(100% - 48px));
   grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
@@ -4048,7 +4056,9 @@ button {
   min-width: 38px;
   align-items: center;
   justify-content: center;
-  margin: -38px 4px 0 auto;
+  margin-block: -38px 0;
+  margin-inline-start: auto;
+  margin-inline-end: 4px;
   padding: 0;
   border-color: rgba(240, 177, 0, 0.58);
   border-radius: 999px;
@@ -4327,7 +4337,7 @@ button {
   color: var(--ink);
   cursor: pointer;
   padding: 7px 8px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -4402,7 +4412,7 @@ button {
   color: var(--ink);
   cursor: pointer;
   padding: 16px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -4651,7 +4661,7 @@ button {
   align-items: center;
   gap: 7px;
   margin-bottom: 3px;
-  padding-right: 106px;
+  padding-inline-end: 106px;
 }
 
 .track-message-meta strong {
@@ -4666,7 +4676,7 @@ button {
 }
 
 .track-assistant-body .track-message-meta {
-  padding-right: 0;
+  padding-inline-end: 0;
 }
 
 .track-message-body p,
@@ -4681,7 +4691,7 @@ button {
   position: absolute;
   z-index: 2;
   top: 1px;
-  right: 2px;
+  inset-inline-end: 2px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -4728,7 +4738,7 @@ button {
   display: grid;
   min-width: 0;
   gap: 3px;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 72%, var(--ink-4));
+  border-inline-start: 2px solid color-mix(in srgb, var(--accent) 72%, var(--ink-4));
   background: color-mix(in srgb, var(--accent-tint) 42%, transparent);
   padding: 7px 9px;
 }
@@ -4736,7 +4746,10 @@ button {
 .track-message-quote {
   max-width: 560px;
   margin: 5px 0 7px;
-  border-radius: 0 7px 7px 0;
+  border-start-start-radius: 0;
+  border-start-end-radius: 7px;
+  border-end-end-radius: 7px;
+  border-end-start-radius: 0;
 }
 
 .track-message-quote span,
@@ -4782,7 +4795,10 @@ button {
 
 .track-forwarded-card {
   border-color: var(--hairline-strong);
-  border-radius: 0 7px 7px 0;
+  border-start-start-radius: 0;
+  border-start-end-radius: 7px;
+  border-end-end-radius: 7px;
+  border-end-start-radius: 0;
   background: var(--paper-2);
 }
 
@@ -4832,7 +4848,7 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 
 .track-forward-note {
@@ -4859,7 +4875,7 @@ button {
   color: var(--ink);
   cursor: pointer;
   padding: 7px;
-  text-align: left;
+  text-align: start;
 }
 
 .track-forward-target:hover,
@@ -5520,7 +5536,7 @@ button.track-citation-chip:hover {
   color: inherit;
   cursor: pointer;
   padding: 7px 9px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -5680,7 +5696,7 @@ button.track-mention-inline.group:focus-visible {
 
 .track-markdown ul {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .track-markdown li + li {
@@ -5777,15 +5793,15 @@ button.track-mention-inline.group:focus-visible {
 }
 
 .track-typing-avatar {
-  margin-left: -7px;
+  margin-inline-start: -7px;
 }
 
 .track-typing-avatar:first-child {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .track-typing-avatar-more {
-  margin-left: -7px;
+  margin-inline-start: -7px;
   background: var(--paper-2);
   color: var(--ink-3);
   font-family: var(--font-meta);
@@ -5948,7 +5964,7 @@ button.track-mention-inline.group:focus-visible {
 .track-voice-review-remove {
   position: absolute;
   top: -5px;
-  left: -5px;
+  inset-inline-start: -5px;
   z-index: 1;
   display: inline-flex;
   width: 18px;
@@ -6157,7 +6173,8 @@ button.track-mention-inline.group:focus-visible {
 }
 
 .track-voice-error {
-  margin: 0 0 0 4px;
+  margin-block: 0;
+  margin-inline-start: 4px;
   color: var(--danger);
   font-size: 12px;
   font-weight: 650;
@@ -6175,8 +6192,7 @@ button.track-mention-inline.group:focus-visible {
 
 .track-mention-menu {
   position: absolute;
-  left: 10px;
-  right: 10px;
+  inset-inline: 10px;
   bottom: calc(100% + 8px);
   z-index: 5;
   display: flex;
@@ -6231,7 +6247,7 @@ button.track-mention-inline.group:focus-visible {
   cursor: pointer;
   min-height: 50px;
   padding: 7px 9px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -6367,7 +6383,7 @@ button.track-mention-inline.group:focus-visible {
 
 .track-emoji-picker {
   position: absolute;
-  right: 8px;
+  inset-inline-end: 8px;
   bottom: calc(100% - 1px);
   z-index: 6;
   display: grid;
@@ -6804,7 +6820,7 @@ button.track-mention-inline.group:focus-visible {
   font-weight: 600;
   letter-spacing: 0.01em;
   padding: 4px 7px;
-  text-align: left;
+  text-align: start;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -6937,7 +6953,7 @@ button.track-mention-inline.group:focus-visible {
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
-  text-align: right;
+  text-align: end;
 }
 
 .track-settings-group-list {
@@ -7080,7 +7096,7 @@ button:disabled:hover {
   }
 
   .track-profile-sidebar {
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: 1px solid var(--hairline);
     padding: 24px;
   }
@@ -7112,7 +7128,7 @@ button:disabled:hover {
   }
 
   .track-security-action-bar .track-button-danger {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 
   .track-timezone-menu {
@@ -7122,9 +7138,9 @@ button:disabled:hover {
 
   .track-step-up-float {
     top: auto;
-    right: 14px;
+    inset-inline-end: 14px;
     bottom: 14px;
-    left: 14px;
+    inset-inline-start: 14px;
     width: auto;
   }
 
@@ -7147,11 +7163,12 @@ button:disabled:hover {
   .track-nav {
     position: fixed;
     z-index: 40;
-    inset: 0 auto 0 0;
+    inset-block: 0;
+    inset-inline-start: 0;
     display: flex;
     width: min(86vw, 300px);
     height: 100dvh;
-    border-right: 1px solid var(--hairline-strong);
+    border-inline-end: 1px solid var(--hairline-strong);
     box-shadow: 18px 0 50px rgba(27, 25, 23, 0.26);
     transform: translateX(-102%);
     transition: transform 180ms ease;
@@ -7211,7 +7228,9 @@ button:disabled:hover {
   .track-nav.collapsed .track-nav-section {
     justify-content: space-between;
     min-height: 0;
-    padding: 13px 10px 4px 16px;
+    padding-block: 13px 4px;
+    padding-inline-start: 16px;
+    padding-inline-end: 10px;
   }
 
   .track-nav.collapsed .track-nav-section > span {
@@ -7249,7 +7268,7 @@ button:disabled:hover {
 
   .track-nav.collapsed .track-nav-count {
     position: static;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .track-nav.collapsed .track-nav-footer {
@@ -7260,7 +7279,7 @@ button:disabled:hover {
 
   .track-nav.collapsed .track-nav-footer-actions {
     flex-direction: row;
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .track-nav-account-button,
@@ -7290,12 +7309,11 @@ button:disabled:hover {
   .track-thread-header,
   .track-thread-scroll,
   .track-composer-wrap {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-inline: 14px;
   }
 
   .track-header-actions {
-    margin-left: auto;
+    margin-inline-start: auto;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -7325,14 +7343,12 @@ button:disabled:hover {
 
   .track-header-actions .track-button {
     min-height: 30px;
-    padding-left: 9px;
-    padding-right: 9px;
+    padding-inline: 9px;
   }
 
   .track-chat-search-popover {
     top: 62px;
-    right: 14px;
-    left: 14px;
+    inset-inline: 14px;
     width: auto;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
   }
@@ -7534,7 +7550,9 @@ body {
   min-height: 47px;
   gap: 9px;
   border-bottom: 0 !important;
-  padding: 10px 12px 7px 16px;
+  padding-block: 10px 7px;
+  padding-inline-start: 16px;
+  padding-inline-end: 12px;
 }
 
 .track-brand-mark {
@@ -7609,7 +7627,7 @@ body {
   position: absolute;
   top: 6px;
   bottom: 6px;
-  left: 0;
+  inset-inline-start: 0;
   width: 2.5px;
   border-radius: 999px;
   background: var(--accent);
@@ -7709,9 +7727,9 @@ body {
 
 .track-header-view-tabs .active::after {
   position: absolute;
-  right: 10px;
+  inset-inline-end: 10px;
   bottom: -1px;
-  left: 10px;
+  inset-inline-start: 10px;
   height: 2.5px;
   border-radius: 999px 999px 0 0;
   background: var(--accent);
@@ -7732,7 +7750,7 @@ body {
 }
 
 .track-header-actions {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .track-header-actions > .track-button {
@@ -7787,7 +7805,7 @@ body {
 
 .track-message-actions {
   top: -12px;
-  right: 8px;
+  inset-inline-end: 8px;
   gap: 2px;
   border: 1px solid var(--hairline-strong);
   border-radius: 999px;
@@ -7801,14 +7819,16 @@ body {
   border: 0;
   border-radius: 7px;
   background: var(--paper-2);
-  padding: 7px 12px 7px 14px;
+  padding-block: 7px;
+  padding-inline-start: 14px;
+  padding-inline-end: 12px;
 }
 
 .track-message-quote::before {
   position: absolute;
   top: 6px;
   bottom: 6px;
-  left: 4px;
+  inset-inline-start: 4px;
   width: 2.5px;
   border-radius: 999px;
   background: var(--hairline-strong);
@@ -7982,7 +8002,7 @@ body {
 }
 
 .track-rail > .task-channel-panel > a:last-of-type {
-  margin-left: 0;
+  margin-inline-start: 0;
   border: 0;
   background: transparent;
   color: var(--accent-strong);
@@ -8064,7 +8084,7 @@ body {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  border-right: 1px solid var(--hairline);
+  border-inline-end: 1px solid var(--hairline);
   background: var(--paper-2);
   padding: 10px;
 }
@@ -8159,7 +8179,7 @@ body {
   position: absolute;
   top: 6px;
   bottom: 6px;
-  left: 0;
+  inset-inline-start: 0;
   width: 2.5px;
   border-radius: 999px;
   background: var(--accent);
@@ -8225,7 +8245,7 @@ body {
 
 .task-toolbar > select:first-child,
 .task-toolbar > strong {
-  margin-right: auto;
+  margin-inline-end: auto;
 }
 
 .task-toolbar select {
@@ -8299,7 +8319,7 @@ body {
 .task-state-ring.canceled::after {
   position: absolute;
   top: 5px;
-  left: -2px;
+  inset-inline-start: -2px;
   width: 16px;
   height: 1.5px;
   border-radius: 999px;
@@ -8405,7 +8425,7 @@ body {
 }
 
 .task-inbox-filters {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .task-inbox-list {
@@ -8428,7 +8448,7 @@ body {
 .task-detail-sheet {
   width: min(440px, 92vw);
   max-width: 440px !important;
-  border-left-color: var(--hairline-strong);
+  border-inline-start-color: var(--hairline-strong);
   background: var(--paper);
   box-shadow: var(--shadow-sheet);
 }
@@ -8440,7 +8460,7 @@ body {
 }
 
 .task-detail-sheet [data-slot='sheet-title'] {
-  padding-right: 24px;
+  padding-inline-end: 24px;
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
@@ -8477,7 +8497,7 @@ body {
 }
 
 .task-detail-section blockquote {
-  border-left: 2.5px solid var(--accent);
+  border-inline-start: 2.5px solid var(--accent);
   border-radius: 7px;
   background: var(--paper-2);
   color: var(--ink-2);
@@ -8543,7 +8563,7 @@ body {
 .task-state-ring.canceled::after {
   position: absolute;
   top: calc(50% - 0.75px);
-  left: -2px;
+  inset-inline-start: -2px;
   width: calc(100% + 4px);
   height: 1.5px;
   border-radius: 999px;
@@ -8713,7 +8733,7 @@ body {
 
 .task-card-moves {
   position: absolute;
-  right: 5px;
+  inset-inline-end: 5px;
   bottom: 5px;
   border: 1px solid var(--hairline-strong);
   border-radius: 6px;
@@ -8768,7 +8788,7 @@ body {
   border-bottom: 1px solid var(--hairline) !important;
   border-radius: 7px !important;
   padding: 7px 10px !important;
-  text-align: left;
+  text-align: start;
 }
 
 .task-list-row.omit-assignee {
@@ -8821,7 +8841,7 @@ body {
 }
 
 .task-inline-properties .task-priority-glyph {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .task-inline-cards a > small {
@@ -9121,7 +9141,7 @@ body {
 }
 
 .task-detail-section h3 small {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 500;
@@ -9156,14 +9176,14 @@ body {
 
 .task-origin-evidence {
   position: relative;
-  padding-left: 26px;
+  padding-inline-start: 26px;
 }
 
 .task-origin-track {
   position: absolute;
   top: 4px;
   bottom: 4px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 18px;
   height: calc(100% - 8px);
   overflow: visible;
@@ -9229,12 +9249,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 2px;
+  padding-inline-start: 2px;
   text-transform: none;
 }
 
 .task-activity time {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .task-comment-form textarea {
@@ -9268,8 +9288,7 @@ body {
   min-height: 100vh;
   flex-direction: column;
   gap: 0;
-  border-right: 1px solid var(--hairline);
-  border-left: 1px solid var(--hairline);
+  border-inline: 1px solid var(--hairline);
   background: var(--paper);
   padding: 0;
 }
@@ -9462,7 +9481,7 @@ body {
   position: absolute;
   top: 6px;
   bottom: 6px;
-  left: 0;
+  inset-inline-start: 0;
   width: 2.5px;
   border-radius: 999px;
   background: var(--accent);
@@ -9565,7 +9584,7 @@ body {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     overflow: visible;
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: 1px solid var(--hairline);
     padding: 6px 10px;
   }
@@ -9595,9 +9614,9 @@ body {
 
   .task-view-tabs button.active::before {
     top: auto;
-    right: 8px;
+    inset-inline-end: 8px;
     bottom: -6px;
-    left: 8px;
+    inset-inline-start: 8px;
     width: auto;
     height: 2.5px;
   }
@@ -9624,8 +9643,7 @@ body {
   .task-page-header,
   .task-workspace,
   .task-inbox {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding-inline: 12px;
   }
 
   .task-toolbar {
@@ -9647,7 +9665,7 @@ body {
   }
 
   .task-inbox-filters {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 
   .track-thread-route {
@@ -9692,5 +9710,83 @@ body {
 
   .task-detail-actions > button {
     min-height: 28px;
+  }
+}
+
+/* Direction-sensitive motion and visual marks. Layout uses logical properties
+   above; these few overrides keep movement and asymmetric affordances aligned
+   with the active inline direction. */
+[data-slot='avatar-group'] > * + * {
+  margin-inline-start: -0.5rem;
+}
+
+[dir='rtl'] .track-pwa-install {
+  inset-inline-end: max(14px, env(safe-area-inset-left));
+}
+
+[dir='rtl'] .track-nav.collapsed .track-brand-word,
+[dir='rtl'] .track-nav.collapsed .track-nav-section-label,
+[dir='rtl'] .track-nav.collapsed .track-nav-copy {
+  transform: translateX(4px);
+}
+
+[dir='rtl'] .track-nav-item:hover {
+  transform: translateX(-1px);
+}
+
+[dir='rtl'] .track-profile-tabs button.active {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+[dir='rtl'] .track-mention-option:hover,
+[dir='rtl'] .track-mention-option.active {
+  box-shadow: inset -3px 0 0 var(--accent);
+  transform: translateX(-2px);
+}
+
+[dir='rtl'] .track-mention-option:active {
+  transform: translateX(0) scale(0.99);
+}
+
+[dir='rtl'] .task-origin-track {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .track-voice-progress::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to left,
+    var(--ink) 0%,
+    var(--ink) var(--voice-progress),
+    var(--voice-track) var(--voice-progress),
+    var(--voice-track) 100%
+  );
+}
+
+[dir='rtl'] [data-slot='switch'][data-checked] [data-slot='switch-thumb'] {
+  transform: translateX(calc(-100% + 2px));
+}
+
+[dir='rtl'] [data-slot='dropdown-menu-sub-trigger'] > svg {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] [data-slot='sheet-content'][data-side='left'][data-ending-style],
+[dir='rtl'] [data-slot='sheet-content'][data-side='left'][data-starting-style] {
+  transform: translateX(2.5rem);
+}
+
+[dir='rtl'] [data-slot='sheet-content'][data-side='right'][data-ending-style],
+[dir='rtl'] [data-slot='sheet-content'][data-side='right'][data-starting-style] {
+  transform: translateX(-2.5rem);
+}
+
+@media (max-width: 760px) {
+  [dir='rtl'] .track-nav {
+    box-shadow: -18px 0 50px rgba(27, 25, 23, 0.26);
+    transform: translateX(102%);
+  }
+
+  [dir='rtl'] .track-nav.mobile-open {
+    transform: translateX(0);
   }
 }
