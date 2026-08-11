@@ -1,4 +1,5 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 
 import { Button } from '#/components/ui/button'
@@ -46,6 +47,7 @@ function applyThemeMode(mode: ThemeMode) {
 }
 
 export default function ThemeToggle() {
+  const { t } = useTranslation('shell')
   const [mode, setMode] = useState<ThemeMode>('auto')
 
   useEffect(() => {
@@ -78,8 +80,8 @@ export default function ThemeToggle() {
 
   const label =
     mode === 'auto'
-      ? 'Theme mode: auto (system). Click to switch to light mode.'
-      : `Theme mode: ${mode}. Click to switch mode.`
+      ? t('theme.auto')
+      : t('theme.mode', { mode: t(`theme.modes.${mode}`) })
   const Icon = mode === 'auto' ? Monitor : mode === 'dark' ? Moon : Sun
 
   return (

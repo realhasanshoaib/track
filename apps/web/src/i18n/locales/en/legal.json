@@ -1,0 +1,143 @@
+{
+  "about": {
+    "eyebrow": "Track",
+    "title": "Shared project memory.",
+    "description": "Track is a unified conversation and task workspace that keeps conversation, evidence, shared memory, and permission-aware AI assistance together."
+  },
+  "privacy": {
+    "eyebrow": "Q9 Track",
+    "title": "Privacy Policy",
+    "effectiveDate": "Effective date: July 11, 2026",
+    "intro": "Track is a project communication and audit tool operated by Q9 Labs. It helps project teams keep conversation, evidence, shared memory, and permission-aware AI assistance together.",
+    "sections": {
+      "information": {
+        "title": "Information We Collect",
+        "item1": "Google account profile data used for sign-in, including name, email address, and Google account identifier.",
+        "item2": "Email/password account data used for sign-in. Passwords are handled by the authentication system and are not stored by Track in plain text.",
+        "item3": "Optional two-factor authentication data, including authenticator app setup state and encrypted backup codes.",
+        "item4": "Profile details you add to Track, such as display name, avatar, designation, bio, timezone, project membership, and notification settings.",
+        "item5": "Project content created in Track, including messages, mentions, attachments, audit events, imported memory, and Track Assistant interactions.",
+        "item6": "Operational data needed to keep Track reliable, including device, browser, app version, push notification tokens, request metadata, and diagnostic logs."
+      },
+      "use": {
+        "title": "How We Use Information",
+        "item1": "To authenticate users with Google or email/password, protect sensitive actions with two-factor step-up, and control access to projects and channels.",
+        "item2": "To provide channel conversation, evidence-aware AI assistance, project memory, search, audit history, and notifications.",
+        "item3": "To improve reliability, investigate abuse or errors, and maintain security.",
+        "item4": "To comply with legal, contractual, and audit obligations connected to the projects managed in Track."
+      },
+      "sharing": {
+        "title": "Sharing",
+        "item1": "We do not sell personal information.",
+        "item2": "Project content is visible to users who have access to the relevant project or channel.",
+        "item3": "We use service providers for hosting, authentication, AI processing, storage, notifications, observability, and app distribution. They process information only as needed to provide those services.",
+        "item4": "We may disclose information if required by law, to protect rights and security, or to enforce project agreements."
+      },
+      "retention": {
+        "title": "Retention",
+        "item1": "Shared project content and audit history may be retained for the life of the project or longer when required for business, legal, or dispute-resolution reasons.",
+        "item2": "Operational logs are kept only as long as needed for security, reliability, and debugging."
+      },
+      "choices": {
+        "title": "Your Choices",
+        "item1": "You can request access, correction, or deletion of personal profile data by contacting us.",
+        "item2": "Deletion of shared project content or audit events may be limited when they must be preserved for contract, legal, or security reasons.",
+        "item3": "You can control push notification preferences globally and per channel inside Track."
+      },
+      "security": {
+        "title": "Security",
+        "body": "We use access controls, secure authentication, optional two-factor authentication, encrypted transport, managed hosting, and operational monitoring to protect Track data. No internet service can be guaranteed to be perfectly secure."
+      },
+      "children": {
+        "title": "Children",
+        "body": "Track is intended for business use and is not directed to children."
+      },
+      "contact": {
+        "title": "Contact",
+        "prefix": "For privacy requests, contact",
+        "suffix": "."
+      }
+    }
+  },
+  "terms": {
+    "eyebrow": "Q9 Track",
+    "title": "Terms",
+    "effectiveDate": "Effective date: July 11, 2026",
+    "intro": "These terms summarize the business-use expectations for Track. They are provided so mobile and web users can review the basic account, content, AI, and retention rules before and during use of the product.",
+    "sections": {
+      "use": {
+        "title": "Use of Track",
+        "body": "Track is provided for business project communication, evidence review, and audit workflows. You are responsible for using Track only with content and collaborators you are authorized to manage."
+      },
+      "content": {
+        "title": "Project Content",
+        "body": "Messages, attachments, voice notes, assistant interactions, reports, imported memory, and audit history may be visible to users with access to the relevant project or channel. Project owners are responsible for inviting the right collaborators and managing access."
+      },
+      "ai": {
+        "title": "AI Features",
+        "body": "Track Assistant can help summarize and answer questions about accessible project content. AI output should be reviewed before it is relied on for legal, billing, operational, or contractual decisions."
+      },
+      "accounts": {
+        "title": "Accounts and Security",
+        "body": "You must keep your account secure, use accurate profile information, and notify us if you believe your account or project access has been compromised."
+      },
+      "retention": {
+        "title": "Retention and Deletion",
+        "body": "Personal profile data can be corrected or deleted as described in the Privacy Policy. Some shared project content and audit history may be retained where needed for project integrity, contracts, legal obligations, or dispute resolution."
+      },
+      "contact": {
+        "title": "Contact",
+        "prefix": "For access, billing, support, or terms questions, contact",
+        "suffix": "."
+      }
+    }
+  },
+  "support": {
+    "eyebrow": "Q9 Track",
+    "title": "Support",
+    "effectiveDate": "Effective date: July 11, 2026",
+    "intro": "Track support is available by email for mobile and web users who need help with account access, project workspaces, conversation, memory, privacy requests, or account deletion.",
+    "items": {
+      "account": {
+        "title": "Account and Access",
+        "body": "For sign-in, password, two-factor authentication, or account access help, email the support contact below from the address associated with your Track account."
+      },
+      "project": {
+        "title": "Project Support",
+        "body": "For project membership, conversation, memory, notifications, or workspace questions, include your project name, affected channel, and a brief description of what happened."
+      },
+      "privacy": {
+        "title": "Privacy and Deletion",
+        "body": "Privacy requests and account deletion questions can be sent to the same support contact. Account deletion instructions are also available on the deletion page."
+      }
+    },
+    "contact": {
+      "title": "Contact",
+      "prefix": "Email",
+      "suffix": ". We normally respond to support requests by email."
+    }
+  },
+  "deletion": {
+    "eyebrow": "Q9 Track",
+    "title": "Account Deletion",
+    "effectiveDate": "Effective date: July 11, 2026",
+    "intro": "Track users can request account deletion from inside the mobile app. This page explains the deletion path and how shared project history is handled after a request.",
+    "steps": {
+      "title": "Delete Your Account in the App",
+      "item1": "Open Track on mobile and sign in to the account you want to delete.",
+      "item2": "Open the account menu from the Projects screen.",
+      "item3": "Choose Delete account and confirm the deletion prompt."
+    },
+    "retention": {
+      "title": "What Is Deleted or Retained",
+      "item1": "Track removes personal profile fields and disables push notification subscriptions for the deleted account.",
+      "item2": "Shared project messages, attachments, and audit events may be retained where needed for other project members, project integrity, contracts, legal obligations, security, or dispute resolution.",
+      "item3": "If you cannot access the app, email support from the address associated with your Track account and ask for account deletion assistance."
+    },
+    "contact": {
+      "title": "Contact",
+      "prefix": "For deletion help, email",
+      "suffix": "."
+    }
+  }
+}

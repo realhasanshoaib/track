@@ -13,16 +13,19 @@ import {
   UserRound,
 } from 'lucide-react'
 import { toDataURL } from 'qrcode'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ChangeEvent, FormEvent } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
 import type { Id } from '../../../../../convex/_generated/dataModel'
+import { PublicLocaleControl } from '#/components/PublicLocaleControl'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
 import TrackLoader from '#/components/TrackLoader'
+import { formatTime, useLocale } from '#/i18n'
 import { authClient } from '#/lib/auth-client'
 import { useDevAuthBypass } from '#/lib/dev-auth-bypass'
 import { getAvatarTone, getAvatarToneColor, getInitials } from '#/features/workspace/identity'
@@ -93,14 +96,14 @@ function getTimezoneOptions() {
   return Array.from(new Set([browserTimezone, ...supportedValues, ...fallback])).sort()
 }
 
-function getLocalTimeLabel(timezone: string) {
+function getLocalTimeLabel(timezone: string, locale: Parameters<typeof formatTime>[0]) {
   try {
-    return new Intl.DateTimeFormat([], {
+    return formatTime(locale, new Date(), {
       hour: 'numeric',
       minute: '2-digit',
       timeZone: timezone,
       timeZoneName: 'short',
-    }).format(new Date())
+    })
   } catch {
     return timezone
   }
@@ -114,26 +117,18 @@ function isProfileComplete(input: {
   return Boolean(input.displayName.trim() && input.profileDesignation.trim() && input.timezone.trim())
 }
 
-function getProviderLabel(providerId: string) {
+function getProviderLabel(providerId: string, emailPasswordLabel: string) {
   if (providerId === 'google') return 'Google'
-  if (providerId === 'credential') return 'Email password'
+  if (providerId === 'credential') return emailPasswordLabel
   return providerId.replaceAll('_', ' ')
 }
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = String(error.message)
-    if (message) return message
+function getSecurityMessage(error: unknown, fallback: string, syncFallback: string) {
+  const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : ''
+  if (message.includes('CONVEX') || message.includes('unauthenticated')) {
+    return syncFallback
   }
   return fallback
-}
-
-function getSecurityMessage(error: unknown, fallback: string) {
-  const message = getErrorMessage(error, fallback)
-  if (message.includes('CONVEX') || message.includes('unauthenticated')) {
-    return 'Track could not sync the security change. Refresh and try again from a normal signed-in session.'
-  }
-  return message
 }
 
 function getImagePalette(image: HTMLImageElement) {
@@ -169,6 +164,8 @@ function getImagePalette(image: HTMLImageElement) {
 }
 
 export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
+  const { t } = useTranslation('profile')
+  const { locale } = useLocale()
   const session = authClient.useSession()
   const devAuthBypass = useDevAuthBypass()
   const ensureCurrentUser = useMutation(api.auth.ensureCurrentUser)
@@ -290,7 +287,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
     event.preventDefault()
     if (!trackUserId) return
     if (!canSaveProfile) {
-      setProfileMessage('Display name, designation, and timezone are required.')
+      setProfileMessage(t('profile.validation'))
       return
     }
 
@@ -305,13 +302,13 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
         profileBio: bio || undefined,
         timezone,
       })
-      setProfileMessage('Profile saved.')
+      setProfileMessage(t('profile.saved'))
       if (mode === 'onboarding') {
         const next = new URLSearchParams(window.location.search).get('next') || '/workspace'
         window.location.href = next.startsWith('/') ? next : '/workspace'
       }
-    } catch (error) {
-      setProfileMessage(getErrorMessage(error, 'Could not save profile.'))
+    } catch {
+      setProfileMessage(t('profile.saveFailed'))
     } finally {
       setBusyProfile(false)
     }
@@ -323,11 +320,11 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
     setAvatarMessage('')
 
     if (!allowedAvatarTypes.has(file.type)) {
-      setAvatarMessage('Use PNG, JPEG, or WebP.')
+      setAvatarMessage(t('profile.avatar.invalidType'))
       return
     }
     if (file.size > maxAvatarBytes) {
-      setAvatarMessage('Avatar must be 2MB or smaller.')
+      setAvatarMessage(t('profile.avatar.tooLarge'))
       return
     }
 
@@ -343,9 +340,9 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       if (!response.ok) throw new Error('avatar_upload_failed')
       const { storageId } = await response.json() as { storageId: Id<'_storage'> }
       await setAvatar({ userId: trackUserId, avatarStorageId: storageId })
-      setAvatarMessage('Avatar saved.')
-    } catch (error) {
-      setAvatarMessage(getErrorMessage(error, 'Could not upload avatar.'))
+      setAvatarMessage(t('profile.avatar.saved'))
+    } catch {
+      setAvatarMessage(t('profile.avatar.uploadFailed'))
       setAvatarPreview(null)
     }
   }
@@ -360,7 +357,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
         password: accountPassword || undefined,
       })
       if (result.error || !result.data) {
-        setSecurityMessage(result.error?.message ?? 'Could not start two-factor setup.')
+        setSecurityMessage(t('security.messages.setupFailed'))
         return
       }
       const qrDataUrl = await toDataURL(result.data.totpURI, {
@@ -370,9 +367,9 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       setSetupQrUrl(qrDataUrl)
       setSetupBackupCodes(result.data.backupCodes)
       setBackupCodesVisible(false)
-      setSecurityMessage('Scan the code, then enter one authenticator code to finish setup.')
+      setSecurityMessage(t('security.messages.setupInstructions'))
     } catch (error) {
-      setSecurityMessage(getSecurityMessage(error, 'Could not start two-factor setup.'))
+      setSecurityMessage(getSecurityMessage(error, t('security.messages.setupFailed'), t('security.messages.syncFailed')))
     } finally {
       setBusySecurity(false)
     }
@@ -387,15 +384,15 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       const client = authClient as AuthClientWithTwoFactorMethods
       const result = await client.twoFactor.verifyTotp({ code: setupCode })
       if (result.error) {
-        setSecurityMessage(result.error.message ?? 'Invalid authenticator code.')
+        setSecurityMessage(t('security.messages.invalidCode'))
         return
       }
       await setTwoFactorEnabled({ userId: trackUserId, enabled: true })
       setSetupCode('')
       setSetupQrUrl('')
-      setSecurityMessage('Two-factor authentication is on.')
+      setSecurityMessage(t('security.messages.enabled'))
     } catch (error) {
-      setSecurityMessage(getSecurityMessage(error, 'Could not verify two-factor setup.'))
+      setSecurityMessage(getSecurityMessage(error, t('security.messages.verifyFailed'), t('security.messages.syncFailed')))
     } finally {
       setBusySecurity(false)
     }
@@ -410,14 +407,14 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
         password: accountPassword || undefined,
       })
       if (result.error || !result.data) {
-        setSecurityMessage(result.error?.message ?? 'Could not generate backup codes.')
+        setSecurityMessage(t('security.messages.codesFailed'))
         return
       }
       setSetupBackupCodes(result.data.backupCodes)
       setBackupCodesVisible(true)
-      setSecurityMessage('New backup codes generated. Store them somewhere safe.')
+      setSecurityMessage(t('security.messages.codesGenerated'))
     } catch (error) {
-      setSecurityMessage(getSecurityMessage(error, 'Could not generate backup codes.'))
+      setSecurityMessage(getSecurityMessage(error, t('security.messages.codesFailed'), t('security.messages.syncFailed')))
     } finally {
       setBusySecurity(false)
     }
@@ -431,13 +428,13 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       const client = authClient as AuthClientWithTwoFactorMethods
       const result = await client.twoFactor.disable({ password: accountPassword || undefined })
       if (result.error) {
-        setSecurityMessage(result.error.message ?? 'Could not disable two-factor authentication.')
+        setSecurityMessage(t('security.messages.disableFailed'))
         return
       }
       await setTwoFactorEnabled({ userId: trackUserId, enabled: false })
-      setSecurityMessage('Two-factor authentication is off.')
+      setSecurityMessage(t('security.messages.disabled'))
     } catch (error) {
-      setSecurityMessage(getSecurityMessage(error, 'Could not disable two-factor authentication.'))
+      setSecurityMessage(getSecurityMessage(error, t('security.messages.disableFailed'), t('security.messages.syncFailed')))
     } finally {
       setBusySecurity(false)
     }
@@ -451,48 +448,49 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       const result = await resetStepUps({ userId: trackUserId })
       setSecurityMessage(
         result.removed
-          ? 'Two-factor grace period reset. The next protected action will ask again.'
-          : 'No active two-factor grace period was found.',
+          ? t('security.messages.graceReset')
+          : t('security.messages.noGracePeriod'),
       )
     } catch (error) {
-      setSecurityMessage(getSecurityMessage(error, 'Could not reset the two-factor grace period.'))
+      setSecurityMessage(getSecurityMessage(error, t('security.messages.resetFailed'), t('security.messages.syncFailed')))
     } finally {
       setBusySecurity(false)
     }
   }
 
   if ((session.isPending && !devAuthBypass.enabled) || !trackUserId || profileStatus === undefined) {
-    return <TrackLoader label="Loading profile" />
+    return <TrackLoader label={t('loading')} />
   }
 
   return (
     <main className={mode === 'onboarding' ? 'track-profile-page onboarding' : 'track-profile-page'}>
       <section className="track-profile-shell">
-        <aside className="track-profile-sidebar" aria-label="Profile settings sections">
+        <aside className="track-profile-sidebar" aria-label={t('sidebar.ariaLabel')}>
+          <PublicLocaleControl className="mb-6" />
           {mode === 'settings' ? (
             <a className="track-profile-back-link" href="/workspace">
               <ArrowLeft size={14} />
-              <span>Back to workspace</span>
+              <span>{t('sidebar.backToWorkspace')}</span>
             </a>
           ) : null}
           <div>
-            <h1>{mode === 'onboarding' ? 'Complete your profile' : 'Profile Settings'}</h1>
+            <h1>{mode === 'onboarding' ? t('sidebar.onboardingTitle') : t('sidebar.settingsTitle')}</h1>
             <p>
               {mode === 'onboarding'
-                ? 'Display name, designation, and timezone are required before entering the workspace.'
-                : 'Manage your public teammate profile, login methods, and security.'}
+                ? t('sidebar.onboardingDescription')
+                : t('sidebar.settingsDescription')}
             </p>
           </div>
           {mode === 'settings' ? (
             <nav className="track-profile-tabs">
               <Button className={activePanel === 'profile' ? 'active' : ''} onClick={() => setActivePanel('profile')} type="button">
-                <UserRound size={15} /> Profile
+                <UserRound size={15} /> {t('tabs.profile')}
               </Button>
               <Button className={activePanel === 'security' ? 'active' : ''} onClick={() => setActivePanel('security')} type="button">
-                <ShieldCheck size={15} /> Security
+                <ShieldCheck size={15} /> {t('tabs.security')}
               </Button>
               <Button className={activePanel === 'methods' ? 'active' : ''} onClick={() => setActivePanel('methods')} type="button">
-                <KeyRound size={15} /> Login methods
+                <KeyRound size={15} /> {t('tabs.methods')}
               </Button>
             </nav>
           ) : null}
@@ -503,18 +501,18 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
             <section className="track-profile-section">
               <div className="track-profile-section-header">
                 <div>
-                  <h2>Teammate card</h2>
+                  <h2>{t('profile.sectionTitle')}</h2>
                 </div>
               </div>
 
               <div className="track-profile-avatar-row">
                 <Avatar className="track-profile-avatar">
                   <AvatarImage src={visibleAvatarUrl} />
-                  <AvatarFallback>{getInitials(displayName || user?.email || 'Track User')}</AvatarFallback>
+                  <AvatarFallback>{getInitials(displayName || user?.email || t('methods.currentAccount'))}</AvatarFallback>
                 </Avatar>
                 <label className="track-profile-avatar-upload">
                   <Camera size={15} />
-                  <span>Upload avatar</span>
+                  <span>{t('profile.uploadAvatar')}</span>
                   <input accept="image/png,image/jpeg,image/webp" onChange={(event) => void uploadAvatar(event)} type="file" />
                 </label>
                 {avatarMessage ? <p>{avatarMessage}</p> : null}
@@ -522,26 +520,27 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
 
               <form className="track-profile-form" onSubmit={(event) => void saveProfile(event)}>
                 <label>
-                  <span>Display name</span>
+                  <span>{t('profile.fields.displayName')}</span>
                   <span className="track-profile-input-shell">
                     <UserRound size={18} />
-                    <Input value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} />
+                    <Input dir="auto" value={displayName} onChange={(event) => setDisplayName(event.currentTarget.value)} />
                   </span>
                 </label>
                 <label>
-                  <span>Designation</span>
+                  <span>{t('profile.fields.designation')}</span>
                   <span className="track-profile-input-shell">
                     <PenLine size={18} />
                     <Input
+                      dir="auto"
                       maxLength={60}
                       value={designation}
                       onChange={(event) => setDesignation(event.currentTarget.value)}
                     />
                   </span>
-                  <small>{designation.length}/60</small>
+                  <small>{t('profile.counts.designation', { count: designation.length })}</small>
                 </label>
                 <label>
-                  <span>Timezone</span>
+                  <span>{t('profile.fields.timezone')}</span>
                   <div className="track-timezone-picker">
                     <button
                       aria-expanded={timezoneOpen}
@@ -552,7 +551,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                       }}
                       type="button"
                     >
-                      <span>{timezone}</span>
+                      <span dir="ltr">{timezone}</span>
                       <ChevronDown size={15} />
                     </button>
                     {timezoneOpen ? (
@@ -560,7 +559,8 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                         <Input
                           autoFocus
                           onChange={(event) => setTimezoneSearch(event.currentTarget.value)}
-                          placeholder="Search timezone"
+                          dir="ltr"
+                          placeholder={t('profile.fields.timezoneSearch')}
                           value={timezoneSearch}
                         />
                         <div className="track-timezone-options">
@@ -575,28 +575,29 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                               }}
                               type="button"
                             >
-                              <span>{option}</span>
-                              <small>{getLocalTimeLabel(option)}</small>
+                              <span dir="ltr">{option}</span>
+                              <small>{getLocalTimeLabel(option, locale)}</small>
                             </button>
                           ))}
                         </div>
                       </div>
                     ) : null}
                   </div>
-                  <small>{getLocalTimeLabel(timezone)}</small>
+                  <small>{getLocalTimeLabel(timezone, locale)}</small>
                 </label>
                 <label>
-                  <span>Bio</span>
+                  <span>{t('profile.fields.bio')}</span>
                   <span className="track-profile-input-shell textarea">
                     <PenLine size={18} />
                     <Textarea
+                      dir="auto"
                       maxLength={180}
                       rows={4}
                       value={bio}
                       onChange={(event) => setBio(event.currentTarget.value)}
                     />
                   </span>
-                  <small>{bio.length}/180</small>
+                  <small>{t('profile.counts.bio', { count: bio.length })}</small>
                 </label>
                 <fieldset
                   className="track-profile-banner-fieldset"
@@ -605,7 +606,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                     '--track-avatar-card-secondary': bannerSecondary,
                   } as CSSProperties}
                 >
-                  <legend>Banner style</legend>
+                  <legend>{t('profile.fields.bannerStyle')}</legend>
                   <div className="track-profile-banner-grid">
                     {profileBannerStyles.map((style) => (
                       <button
@@ -621,26 +622,26 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                             style={style.id}
                           />
                         </span>
-                        <span className="track-profile-banner-option-label">{style.label}</span>
+                        <span className="track-profile-banner-option-label">{t(`profile.bannerStyles.${style.id}`)}</span>
                       </button>
                     ))}
                   </div>
                 </fieldset>
                 <div className="track-profile-card-preview">
-                  <span>Team card preview</span>
+                  <span>{t('profile.preview')}</span>
                   <TeamMemberCard
                     avatarUrl={visibleAvatarUrl}
                     bannerStyle={selectedBannerStyle}
                     bio={bio || null}
                     detail={designation || null}
-                    name={displayName || user?.email || 'Track User'}
+                    name={displayName || user?.email || t('methods.currentAccount')}
                     toneSource={user?.email ?? displayName}
                     timezone={timezone}
                   />
                 </div>
                 <div className="track-profile-actions">
                   <button className="track-button track-button-primary" disabled={busyProfile || !canSaveProfile} type="submit">
-                    {mode === 'onboarding' ? 'Save and enter Track' : 'Save changes'}
+                    {mode === 'onboarding' ? t('profile.actions.saveAndEnter') : t('profile.actions.saveChanges')}
                   </button>
                   {profileMessage ? <p>{profileMessage}</p> : null}
                 </div>
@@ -652,14 +653,13 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
             <section className="track-profile-section">
               <div className="track-profile-section-header track-security-header">
                 <div>
-                  <h2>Two-factor authentication</h2>
+                  <h2>{t('security.title')}</h2>
                   <p className="track-profile-muted">
-                    Normal sign-in can use one factor. Protected actions require a fresh step-up and stay trusted for 10 minutes.
-                    Trusted devices last 30 days.
+                    {t('security.description')}
                   </p>
                 </div>
                 <span className={twoFactorEnabled ? 'track-profile-status' : 'track-profile-status muted'}>
-                  <ShieldCheck size={14} /> {twoFactorEnabled ? 'On' : 'Off'}
+                  <ShieldCheck size={14} /> {twoFactorEnabled ? t('security.statusOn') : t('security.statusOff')}
                 </span>
               </div>
 
@@ -667,22 +667,22 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                 <div className="track-security-action-bar">
                   {!twoFactorEnabled && canManageTwoFactor && !setupQrUrl ? (
                     <Button className="track-button track-button-primary" disabled={busySecurity} onClick={() => void startTwoFactorSetup()} type="button">
-                      <QrCode size={15} /> Set up authenticator app
+                      <QrCode size={15} /> {t('security.actions.setup')}
                     </Button>
                   ) : null}
                   {twoFactorEnabled && canManageTwoFactor ? (
                     <Button className="track-button" disabled={busySecurity} onClick={() => void regenerateBackupCodes()} type="button">
-                      Generate backup codes
+                      {t('security.actions.generateBackupCodes')}
                     </Button>
                   ) : null}
                   {twoFactorEnabled && canResetStepUpGracePeriod ? (
                     <Button className="track-button" disabled={busySecurity} onClick={() => void resetTwoFactorGracePeriod()} type="button">
-                      Reset grace period
+                      {t('security.actions.resetGracePeriod')}
                     </Button>
                   ) : null}
                   {twoFactorEnabled && canManageTwoFactor ? (
                     <Button className="track-button track-button-danger" disabled={busySecurity} onClick={() => void disableTwoFactor()} type="button">
-                      Turn off 2FA
+                      {t('security.actions.turnOff')}
                     </Button>
                   ) : null}
                 </div>
@@ -691,34 +691,34 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
               <div className="track-security-summary">
                 <div>
                   <span><Smartphone size={16} /></span>
-                  <strong>Authenticator app</strong>
-                  <small>{twoFactorEnabled ? 'Required for protected actions' : 'Not configured yet'}</small>
+                  <strong>{t('security.summary.authenticator')}</strong>
+                  <small>{twoFactorEnabled ? t('security.summary.authenticatorRequired') : t('security.summary.authenticatorNotConfigured')}</small>
                 </div>
                 <div>
                   <span><KeyRound size={16} /></span>
-                  <strong>Backup codes</strong>
-                  <small>{setupBackupCodes.length ? 'Available to view' : 'Generate after setup'}</small>
+                  <strong>{t('security.summary.backupCodes')}</strong>
+                  <small>{setupBackupCodes.length ? t('security.summary.backupCodesAvailable') : t('security.summary.backupCodesGenerate')}</small>
                 </div>
                 <div>
                   <span><Clock3 size={16} /></span>
-                  <strong>Trusted device</strong>
-                  <small>30-day remember window</small>
+                  <strong>{t('security.summary.trustedDevice')}</strong>
+                  <small>{t('security.summary.trustedDeviceWindow')}</small>
                 </div>
               </div>
 
               {!canManageTwoFactor ? (
                 <div className="track-security-note">
-                  Sign in with Google or email/password to manage two-factor authentication from this browser session.
+                  {t('security.signInRequired')}
                 </div>
               ) : null}
 
               {hasCredentialAccount ? (
                 <label className="track-profile-password">
-                  <span>Account password</span>
+                  <span>{t('security.accountPassword')}</span>
                   <Input
                     autoComplete="current-password"
                     onChange={(event) => setAccountPassword(event.currentTarget.value)}
-                    placeholder="Required for email/password accounts"
+                    placeholder={t('security.accountPasswordPlaceholder')}
                     type="password"
                     value={accountPassword}
                   />
@@ -728,20 +728,20 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
               {!twoFactorEnabled && canManageTwoFactor ? (
                 <div className="track-profile-security-box">
                   {!setupQrUrl ? (
-                    <p className="track-profile-muted">Use the setup action above to add an authenticator app.</p>
+                    <p className="track-profile-muted">{t('security.setupHint')}</p>
                   ) : (
                     <>
-                      <img alt="Authenticator QR code" className="track-profile-qr" src={setupQrUrl} />
+                      <img alt={t('security.qrAlt')} className="track-profile-qr" src={setupQrUrl} />
                       <form className="track-profile-inline-form" onSubmit={(event) => void verifyTwoFactorSetup(event)}>
                         <Input
                           autoComplete="one-time-code"
                           inputMode="numeric"
                           onChange={(event) => setSetupCode(event.currentTarget.value)}
-                          placeholder="123456"
+                          placeholder={t('security.codePlaceholder')}
                           value={setupCode}
                         />
                         <button className="track-button track-button-primary" disabled={busySecurity} type="submit">
-                          Verify code
+                          {t('security.verifyCode')}
                         </button>
                       </form>
                     </>
@@ -752,7 +752,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
               {setupBackupCodes.length ? (
                 <div className="track-profile-backup-codes">
                   <Button className="track-button" onClick={() => setBackupCodesVisible((visible) => !visible)} type="button">
-                    {backupCodesVisible ? 'Hide backup codes' : 'Show backup codes'}
+                    {backupCodesVisible ? t('security.backupCodes.hide') : t('security.backupCodes.show')}
                   </Button>
                   {backupCodesVisible ? (
                     <div>
@@ -769,7 +769,7 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
             <section className="track-profile-section">
               <div className="track-profile-section-header">
                 <div>
-                  <h2>Login methods</h2>
+                  <h2>{t('methods.title')}</h2>
                 </div>
               </div>
               <div className="track-profile-method-list">
@@ -783,17 +783,17 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
                             ? <Mail size={17} />
                             : <KeyRound size={17} />}
                       </span>
-                      <strong>{getProviderLabel(account.providerId)}</strong>
+                      <strong dir="auto">{getProviderLabel(account.providerId, t('methods.emailPassword'))}</strong>
                     </span>
-                    <span>Connected</span>
+                    <span>{t('methods.connected')}</span>
                   </div>
                 )) : (
                   <div>
                     <span className="track-profile-method-identity">
                       <span className="track-profile-method-icon"><Mail size={17} /></span>
-                      <strong>{user?.email ?? 'Current account'}</strong>
+                      <strong dir={user?.email ? 'ltr' : 'auto'}>{user?.email ?? t('methods.currentAccount')}</strong>
                     </span>
-                    <span>Connected</span>
+                    <span>{t('methods.connected')}</span>
                   </div>
                 )}
               </div>
