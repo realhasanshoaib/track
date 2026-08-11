@@ -1,0 +1,210 @@
+{
+  "actions": {
+    "accept": "Accept",
+    "acceptForCompany": "Accept for Company",
+    "approveForCompany": "Approve for Company",
+    "cancelRequest": "Cancel request",
+    "decline": "Decline",
+    "delete": "Delete",
+    "reactivate": "Reactivate",
+    "remove": "Remove",
+    "send": "Send",
+    "suspend": "Suspend"
+  },
+  "archives": {
+    "archive": "archive",
+    "channelArchive": "Channel archive",
+    "channelRestore": "Channel restore",
+    "projectApproval": "{{operation}} approval requested",
+    "requestChannel": "Request Channel {{operation}}",
+    "requestProject": "Request Project {{operation}}",
+    "requested": "requested",
+    "restore": "restore"
+  },
+  "availability": {
+    "disabled": "This capability is currently disabled by the server release configuration."
+  },
+  "channels": {
+    "ariaLabel": "Channels",
+    "create": "Create Channel",
+    "heading": "Channels",
+    "label": "Channel",
+    "newName": "New Channel name",
+    "newPlaceholder": "New Channel",
+    "select": "Select a Channel",
+    "unreadThread": "{{count}} unread thread",
+    "unreadThreads": "{{count}} unread threads"
+  },
+  "controls": {
+    "addMember": "Add {{name}}",
+    "addMembers": "Add your Company members",
+    "heading": "Project controls",
+    "yourMembers": "Your Company members"
+  },
+  "exit": {
+    "cancelSafely": "Cancel safely",
+    "cleanupAttention": "Exit snapshot cleanup needs attention",
+    "finalize": "Finalize exit",
+    "prepared": "Company exit prepared",
+    "retryCleanup": "Retry cleanup",
+    "retrySnapshot": "Retry snapshot",
+    "snapshot": "Snapshot: {{status}}",
+    "snapshotPending": "pending",
+    "snapshotVerified": "verified",
+    "start": "Start Company exit"
+  },
+  "forms": {
+    "createCompany": {
+      "name": "Company name",
+      "privateHandle": "Private handle",
+      "submit": "Create Company"
+    },
+    "invite": {
+      "email": "Email",
+      "role": "Role",
+      "submit": "Invite member"
+    },
+    "profile": {
+      "displayName": "Company display name",
+      "submit": "Save profile"
+    },
+    "relationship": {
+      "exactHandle": "Exact Company handle",
+      "name": "Relationship name",
+      "noDirectory": "Track has no public Company directory.",
+      "noMatch": "No exact active Company match.",
+      "submit": "Create Relationship"
+    },
+    "relationshipParticipant": {
+      "exactHandle": "Add exact Company handle",
+      "noDirectory": "No public directory is exposed.",
+      "submit": "Invite Company"
+    },
+    "sharedProject": {
+      "chooseActive": "Choose an active multi-Company Relationship.",
+      "invites": "Invites {{companies}}",
+      "name": "Project name",
+      "relationship": "Relationship",
+      "selectRelationship": "Select Relationship",
+      "submit": "Propose shared Project"
+    }
+  },
+  "hub": {
+    "actingCompany": "Acting Company",
+    "createFirst": "Create your first Company to start.",
+    "description": "Relationships make shared work possible; Project and Channel membership still control access.",
+    "eyebrow": "Track Company model",
+    "heading": "Company collaboration",
+    "loadingCompanies": "Loading Companies…",
+    "representCompany": "Represent Company"
+  },
+  "invitations": {
+    "expires": "expires {{date}}",
+    "heading": "Company invitations"
+  },
+  "labels": {
+    "actingCompany": "Acting Company",
+    "unknownMember": "Unknown member"
+  },
+  "links": {
+    "companyHub": "Company hub",
+    "legacyProjects": "Legacy Projects",
+    "returnCompany": "Return to Company hub",
+    "returnProjects": "Return to Projects"
+  },
+  "members": {
+    "closeCompany": "Close Company",
+    "closeConfirm": "Close this Company after confirming retention? Shared Projects must be exited first; retained history is not erased.",
+    "description": "Company membership alone grants no Project or Channel content.",
+    "heading": "Company members",
+    "makeAdmin": "Make admin",
+    "makeMember": "Make member",
+    "promoteOwner": "Promote to owner",
+    "suspendCompany": "Suspend Company"
+  },
+  "messages": {
+    "attachment": "Attachment message",
+    "deleteConfirm": "Delete this message? This can’t be undone.",
+    "empty": "No messages yet.",
+    "label": "Message",
+    "loading": "Loading messages…",
+    "placeholder": "Message #{{channel}}",
+    "replies": "{{count}} replies"
+  },
+  "migration": {
+    "activate": "Activate atomically",
+    "asManager": "as manager",
+    "cancel": "Cancel draft",
+    "chooseExplicitly": "Choose explicitly",
+    "confirmDescription": "Select at least one manager from your Company; this confirms identity and roles for your people.",
+    "confirmMapping": "Confirm Company mapping",
+    "confirmProject": "Confirm {{project}}",
+    "confirmed": "{{confirmed}} of {{total}} Companies confirmed.",
+    "description": "Track will not infer Company identity or neutral roles. Map every person explicitly; existing Group membership is preserved exactly.",
+    "heading": "Guided legacy upgrade",
+    "legacyProject": "Legacy Project",
+    "neutralRole": "Neutral Project role",
+    "relationshipMultiple": "Relationship for multiple Companies",
+    "representedCompany": "Represented Company",
+    "selectProject": "Select Project",
+    "singleCompany": "Single-Company upgrade",
+    "start": "Start reviewed upgrade",
+    "status": "Upgrade status: {{status}}",
+    "statusActivated": "activated",
+    "statusAwaitingConfirmation": "awaiting confirmation",
+    "statusCancelled": "cancelled",
+    "statusReady": "ready"
+  },
+  "participation": {
+    "addToChannel": "Add {{company}} to #{{channel}}",
+    "membersSelected": "{{count}} Project members will be selected for their manager to confirm.",
+    "request": "Request participation",
+    "requested": "Channel participation requested",
+    "selected": "The requesting Company selected {{count}} members."
+  },
+  "project": {
+    "loading": "Loading Project…",
+    "readOnly": "Read only",
+    "readOnlyExitArchive": "Read-only exit archive",
+    "tasks": "Tasks",
+    "unauthorized": "This represented membership is no longer authorized.",
+    "unavailable": "Project unavailable"
+  },
+  "projects": {
+    "heading": "Shared Projects",
+    "invitation": "{{company}} proposes shared work; accepting appoints you as the initial manager.",
+    "open": "Open Project",
+    "representedBy": "represented by"
+  },
+  "relationships": {
+    "approveRemoval": "Approve pending removal",
+    "heading": "Relationships",
+    "invitation": "{{company}} invited this exact Company.",
+    "leave": "Leave Relationship",
+    "requestRemoval": "Request removal of {{company}}"
+  },
+  "roles": {
+    "admin": "Admin",
+    "manager": "Manager",
+    "member": "Member",
+    "owner": "Owner"
+  },
+  "status": {
+    "actionFailed": "The action failed.",
+    "saved": "Saved."
+  },
+  "statuses": {
+    "active": "active",
+    "archived": "archived",
+    "closed": "closed",
+    "pending": "pending",
+    "removed": "removed",
+    "suspended": "suspended"
+  },
+  "suspension": {
+    "askOwner": "Ask a Company owner to reactivate it.",
+    "description": "Project and Channel access is paused. An owner can reactivate this Company without support intervention.",
+    "heading": "Company suspended",
+    "reactivate": "Reactivate Company"
+  }
+}

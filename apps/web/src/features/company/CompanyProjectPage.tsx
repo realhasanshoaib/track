@@ -1,11 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
+import { formatDate, formatNumber, formatTime, useLocale } from "#/i18n";
 import { useReleaseConfig } from "#/lib/release-config";
 import { ChannelTaskPanel, CreateTaskFromMessage, MessageInlineTasks } from "#/features/tasks/ConversationTaskActions";
 import { ChannelThreadBrowser } from "#/features/threads/ChannelThreadBrowser";
@@ -24,6 +26,8 @@ export function CompanyProjectPage({
   projectId,
   projectMemberId,
 }: Props) {
+  const { t } = useTranslation("company");
+  const { locale } = useLocale();
   const releaseConfig = useReleaseConfig();
   const currentUser = useQuery(api.auth.getCurrentUser);
   const projects = useQuery(
@@ -84,6 +88,26 @@ export function CompanyProjectPage({
   const [channelName, setChannelName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const roleLabel = (role: string) => {
+    if (role === "owner") return t("roles.owner");
+    if (role === "admin") return t("roles.admin");
+    if (role === "manager") return t("roles.manager");
+    if (role === "member") return t("roles.member");
+    return role;
+  };
+  const statusLabel = (status: string) => {
+    if (status === "active") return t("statuses.active");
+    if (status === "suspended") return t("statuses.suspended");
+    if (status === "removed") return t("statuses.removed");
+    if (status === "archived") return t("statuses.archived");
+    if (status === "pending") return t("statuses.pending");
+    return status;
+  };
+  const snapshotStatusLabel = (status: string) => {
+    if (status === "pending") return t("exit.snapshotPending");
+    if (status === "verified") return t("exit.snapshotVerified");
+    return status;
+  };
   const messages = useQuery(
     api.messages.listDetailed,
     activeChannelId && currentUser
@@ -215,14 +239,10 @@ export function CompanyProjectPage({
     setNotice(null);
     try {
       await action();
-      setNotice("Saved.");
+      setNotice(t("status.saved"));
       return true;
-    } catch (error) {
-      setNotice(
-        error instanceof Error
-          ? error.message.replaceAll("_", " ")
-          : "The action failed.",
-      );
+    } catch {
+      setNotice(t("status.actionFailed"));
       return false;
     } finally {
       setBusy(false);
@@ -246,7 +266,7 @@ export function CompanyProjectPage({
   }
 
   async function deleteAuthoredMessage(messageId: Id<"messages">) {
-    if (!currentUser || !window.confirm("Delete this message? This can’t be undone.")) return;
+    if (!currentUser || !window.confirm(t("messages.deleteConfirm"))) return;
     await run(() =>
       deleteMessage({
         actingCompanyId,
@@ -260,37 +280,37 @@ export function CompanyProjectPage({
   if (!releaseConfig.companyModel)
     return (
       <main className="company-hub">
-        <h1>Company Project unavailable</h1>
-        <p>This capability is currently disabled by the server release configuration.</p>
-        <Link to="/workspace">Return to Projects</Link>
+        <h1>{t("project.unavailable")}</h1>
+        <p>{t("availability.disabled")}</p>
+        <Link to="/workspace">{t("links.returnProjects")}</Link>
       </main>
     );
 
   if (projects === undefined)
     return (
       <main className="company-hub">
-        <p>Loading Project…</p>
+        <p>{t("project.loading")}</p>
       </main>
     );
   if (!item)
     return (
       <main className="company-hub">
-        <h1>Project unavailable</h1>
-        <p>This represented membership is no longer authorized.</p>
-        <Link to="/workspace/company">Return to Company hub</Link>
+        <h1>{t("project.unavailable")}</h1>
+        <p>{t("project.unauthorized")}</p>
+        <Link to="/workspace/company">{t("links.returnCompany")}</Link>
       </main>
     );
 
   return (
     <main aria-busy={busy} className="company-project-shell">
       <aside className="company-channel-sidebar">
-        <Link to="/workspace/company">← Company hub</Link>
-        <h1>{item.project.name}</h1>
+        <Link to="/workspace/company">← {t("links.companyHub")}</Link>
+        <h1 dir="auto">{item.project.name}</h1>
         <span className="company-badge">
-          {item.membership.companyDisplayNameSnapshot} · {item.membership.role}
+          <span dir="auto">{item.membership.companyDisplayNameSnapshot}</span> · {roleLabel(item.membership.role)}
         </span>
         {item.membership.status === "archived" ? (
-          <p className="company-read-only">Read-only exit archive</p>
+          <p className="company-read-only">{t("project.readOnlyExitArchive")}</p>
         ) : null}
         {releaseConfig.tasks ? (
           <Link
@@ -302,11 +322,11 @@ export function CompanyProjectPage({
             }}
             to="/workspace/projects/$projectId/tasks"
           >
-            Tasks
+            {t("project.tasks")}
           </Link>
         ) : null}
-        <nav aria-label="Channels">
-          <h2>Channels</h2>
+        <nav aria-label={t("channels.ariaLabel")}>
+          <h2>{t("channels.heading")}</h2>
           {channelItems.map((channel) => (
             <button
               aria-current={
@@ -317,10 +337,10 @@ export function CompanyProjectPage({
               onClick={() => setActiveChannelId(channel._id)}
               type="button"
             >
-              # {channel.name}
-              {channel.status === "archived" ? " · archived" : ""}
+              # <span dir="auto">{channel.name}</span>
+              {channel.status === "archived" ? ` · ${t("statuses.archived")}` : ""}
               {threadUnreadByChannel.get(channel._id)
-                ? ` · ${threadUnreadByChannel.get(channel._id)} unread ${threadUnreadByChannel.get(channel._id) === 1 ? "thread" : "threads"}`
+                ? ` · ${t(threadUnreadByChannel.get(channel._id) === 1 ? "channels.unreadThread" : "channels.unreadThreads", { count: formatNumber(locale, threadUnreadByChannel.get(channel._id) ?? 0) })}`
                 : ""}
             </button>
           ))}
@@ -343,13 +363,13 @@ export function CompanyProjectPage({
             }}
           >
             <Input
-              aria-label="New Channel name"
+              aria-label={t("channels.newName")}
               onChange={(event) => setChannelName(event.target.value)}
-              placeholder="New Channel"
+              placeholder={t("channels.newPlaceholder")}
               required
               value={channelName}
             />
-            <Button type="submit">Create Channel</Button>
+            <Button type="submit">{t("channels.create")}</Button>
           </form>
         ) : null}
       </aside>
@@ -357,11 +377,11 @@ export function CompanyProjectPage({
       <section className="company-conversation">
         <header>
           <div>
-            <span className="company-eyebrow">Channel</span>
-            <h2>{activeChannel?.name ?? "Select a Channel"}</h2>
+            <span className="company-eyebrow">{t("channels.label")}</span>
+            <h2 dir="auto">{activeChannel?.name ?? t("channels.select")}</h2>
           </div>
           {readOnly ? (
-            <span className="company-read-only">Read only</span>
+            <span className="company-read-only">{t("project.readOnly")}</span>
           ) : null}
         </header>
         {notice ? (
@@ -382,9 +402,9 @@ export function CompanyProjectPage({
         ) : null}
         <div className="company-message-list" role="log">
           {messages === undefined && activeChannelId ? (
-            <p>Loading messages…</p>
+            <p>{t("messages.loading")}</p>
           ) : messages?.length === 0 ? (
-            <p>No messages yet.</p>
+            <p>{t("messages.empty")}</p>
           ) : (
             messages
               ?.slice()
@@ -392,19 +412,20 @@ export function CompanyProjectPage({
               .map((detail) => (
                 <article id={`message-${detail.message._id}`} key={detail.message._id} tabIndex={-1}>
                   <div>
-                    <strong>
-                      {detail.author?.displayName ?? "Unknown member"}
+                    <strong dir="auto">
+                      {detail.author?.displayName ?? t("labels.unknownMember")}
                     </strong>
                     {detail.authorCompany ? (
-                      <span className="company-badge">
+                      <span className="company-badge" dir="auto">
                         {detail.authorCompany.displayName}
                       </span>
                     ) : null}
                     <time>
-                      {new Date(detail.message.createdAt).toLocaleString()}
+                      {formatDate(locale, new Date(detail.message.createdAt))}{" "}
+                      {formatTime(locale, new Date(detail.message.createdAt))}
                     </time>
                   </div>
-                  <p>{detail.message.body || "Attachment message"}</p>
+                  <p dir="auto">{detail.message.body || t("messages.attachment")}</p>
                   {!readOnly &&
                   (detail.message.authorProjectMemberId
                     ? detail.message.authorProjectMemberId === projectMemberId
@@ -414,7 +435,7 @@ export function CompanyProjectPage({
                       onClick={() => void deleteAuthoredMessage(detail.message._id)}
                       variant="destructive"
                     >
-                      Delete
+                      {t("actions.delete")}
                     </Button>
                   ) : null}
                   {releaseConfig.tasks && !readOnly ? (
@@ -434,7 +455,7 @@ export function CompanyProjectPage({
                       actingCompanyId,
                       projectMemberId,
                     })}>
-                      {detail.channelThread.name} · {detail.channelThread.replyCount} replies
+                      <span dir="auto">{detail.channelThread.name}</span> · {t("messages.replies", { count: formatNumber(locale, detail.channelThread.replyCount) })}
                     </a>
                   ) : null}
                 </article>
@@ -447,30 +468,33 @@ export function CompanyProjectPage({
             onSubmit={(event) => void submitMessage(event)}
           >
             <label className="sr-only" htmlFor="company-message">
-              Message
+              {t("messages.label")}
             </label>
             <Input
+              dir="auto"
               id="company-message"
               onChange={(event) => setComposer(event.target.value)}
-              placeholder={`Message #${activeChannel?.name ?? "Channel"}`}
+              placeholder={t("messages.placeholder", {
+                channel: activeChannel?.name ?? t("channels.label"),
+              })}
               value={composer}
             />
             <Button disabled={!composer.trim()} type="submit">
-              Send
+              {t("actions.send")}
             </Button>
           </form>
         ) : null}
       </section>
 
       <aside className="company-project-admin">
-        <h2>Project controls</h2>
+        <h2>{t("controls.heading")}</h2>
         {projectMembers ? (
           <>
-            <h3>Your Company members</h3>
+            <h3>{t("controls.yourMembers")}</h3>
             <ul>
               {projectMembers.map(({ membership, user }) => (
                 <li key={membership._id}>
-                  {user?.displayName} <span>{membership.role}</span>
+                  <span dir="auto">{user?.displayName}</span> <span>{roleLabel(membership.role)}</span>
                   {membership._id !== projectMemberId ? (
                     <Button
                       onClick={() =>
@@ -490,14 +514,14 @@ export function CompanyProjectPage({
                       variant="outline"
                     >
                       {membership.status === "active"
-                        ? "Suspend"
-                        : "Reactivate"}
+                        ? t("actions.suspend")
+                        : t("actions.reactivate")}
                     </Button>
                   ) : null}
                 </li>
               ))}
             </ul>
-            <h3>Add your Company members</h3>
+            <h3>{t("controls.addMembers")}</h3>
             {companyMembers?.members
               .filter(
                 ({ membership }) =>
@@ -522,17 +546,20 @@ export function CompanyProjectPage({
                   }
                   variant="outline"
                 >
-                  Add {user?.displayName ?? membership.userDisplayNameSnapshot}
+                  {t("controls.addMember", {
+                    name: user?.displayName ?? membership.userDisplayNameSnapshot,
+                  })}
                 </Button>
               ))}
           </>
         ) : null}
         {channelParticipationInvitations?.map((request) => (
           <div className="company-admin-card" key={request._id}>
-            <strong>Channel participation requested</strong>
+            <strong>{t("participation.requested")}</strong>
             <p>
-              The requesting Company selected{" "}
-              {request.selectedProjectMemberIds.length} member(s).
+              {t("participation.selected", {
+                count: formatNumber(locale, request.selectedProjectMemberIds.length),
+              })}
             </p>
             <Button
               onClick={() =>
@@ -549,7 +576,7 @@ export function CompanyProjectPage({
                 )
               }
             >
-              Accept for Company
+              {t("actions.acceptForCompany")}
             </Button>
             <Button
               onClick={() =>
@@ -567,18 +594,22 @@ export function CompanyProjectPage({
               }
               variant="outline"
             >
-              Decline
+              {t("actions.decline")}
             </Button>
           </div>
         ))}
         {participationOptions?.map((option) => (
           <div className="company-admin-card" key={option.projectCompany._id}>
-            <strong>
-              Add {option.company?.displayName} to #{activeChannel?.name}
+            <strong dir="auto">
+              {t("participation.addToChannel", {
+                company: option.company?.displayName,
+                channel: activeChannel?.name,
+              })}
             </strong>
             <p>
-              {option.members.length} Project member(s) will be selected for
-              their manager to confirm.
+              {t("participation.membersSelected", {
+                count: formatNumber(locale, option.members.length),
+              })}
             </p>
             <Button
               onClick={() =>
@@ -598,17 +629,14 @@ export function CompanyProjectPage({
               }
               variant="outline"
             >
-              Request participation
+              {t("participation.request")}
             </Button>
           </div>
         ))}
         {pendingChannelArchives?.map((request) => (
           <div className="company-admin-card" key={request._id}>
             <strong>
-              {request.operation === "archive"
-                ? "Channel archive"
-                : "Channel restore"}{" "}
-              requested
+              {t(request.operation === "archive" ? "archives.channelArchive" : "archives.channelRestore")} {t("archives.requested")}
             </strong>
             <Button
               onClick={() =>
@@ -623,7 +651,7 @@ export function CompanyProjectPage({
                 )
               }
             >
-              Approve for Company
+              {t("actions.approveForCompany")}
             </Button>
             <Button
               onClick={() =>
@@ -639,7 +667,7 @@ export function CompanyProjectPage({
               }
               variant="outline"
             >
-              Cancel request
+              {t("actions.cancelRequest")}
             </Button>
           </div>
         ))}
@@ -672,15 +700,17 @@ export function CompanyProjectPage({
             }
             variant="outline"
           >
-            Request Channel{" "}
-            {activeChannel.status === "archived" ? "restore" : "archive"}
+            {t("archives.requestChannel", {
+              operation: t(activeChannel.status === "archived" ? "archives.restore" : "archives.archive"),
+            })}
           </Button>
         ) : null}
         {pendingProjectArchives?.map((request) => (
           <div className="company-admin-card" key={request._id}>
             <strong>
-              {request.operation === "archive" ? "Archive" : "Restore"} approval
-              requested
+              {t("archives.projectApproval", {
+                operation: t(request.operation === "archive" ? "archives.archive" : "archives.restore"),
+              })}
             </strong>
             <Button
               onClick={() =>
@@ -694,7 +724,7 @@ export function CompanyProjectPage({
                 )
               }
             >
-              Approve for Company
+              {t("actions.approveForCompany")}
             </Button>
           </div>
         ))}
@@ -721,8 +751,9 @@ export function CompanyProjectPage({
             }
             variant="outline"
           >
-            Request Project{" "}
-            {item.project.status === "archived" ? "restore" : "archive"}
+            {t("archives.requestProject", {
+              operation: t(item.project.status === "archived" ? "archives.restore" : "archives.archive"),
+            })}
           </Button>
         ) : null}
         {item.project.origin === "shared" &&
@@ -734,30 +765,30 @@ export function CompanyProjectPage({
             }
             variant="destructive"
           >
-            Start Company exit
+            {t("exit.start")}
           </Button>
         ) : null}
         {exitStatus?.status === "active" &&
         exitStatus.snapshotError?.startsWith("snapshot_cleanup") ? (
           <div className="company-admin-card">
-            <strong>Exit snapshot cleanup needs attention</strong>
-            <p>{exitStatus.snapshotError}</p>
+            <strong>{t("exit.cleanupAttention")}</strong>
+            <p dir="ltr">{exitStatus.snapshotError}</p>
             <Button
               onClick={() =>
                 void run(() => retryExitCleanup({ actingCompanyId, projectId }))
               }
               variant="outline"
             >
-              Retry cleanup
+              {t("exit.retryCleanup")}
             </Button>
           </div>
         ) : null}
         {exitStatus?.status === "exit_pending" ? (
           <div className="company-admin-card">
-            <strong>Company exit prepared</strong>
-            <p>Snapshot: {exitStatus.snapshotStatus ?? "pending"}</p>
+            <strong>{t("exit.prepared")}</strong>
+            <p>{t("exit.snapshot", { status: snapshotStatusLabel(exitStatus.snapshotStatus ?? "pending") })}</p>
             {exitStatus.snapshotError ? (
-              <p>{exitStatus.snapshotError}</p>
+              <p dir="ltr">{exitStatus.snapshotError}</p>
             ) : null}
             <Button
               disabled={exitStatus.snapshotStatus !== "verified"}
@@ -765,7 +796,7 @@ export function CompanyProjectPage({
                 void run(() => finalizeExit({ actingCompanyId, projectId }))
               }
             >
-              Finalize exit
+              {t("exit.finalize")}
             </Button>
             <Button
               onClick={() =>
@@ -773,7 +804,7 @@ export function CompanyProjectPage({
               }
               variant="outline"
             >
-              Retry snapshot
+              {t("exit.retrySnapshot")}
             </Button>
             <Button
               onClick={() =>
@@ -781,7 +812,7 @@ export function CompanyProjectPage({
               }
               variant="outline"
             >
-              Cancel safely
+              {t("exit.cancelSafely")}
             </Button>
           </div>
         ) : null}

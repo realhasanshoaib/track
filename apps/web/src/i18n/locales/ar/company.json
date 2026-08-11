@@ -1,0 +1,210 @@
+{
+  "actions": {
+    "accept": "قبول",
+    "acceptForCompany": "قبول للشركة",
+    "approveForCompany": "اعتماد للشركة",
+    "cancelRequest": "إلغاء الطلب",
+    "decline": "رفض",
+    "delete": "حذف",
+    "reactivate": "إعادة التفعيل",
+    "remove": "إزالة",
+    "send": "إرسال",
+    "suspend": "تعليق"
+  },
+  "archives": {
+    "archive": "أرشفة",
+    "channelArchive": "أرشفة القناة",
+    "channelRestore": "استعادة القناة",
+    "projectApproval": "طلب اعتماد {{operation}} المشروع",
+    "requestChannel": "طلب {{operation}} القناة",
+    "requestProject": "طلب {{operation}} المشروع",
+    "requested": "مطلوب",
+    "restore": "استعادة"
+  },
+  "availability": {
+    "disabled": "هذه الإمكانية معطلة حاليًا وفق إعدادات إصدار الخادم."
+  },
+  "channels": {
+    "ariaLabel": "القنوات",
+    "create": "إنشاء قناة",
+    "heading": "القنوات",
+    "label": "القناة",
+    "newName": "اسم القناة الجديدة",
+    "newPlaceholder": "قناة جديدة",
+    "select": "اختر قناة",
+    "unreadThread": "{{count}} سلسلة محادثة غير مقروءة",
+    "unreadThreads": "{{count}} سلاسل محادثة غير مقروءة"
+  },
+  "controls": {
+    "addMember": "إضافة {{name}}",
+    "addMembers": "إضافة أعضاء شركتك",
+    "heading": "عناصر التحكم في المشروع",
+    "yourMembers": "أعضاء شركتك"
+  },
+  "exit": {
+    "cancelSafely": "إلغاء بأمان",
+    "cleanupAttention": "تحتاج إزالة لقطة الخروج إلى عناية",
+    "finalize": "إنهاء الخروج",
+    "prepared": "تم إعداد الخروج من الشركة",
+    "retryCleanup": "إعادة محاولة الإزالة",
+    "retrySnapshot": "إعادة محاولة اللقطة",
+    "snapshot": "اللقطة: {{status}}",
+    "snapshotPending": "معلّقة",
+    "snapshotVerified": "محقّقة",
+    "start": "بدء الخروج من الشركة"
+  },
+  "forms": {
+    "createCompany": {
+      "name": "اسم الشركة",
+      "privateHandle": "المعرّف الخاص",
+      "submit": "إنشاء شركة"
+    },
+    "invite": {
+      "email": "البريد الإلكتروني",
+      "role": "الدور",
+      "submit": "دعوة عضو"
+    },
+    "profile": {
+      "displayName": "اسم عرض الشركة",
+      "submit": "حفظ الملف الشخصي"
+    },
+    "relationship": {
+      "exactHandle": "معرّف الشركة المطابق تمامًا",
+      "name": "اسم العلاقة",
+      "noDirectory": "لا يملك Track دليل شركات عامًا.",
+      "noMatch": "لا توجد شركة نشطة مطابقة تمامًا.",
+      "submit": "إنشاء علاقة"
+    },
+    "relationshipParticipant": {
+      "exactHandle": "إضافة معرّف شركة مطابق تمامًا",
+      "noDirectory": "لا يتوفر دليل عام.",
+      "submit": "دعوة شركة"
+    },
+    "sharedProject": {
+      "chooseActive": "اختر علاقة نشطة بين عدة شركات.",
+      "invites": "دعوة {{companies}}",
+      "name": "اسم المشروع",
+      "relationship": "العلاقة",
+      "selectRelationship": "اختر علاقة",
+      "submit": "اقتراح مشروع مشترك"
+    }
+  },
+  "hub": {
+    "actingCompany": "الشركة الممثَّلة",
+    "createFirst": "أنشئ شركتك الأولى للبدء.",
+    "description": "تتيح العلاقات العمل المشترك؛ وتظل عضوية المشروع والقناة هي التي تتحكم في الوصول.",
+    "eyebrow": "نموذج الشركة في Track",
+    "heading": "التعاون بين الشركات",
+    "loadingCompanies": "جارٍ تحميل الشركات…",
+    "representCompany": "تمثيل الشركة"
+  },
+  "invitations": {
+    "expires": "تنتهي في {{date}}",
+    "heading": "دعوات الشركات"
+  },
+  "labels": {
+    "actingCompany": "الشركة الممثَّلة",
+    "unknownMember": "عضو غير معروف"
+  },
+  "links": {
+    "companyHub": "مركز الشركة",
+    "legacyProjects": "المشاريع القديمة",
+    "returnCompany": "العودة إلى مركز الشركة",
+    "returnProjects": "العودة إلى المشاريع"
+  },
+  "members": {
+    "closeCompany": "إغلاق الشركة",
+    "closeConfirm": "هل تريد إغلاق هذه الشركة بعد تأكيد الاحتفاظ بالبيانات؟ يجب الخروج من المشاريع المشتركة أولًا؛ ولن يُحذف السجل المحتفظ به.",
+    "description": "لا تمنح عضوية الشركة وحدها وصولًا إلى محتوى المشروع أو القناة.",
+    "heading": "أعضاء الشركة",
+    "makeAdmin": "تعيين مسؤول",
+    "makeMember": "تعيين عضو",
+    "promoteOwner": "ترقية إلى مالك",
+    "suspendCompany": "تعليق الشركة"
+  },
+  "messages": {
+    "attachment": "رسالة مرفق",
+    "deleteConfirm": "هل تريد حذف هذه الرسالة؟ لا يمكن التراجع عن ذلك.",
+    "empty": "لا توجد رسائل بعد.",
+    "label": "رسالة",
+    "loading": "جارٍ تحميل الرسائل…",
+    "placeholder": "رسالة #{{channel}}",
+    "replies": "{{count}} ردود"
+  },
+  "migration": {
+    "activate": "تفعيل ذري",
+    "asManager": "بصفته مديرًا",
+    "cancel": "إلغاء المسودة",
+    "chooseExplicitly": "اختر صراحةً",
+    "confirmDescription": "اختر مديرًا واحدًا على الأقل من شركتك؛ فهذا يؤكد هويات أفرادك وأدوارهم.",
+    "confirmMapping": "تأكيد ربط الشركة",
+    "confirmProject": "تأكيد {{project}}",
+    "confirmed": "تم تأكيد {{confirmed}} من أصل {{total}} شركات.",
+    "description": "لن يستنتج Track هوية الشركة أو الأدوار المحايدة. اربط كل شخص صراحةً؛ وستُحفظ عضوية المجموعة الحالية كما هي تمامًا.",
+    "heading": "ترقية موجّهة من النظام القديم",
+    "legacyProject": "المشروع القديم",
+    "neutralRole": "دور المشروع المحايد",
+    "relationshipMultiple": "علاقة لعدة شركات",
+    "representedCompany": "الشركة الممثَّلة",
+    "selectProject": "اختر مشروعًا",
+    "singleCompany": "ترقية لشركة واحدة",
+    "start": "بدء الترقية بعد المراجعة",
+    "status": "حالة الترقية: {{status}}",
+    "statusActivated": "مفعّلة",
+    "statusAwaitingConfirmation": "بانتظار التأكيد",
+    "statusCancelled": "ملغاة",
+    "statusReady": "جاهزة"
+  },
+  "participation": {
+    "addToChannel": "إضافة {{company}} إلى #{{channel}}",
+    "membersSelected": "سيُختار {{count}} من أعضاء المشروع ليؤكد مديرهم ذلك.",
+    "request": "طلب المشاركة",
+    "requested": "طُلبت المشاركة في القناة",
+    "selected": "اختارت الشركة الطالبة {{count}} من الأعضاء."
+  },
+  "project": {
+    "loading": "جارٍ تحميل المشروع…",
+    "readOnly": "للقراءة فقط",
+    "readOnlyExitArchive": "أرشيف خروج للقراءة فقط",
+    "tasks": "المهام",
+    "unauthorized": "لم تعد عضوية التمثيل هذه مخوّلة.",
+    "unavailable": "المشروع غير متاح"
+  },
+  "projects": {
+    "heading": "المشاريع المشتركة",
+    "invitation": "تقترح {{company}} عملًا مشتركًا؛ ويعيّنك القبول مديرًا أوليًا.",
+    "open": "فتح المشروع",
+    "representedBy": "تمثّله"
+  },
+  "relationships": {
+    "approveRemoval": "اعتماد الإزالة المعلّقة",
+    "heading": "العلاقات",
+    "invitation": "دعتك {{company}} إلى هذه الشركة المحددة.",
+    "leave": "مغادرة العلاقة",
+    "requestRemoval": "طلب إزالة {{company}}"
+  },
+  "roles": {
+    "admin": "مسؤول",
+    "manager": "مدير",
+    "member": "عضو",
+    "owner": "مالك"
+  },
+  "status": {
+    "actionFailed": "تعذّر تنفيذ الإجراء.",
+    "saved": "تم الحفظ."
+  },
+  "statuses": {
+    "active": "نشطة",
+    "archived": "مؤرشفة",
+    "closed": "مغلقة",
+    "pending": "معلّقة",
+    "removed": "مزالة",
+    "suspended": "معلّقة"
+  },
+  "suspension": {
+    "askOwner": "اطلب من مالك الشركة إعادة تفعيلها.",
+    "description": "تم إيقاف الوصول إلى المشروع والقناة مؤقتًا. يمكن للمالك إعادة تفعيل هذه الشركة دون تدخل الدعم.",
+    "heading": "الشركة معلّقة",
+    "reactivate": "إعادة تفعيل الشركة"
+  }
+}

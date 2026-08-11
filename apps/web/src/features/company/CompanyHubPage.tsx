@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Button } from "#/components/ui/button";
+import { formatDate, useLocale } from "#/i18n";
 import { useReleaseConfig } from "#/lib/release-config";
 import {
   CreateCompanyForm,
@@ -18,6 +20,8 @@ import { useActingCompany } from "./use-acting-company";
 import { MigrationPanel } from "./MigrationPanel";
 
 export function CompanyHubPage() {
+  const { t } = useTranslation("company");
+  const { locale } = useLocale();
   const flags = useReleaseConfig();
   const currentUser = useQuery(api.auth.getCurrentUser);
   const companies = useQuery(
@@ -93,18 +97,31 @@ export function CompanyHubPage() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const roleLabel = (role: string) => {
+    if (role === "owner") return t("roles.owner");
+    if (role === "admin") return t("roles.admin");
+    if (role === "manager") return t("roles.manager");
+    if (role === "member") return t("roles.member");
+    return role;
+  };
+  const statusLabel = (status: string) => {
+    if (status === "active") return t("statuses.active");
+    if (status === "suspended") return t("statuses.suspended");
+    if (status === "removed") return t("statuses.removed");
+    if (status === "archived") return t("statuses.archived");
+    if (status === "closed") return t("statuses.closed");
+    if (status === "pending") return t("statuses.pending");
+    return status;
+  };
+
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setNotice(null);
     try {
       await action();
-      setNotice("Saved.");
-    } catch (error) {
-      setNotice(
-        error instanceof Error
-          ? error.message.replaceAll("_", " ")
-          : "The action failed.",
-      );
+      setNotice(t("status.saved"));
+    } catch {
+      setNotice(t("status.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -113,12 +130,9 @@ export function CompanyHubPage() {
   if (!flags.companyModel)
     return (
       <main className="company-hub">
-        <h1>Company collaboration</h1>
-        <p>
-          This capability is currently disabled by the server release
-          configuration.
-        </p>
-        <Link to="/workspace">Return to Projects</Link>
+        <h1>{t("hub.heading")}</h1>
+        <p>{t("availability.disabled")}</p>
+        <Link to="/workspace">{t("links.returnProjects")}</Link>
       </main>
     );
 
@@ -126,14 +140,11 @@ export function CompanyHubPage() {
     <main aria-busy={busy} className="company-hub">
       <header className="company-hub-header">
         <div>
-          <span className="company-eyebrow">Track Company model</span>
-          <h1>Company collaboration</h1>
-          <p>
-            Relationships make shared work possible; Project and Channel
-            membership still control access.
-          </p>
+          <span className="company-eyebrow">{t("hub.eyebrow")}</span>
+          <h1>{t("hub.heading")}</h1>
+          <p>{t("hub.description")}</p>
         </div>
-        <Link to="/workspace">Legacy Projects</Link>
+        <Link to="/workspace">{t("links.legacyProjects")}</Link>
       </header>
       {notice ? (
         <p aria-live="polite" className="company-notice">
@@ -142,17 +153,17 @@ export function CompanyHubPage() {
       ) : null}
 
       <section className="company-panel">
-        <h2>Acting Company</h2>
+        <h2>{t("hub.actingCompany")}</h2>
         {companies === undefined ? (
-          <p>Loading Companies…</p>
+          <p>{t("hub.loadingCompanies")}</p>
         ) : companies.length === 0 ? (
           <>
-            <p>Create your first Company to start.</p>
+            <p>{t("hub.createFirst")}</p>
             <CreateCompanyForm run={run} />
           </>
         ) : (
           <>
-            <label htmlFor="acting-company">Represent Company</label>
+            <label htmlFor="acting-company">{t("hub.representCompany")}</label>
             <select
               id="acting-company"
               onChange={(event) =>
@@ -163,9 +174,8 @@ export function CompanyHubPage() {
               {companies.flatMap((item) =>
                 item.company
                   ? [
-                      <option key={item.company._id} value={item.company._id}>
-                        {item.company.displayName} · @
-                        {item.company.normalizedHandle} · {item.membership.role}
+                      <option dir="auto" key={item.company._id} value={item.company._id}>
+                        {item.company.displayName} · @{item.company.normalizedHandle} · {roleLabel(item.membership.role)}
                       </option>,
                     ]
                   : [],
@@ -178,15 +188,16 @@ export function CompanyHubPage() {
 
       {(companyInvitations ?? []).length > 0 ? (
         <section className="company-panel">
-          <h2>Company invitations</h2>
+          <h2>{t("invitations.heading")}</h2>
           <ul className="company-list">
             {companyInvitations?.map(({ company, invitation }) => (
               <li key={invitation._id}>
                 <div>
-                  <strong>{company?.displayName}</strong>
-                  <span>
-                    {invitation.role} · expires{" "}
-                    {new Date(invitation.expiresAt).toLocaleDateString()}
+                    <strong dir="auto">{company?.displayName}</strong>
+                    <span dir="auto">
+                      {roleLabel(invitation.role)} · {t("invitations.expires", {
+                        date: formatDate(locale, new Date(invitation.expiresAt)),
+                      })}
                   </span>
                 </div>
                 <div>
@@ -200,7 +211,7 @@ export function CompanyHubPage() {
                       )
                     }
                   >
-                    Accept
+                    {t("actions.accept")}
                   </Button>
                   <Button
                     onClick={() =>
@@ -213,7 +224,7 @@ export function CompanyHubPage() {
                     }
                     variant="outline"
                   >
-                    Decline
+                    {t("actions.decline")}
                   </Button>
                 </div>
               </li>
@@ -224,11 +235,8 @@ export function CompanyHubPage() {
 
       {actingCompanyId && actingCompany?.company?.status === "suspended" ? (
         <section className="company-panel">
-          <h2>Company suspended</h2>
-          <p>
-            Project and Channel access is paused. An owner can reactivate this
-            Company without support intervention.
-          </p>
+          <h2>{t("suspension.heading")}</h2>
+          <p>{t("suspension.description")}</p>
           {actingCompany.membership.role === "owner" ? (
             <Button
               onClick={() =>
@@ -240,10 +248,10 @@ export function CompanyHubPage() {
                 )
               }
             >
-              Reactivate Company
+              {t("suspension.reactivate")}
             </Button>
           ) : (
-            <p>Ask a Company owner to reactivate it.</p>
+            <p>{t("suspension.askOwner")}</p>
           )}
         </section>
       ) : null}
@@ -252,10 +260,8 @@ export function CompanyHubPage() {
         <section className="company-panel">
           <div className="company-panel-heading">
             <div>
-              <h2>Company members</h2>
-              <p>
-                Company membership alone grants no Project or Channel content.
-              </p>
+              <h2>{t("members.heading")}</h2>
+              <p>{t("members.description")}</p>
             </div>
             {administration.membership.role === "owner" ? (
               <div>
@@ -270,14 +276,12 @@ export function CompanyHubPage() {
                   }
                   variant="outline"
                 >
-                  Suspend Company
+                  {t("members.suspendCompany")}
                 </Button>
                 <Button
                   onClick={() => {
                     if (
-                      window.confirm(
-                        "Close this Company after confirming retention? Shared Projects must be exited first; retained history is not erased.",
-                      )
+                      window.confirm(t("members.closeConfirm"))
                     ) {
                       void run(() =>
                         closeCompany({
@@ -289,7 +293,7 @@ export function CompanyHubPage() {
                   }}
                   variant="destructive"
                 >
-                  Close Company
+                  {t("members.closeCompany")}
                 </Button>
               </div>
             ) : null}
@@ -306,11 +310,11 @@ export function CompanyHubPage() {
             {administration.members.map(({ membership, user }) => (
               <li key={membership._id}>
                 <div>
-                  <strong>
-                    {user?.displayName ?? membership.userDisplayNameSnapshot}
-                  </strong>
-                  <span>
-                    {membership.role} · {membership.status}
+                    <strong dir="auto">
+                      {user?.displayName ?? membership.userDisplayNameSnapshot}
+                    </strong>
+                    <span>
+                    {roleLabel(membership.role)} · {statusLabel(membership.status)}
                   </span>
                 </div>
                 {administration.membership.role !== "member" &&
@@ -330,7 +334,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Make admin
+                        {t("members.makeAdmin")}
                       </Button>
                     ) : null}
                     {membership.status === "active" &&
@@ -347,7 +351,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Make member
+                        {t("members.makeMember")}
                       </Button>
                     ) : null}
                     {administration.membership.role === "owner" &&
@@ -365,7 +369,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Promote to owner
+                        {t("members.promoteOwner")}
                       </Button>
                     ) : null}
                     <Button
@@ -384,8 +388,8 @@ export function CompanyHubPage() {
                       variant="outline"
                     >
                       {membership.status === "active"
-                        ? "Suspend"
-                        : "Reactivate"}
+                        ? t("actions.suspend")
+                        : t("actions.reactivate")}
                     </Button>
                     <Button
                       onClick={() =>
@@ -399,7 +403,7 @@ export function CompanyHubPage() {
                       }
                       variant="destructive"
                     >
-                      Remove
+                      {t("actions.remove")}
                     </Button>
                   </div>
                 ) : null}
@@ -416,7 +420,7 @@ export function CompanyHubPage() {
       administration &&
       administration.membership.role !== "member" ? (
         <section className="company-panel">
-          <h2>Relationships</h2>
+          <h2>{t("relationships.heading")}</h2>
           <RelationshipForm actingCompanyId={actingCompanyId} run={run} />
           {(relationshipInvitations ?? []).length ? (
             <ul className="company-list">
@@ -424,10 +428,11 @@ export function CompanyHubPage() {
                 ({ invitation, invitingCompany, relationship }) => (
                   <li key={invitation._id}>
                     <div>
-                      <strong>{relationship?.name}</strong>
-                      <span>
-                        {invitingCompany?.displayName} invited this exact
-                        Company.
+                      <strong dir="auto">{relationship?.name}</strong>
+                      <span dir="auto">
+                        {t("relationships.invitation", {
+                          company: invitingCompany?.displayName,
+                        })}
                       </span>
                     </div>
                     <div>
@@ -442,7 +447,7 @@ export function CompanyHubPage() {
                           )
                         }
                       >
-                        Accept
+                        {t("actions.accept")}
                       </Button>
                       <Button
                         onClick={() =>
@@ -456,7 +461,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Decline
+                        {t("actions.decline")}
                       </Button>
                     </div>
                   </li>
@@ -468,12 +473,14 @@ export function CompanyHubPage() {
             {relationships?.map((item) => (
               <li key={item.relationship._id}>
                 <div>
-                  <strong>{item.relationship.name}</strong>
+                  <strong dir="auto">{item.relationship.name}</strong>
                   <span>
-                    {item.relationship.status} ·{" "}
-                    {item.participants
-                      .map((company) => company.displayName)
-                      .join(", ")}
+                    {statusLabel(item.relationship.status)} ·{" "}
+                    <span dir="auto">
+                      {item.participants
+                        .map((company) => company.displayName)
+                        .join(", ")}
+                    </span>
                   </span>
                 </div>
                 <RelationshipParticipantForm
@@ -503,7 +510,9 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Request removal of {company.displayName}
+                        {t("relationships.requestRemoval", {
+                          company: company.displayName,
+                        })}
                       </Button>
                     ))}
                   {item.pendingRemovalRequests
@@ -523,7 +532,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Approve pending removal
+                        {t("relationships.approveRemoval")}
                       </Button>
                     ))}
                   <Button
@@ -537,7 +546,7 @@ export function CompanyHubPage() {
                     }
                     variant="destructive"
                   >
-                    Leave Relationship
+                    {t("relationships.leave")}
                   </Button>
                 </div>
               </li>
@@ -548,7 +557,7 @@ export function CompanyHubPage() {
 
       {actingCompanyId && currentUser && administration ? (
         <section className="company-panel">
-          <h2>Shared Projects</h2>
+          <h2>{t("projects.heading")}</h2>
           {administration.membership.role !== "member" ? (
             <SharedProjectForm
               actingCompanyId={actingCompanyId}
@@ -565,10 +574,11 @@ export function CompanyHubPage() {
                 ({ invitation, invitingCompany, project }) => (
                   <li key={invitation._id}>
                     <div>
-                      <strong>{project?.name}</strong>
-                      <span>
-                        {invitingCompany?.displayName} proposes shared work;
-                        accepting appoints you as the initial manager.
+                      <strong dir="auto">{project?.name}</strong>
+                      <span dir="auto">
+                        {t("projects.invitation", {
+                          company: invitingCompany?.displayName,
+                        })}
                       </span>
                     </div>
                     <div>
@@ -586,7 +596,7 @@ export function CompanyHubPage() {
                           )
                         }
                       >
-                        Accept
+                        {t("actions.accept")}
                       </Button>
                       <Button
                         onClick={() =>
@@ -601,7 +611,7 @@ export function CompanyHubPage() {
                         }
                         variant="outline"
                       >
-                        Decline
+                        {t("actions.decline")}
                       </Button>
                     </div>
                   </li>
@@ -613,10 +623,10 @@ export function CompanyHubPage() {
             {projects?.map((item) => (
               <li key={item.membership._id}>
                 <div>
-                  <strong>{item.project.name}</strong>
+                  <strong dir="auto">{item.project.name}</strong>
                   <span>
-                    {item.membership.role} · {item.membership.status} ·
-                    represented by {administration?.company.displayName}
+                    {roleLabel(item.membership.role)} · {statusLabel(item.membership.status)} ·{" "}
+                    {t("projects.representedBy")} <span dir="auto">{administration?.company.displayName}</span>
                   </span>
                 </div>
                 <Link
@@ -628,7 +638,7 @@ export function CompanyHubPage() {
                   }}
                   to="/workspace/company-projects/$projectId"
                 >
-                  Open Project
+                  {t("projects.open")}
                 </Link>
               </li>
             ))}
