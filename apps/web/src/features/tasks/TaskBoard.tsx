@@ -1,10 +1,12 @@
 import { useMutation } from 'convex/react'
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useMemo, useState } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
 import type { Id } from '../../../../../convex/_generated/dataModel'
 import { Button } from '#/components/ui/button'
+import { formatNumber, useLocale } from '#/i18n'
 import { groupTaskViewsByState, type TaskBoardView, type TaskIdentity, type TaskView } from './task-types'
 import { DueChip, OriginCaption, PriorityGlyph, StateRing, TaskAvatar } from './ui/TaskVisuals'
 
@@ -23,6 +25,8 @@ export function TaskBoard({
   onOpen: (publicKey: string) => void
   tasks: Array<TaskView>
 }) {
+  const { locale } = useLocale()
+  const { t } = useTranslation('tasks')
   const moveTask = useMutation(api.tasks.move)
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({})
   const [draggedTask, setDraggedTask] = useState<Id<'tasks'> | null>(null)
@@ -42,9 +46,9 @@ export function TaskBoard({
         expectedRevision: item.task.revision,
         ...identity,
       })
-      onAnnounce(`${item.task.title} moved.`)
+      onAnnounce(t('board.moved', { title: item.task.title }))
     } catch {
-      onAnnounce("Move couldn't be saved. The card returned to its current position.")
+      onAnnounce(t('board.moveFailed'))
     } finally {
       setOptimisticStates((current) => {
         const next = { ...current }
@@ -71,9 +75,9 @@ export function TaskBoard({
           >
             <header>
               <StateRing category={state.category} />
-              <h2>{state.name}</h2>
-              <span>{columnTasks.length}</span>
-              <button aria-label={`Add task to ${state.name}`} className="task-column-add" onClick={() => onCreate(state._id)} type="button"><Plus size={13} /></button>
+              <h2 dir="auto">{state.name}</h2>
+              <span>{formatNumber(locale, columnTasks.length)}</span>
+              <button aria-label={t('board.addTask', { state: state.name })} className="task-column-add" onClick={() => onCreate(state._id)} type="button"><Plus size={13} /></button>
             </header>
             <div className="task-column-list">
               {columnTasks.map((item) => (
@@ -86,7 +90,7 @@ export function TaskBoard({
                 >
                   <button className="task-card-open" onClick={() => onOpen(item.task.publicKey)} type="button">
                     <span className="task-card-idline"><span>{item.task.publicKey}</span><StateRing category={state.category} size="dense" /></span>
-                    <strong>{item.task.title}</strong>
+                    <strong dir="auto">{item.task.title}</strong>
                     <span className="task-card-foot">
                       <TaskAvatar member={item.assignee} />
                       <OriginCaption boardName={board.board.name} item={item} />
@@ -95,16 +99,16 @@ export function TaskBoard({
                       <PriorityGlyph priority={item.task.priority} />
                     </span>
                   </button>
-                  <div aria-label="Keyboard move controls" className="task-card-moves">
+                  <div aria-label={t('board.keyboardMoveControls')} className="task-card-moves">
                     <Button
-                      aria-label={`Move ${item.task.title} left`}
+                      aria-label={t('board.moveLeft', { title: item.task.title })}
                       disabled={stateIndex === 0}
                       onClick={() => void move(item, board.states[stateIndex - 1]._id, 0)}
                       size="icon-sm"
                       variant="ghost"
                     ><ArrowLeft size={12} /></Button>
                     <Button
-                      aria-label={`Move ${item.task.title} right`}
+                      aria-label={t('board.moveRight', { title: item.task.title })}
                       disabled={stateIndex === board.states.length - 1}
                       onClick={() => void move(item, board.states[stateIndex + 1]._id, 0)}
                       size="icon-sm"
@@ -113,7 +117,7 @@ export function TaskBoard({
                   </div>
                 </article>
               ))}
-              {!columnTasks.length ? <p className="task-column-empty">Drop tasks here</p> : null}
+              {!columnTasks.length ? <p className="task-column-empty">{t('board.empty')}</p> : null}
             </div>
           </section>
         )

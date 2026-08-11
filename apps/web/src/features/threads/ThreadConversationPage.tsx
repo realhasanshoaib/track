@@ -1,5 +1,6 @@
 import { parseMentions } from '@track/shared'
 import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
@@ -7,6 +8,7 @@ import type { Doc, Id } from '../../../../../convex/_generated/dataModel'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Textarea } from '#/components/ui/textarea'
+import { formatDate, formatNumber, useLocale } from '#/i18n'
 import { getMentionHandle } from '#/features/workspace/identity'
 import { MarkdownText } from '#/features/workspace/markdown'
 import {
@@ -29,6 +31,8 @@ export function ThreadConversationPage({
   projectId: Id<'projects'>
   threadId: Id<'channelThreads'>
 }) {
+  const { locale } = useLocale()
+  const { t } = useTranslation('threads')
   const releaseConfig = useReleaseConfig()
   const currentUser = useQuery(api.auth.getCurrentUser)
   const navigation = useQuery(
@@ -173,7 +177,7 @@ export function ThreadConversationPage({
         mentions: mentionedMembers.map((member) => member.userId),
         mentionedProjectMemberIds: mentionedMembers.map((member) => member.projectMemberId),
         replyToMessageId: replyTo ?? undefined,
-        notificationPreview: attachment && !body ? 'Sent an attachment.' : undefined,
+        notificationPreview: attachment && !body ? t('conversation.attachmentSent') : undefined,
       })
       if (attachment) await uploadAttachment(messageId, attachment)
       if (parseMentions(body).includes('track')) {
@@ -192,8 +196,8 @@ export function ThreadConversationPage({
       setComposer('')
       setAttachment(null)
       setReplyTo(null)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't save")
+    } catch {
+      setError(t('errors.save'))
     } finally {
       setBusy(false)
     }
@@ -231,7 +235,7 @@ export function ThreadConversationPage({
   }
 
   async function removeMessage(messageId: Id<'messages'>) {
-    if (!currentUser || !window.confirm('Delete this message? This can’t be undone.')) return
+    if (!currentUser || !window.confirm(t('conversation.deleteConfirm'))) return
     setBusy(true)
     setError(null)
     try {
@@ -242,9 +246,9 @@ export function ThreadConversationPage({
         projectMemberId: context?.projectMemberId,
       })
       if (replyTo === messageId) setReplyTo(null)
-      setNotice('Message deleted.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't delete message")
+      setNotice(t('conversation.deleted'))
+    } catch {
+      setError(t('errors.delete'))
     } finally {
       setBusy(false)
     }
@@ -255,9 +259,9 @@ export function ThreadConversationPage({
     setError(null)
     try {
       await setFollowing({ ...scopedArgs, following: !thread.following })
-      setNotice(thread.following ? 'Thread unfollowed.' : 'Thread followed.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't update follow state")
+      setNotice(thread.following ? t('conversation.unfollowed') : t('conversation.followed'))
+    } catch {
+      setError(t('errors.follow'))
     }
   }
 
@@ -271,10 +275,10 @@ export function ThreadConversationPage({
         status: thread.thread.status === 'active' ? 'archived' : 'active',
       })
       setNotice(result.conflict
-        ? 'Thread changed elsewhere. Current state has been refreshed.'
-        : result.status === 'archived' ? 'Thread archived.' : 'Thread reopened.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't update thread")
+        ? t('conversation.conflictRefresh')
+        : result.status === 'archived' ? t('conversation.archivedNotice') : t('conversation.reopenedNotice'))
+    } catch {
+      setError(t('errors.status'))
     }
   }
 
@@ -289,19 +293,19 @@ export function ThreadConversationPage({
         name: renameValue,
       })
       setNotice(result.conflict
-        ? 'Thread changed elsewhere. Current name has been refreshed.'
-        : 'Thread renamed.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't rename thread")
+        ? t('conversation.conflictNameRefresh')
+        : t('conversation.renamedNotice'))
+    } catch {
+      setError(t('errors.rename'))
     }
   }
 
   if (!releaseConfig.threads) return <Unavailable backHref={backHref} />
   if (typeof navigator !== 'undefined' && !navigator.onLine && thread === undefined) {
-    return <Unavailable backHref={backHref} detail="You're offline and this thread isn't available on this device." retry />
+    return <Unavailable backHref={backHref} detail={t('unavailable.offline')} retry />
   }
   if (!currentUser || navigation === undefined || (navigation.available && thread === undefined)) {
-    return <main className="track-thread-route"><p role="status">Opening thread…</p></main>
+    return <main className="track-thread-route"><p role="status">{t('conversation.opening')}</p></main>
   }
   if (!navigation.available || !thread) return <Unavailable backHref={backHref} />
 
@@ -309,22 +313,22 @@ export function ThreadConversationPage({
   return (
     <main className="track-thread-route" aria-busy={busy}>
       <header className="track-thread-route-header">
-        <a href={backHref}>← Back to Channel</a>
+        <a href={backHref}>{t('conversation.back')}</a>
         <div>
-          <span className="mono-label">Thread</span>
-          <h1>{thread.thread.name}</h1>
-          <p>{thread.replyCount} {thread.replyCount === 1 ? 'reply' : 'replies'} · {thread.following ? 'Following' : 'Not following'}</p>
+          <span className="mono-label">{t('conversation.label')}</span>
+          <h1 dir="auto">{thread.thread.name}</h1>
+          <p>{thread.replyCount === 1 ? t('browser.replyOne', { count: formatNumber(locale, thread.replyCount) }) : t('browser.replyMany', { count: formatNumber(locale, thread.replyCount) })} · {thread.following ? t('browser.following') : t('conversation.notFollowing')}</p>
         </div>
         <div className="track-thread-route-actions">
           {!navigation.archived ? <Button onClick={() => void toggleFollowing()} variant="outline">
-            {thread.following ? 'Unfollow' : 'Follow'}
+            {thread.following ? t('conversation.unfollow') : t('conversation.follow')}
           </Button> : null}
           {thread.canManage && !navigation.archived ? (
             <Button
               onClick={() => void updateStatus()}
               variant="outline"
             >
-              {thread.thread.status === 'active' ? 'Archive' : 'Reopen'}
+              {thread.thread.status === 'active' ? t('conversation.archive') : t('conversation.reopen')}
             </Button>
           ) : null}
         </div>
@@ -334,33 +338,33 @@ export function ThreadConversationPage({
           className="track-thread-rename"
           onSubmit={(event) => void submitRename(event)}
         >
-          <Input aria-label="Rename thread" maxLength={100} onChange={(event) => setRenameValue(event.target.value)} value={renameValue} />
-          <Button type="submit" variant="outline">Rename</Button>
+          <Input aria-label={t('conversation.renameAria')} dir="auto" maxLength={100} onChange={(event) => setRenameValue(event.target.value)} value={renameValue} />
+          <Button type="submit" variant="outline">{t('conversation.rename')}</Button>
         </form>
       ) : null}
       {thread.source ? (
         <aside className="track-thread-source">
-          <strong>Source message</strong>
+          <strong>{t('conversation.source')}</strong>
           {'unavailable' in thread.source ? (
-            <p>Source message unavailable.</p>
+            <p>{t('conversation.sourceUnavailable')}</p>
           ) : (
             <a href={`${backHref}#message-${thread.source.messageId}`}>
-              {thread.source.body || 'Attachment message'}
+              <span dir="auto">{thread.source.body || t('browser.attachmentMessage')}</span>
             </a>
           )}
         </aside>
       ) : null}
       {notice ? <p className="track-thread-notice" role="status">{notice}</p> : null}
-      {error ? <p className="track-error" role="alert">{error}. Your unsent reply is still here.</p> : null}
-      {archived ? <p className="track-thread-archived" role="status">This thread is read-only.</p> : null}
-      <section className="track-thread-message-list" role="log" aria-label="Thread messages">
+      {error ? <p className="track-error" role="alert">{t('conversation.unsentReply', { error })}</p> : null}
+      {archived ? <p className="track-thread-archived" role="status">{t('conversation.readOnly')}</p> : null}
+      <section className="track-thread-message-list" role="log" aria-label={t('conversation.messagesAria')}>
         {messagePageStatus === 'CanLoadMore' ? (
-          <Button onClick={() => loadMoreMessages(50)} variant="outline">Load older replies</Button>
+          <Button onClick={() => loadMoreMessages(50)} variant="outline">{t('conversation.loadOlder')}</Button>
         ) : null}
-        {streamItems.length === 0 ? <p>{messagePageStatus === 'LoadingFirstPage' ? 'Loading replies…' : 'No replies yet.'}</p> : streamItems.map((entry) => entry.kind === 'assistant' ? (
+        {streamItems.length === 0 ? <p>{messagePageStatus === 'LoadingFirstPage' ? t('conversation.loadingReplies') : t('conversation.noReplies')}</p> : streamItems.map((entry) => entry.kind === 'assistant' ? (
           <article className="track-thread-message assistant" key={entry.id}>
             <header>
-              <strong>Track Assistant</strong>
+              <strong>{t('conversation.assistant')}</strong>
               {releaseConfig.tasks && !archived ? (
                 <CreateTaskFromAssistant
                   identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
@@ -368,7 +372,7 @@ export function ThreadConversationPage({
                 />
               ) : null}
             </header>
-            <MarkdownText text={entry.item.answer || entry.item.status} />
+            <div dir="auto"><MarkdownText text={entry.item.answer || entry.item.status} /></div>
             {releaseConfig.tasks ? (
               <AssistantInlineTasks
                 identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
@@ -379,11 +383,11 @@ export function ThreadConversationPage({
         ) : (
           <article className="track-thread-message" id={`message-${entry.id}`} key={entry.id} tabIndex={-1}>
             <header>
-              <strong>{entry.item.author?.displayName ?? 'Unknown member'}</strong>
-              <time>{new Date(entry.at).toLocaleString()}</time>
+              <strong dir="auto">{entry.item.author?.displayName ?? t('browser.unknownMember')}</strong>
+              <time>{formatDate(locale, entry.at, { dateStyle: 'medium', timeStyle: 'short' })}</time>
             </header>
-            {entry.item.replyTo ? <small>Replying to {entry.item.replyTo.authorName}: {entry.item.replyTo.body}</small> : null}
-            <MarkdownText text={entry.item.message.body || 'Attachment message'} />
+            {entry.item.replyTo ? <small dir="auto">{t('conversation.replyingTo', { name: entry.item.replyTo.authorName, body: entry.item.replyTo.body })}</small> : null}
+            <div dir="auto"><MarkdownText text={entry.item.message.body || t('browser.attachmentMessage')} /></div>
             {releaseConfig.tasks ? (
               <MessageInlineTasks
                 identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
@@ -391,10 +395,10 @@ export function ThreadConversationPage({
               />
             ) : null}
             {entry.item.attachments.map(({ attachment: file, url }) => url ? (
-              <a href={url} key={file._id} rel="noreferrer" target="_blank">{file.filename}</a>
+              <a dir="ltr" href={url} key={file._id} rel="noreferrer" target="_blank">{file.filename}</a>
             ) : null)}
             <footer>
-              {!archived ? <button onClick={() => setReplyTo(entry.item.message._id)} type="button">Reply</button> : null}
+              {!archived ? <button onClick={() => setReplyTo(entry.item.message._id)} type="button">{t('conversation.reply')}</button> : null}
               {!archived &&
                 entry.item.message.authorId === currentUser._id &&
                 (!context?.projectMemberId ||
@@ -405,7 +409,7 @@ export function ThreadConversationPage({
                   onClick={() => void removeMessage(entry.item.message._id)}
                   variant="destructive"
                 >
-                  Delete
+                  {t('conversation.delete')}
                 </Button>
               ) : null}
               {releaseConfig.tasks && !archived ? (
@@ -425,17 +429,17 @@ export function ThreadConversationPage({
                   reason: 'other',
                 })}
                 type="button"
-              >Report</button>
+              >{t('conversation.report')}</button>
             </footer>
           </article>
         ))}
       </section>
       {!archived ? (
         <form className="track-thread-composer" onSubmit={(event) => void submitMessage(event)}>
-          {replyTo ? <p>Reply selected. <button onClick={() => setReplyTo(null)} type="button">Cancel</button></p> : null}
-          <Textarea aria-label={`Reply in ${thread.thread.name}`} onChange={(event) => setComposer(event.target.value)} placeholder="Reply in thread" value={composer} />
-          <input aria-label="Attach a file" onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} type="file" />
-          <Button disabled={busy || (!composer.trim() && !attachment)} type="submit">{busy ? 'Sending…' : 'Send'}</Button>
+          {replyTo ? <p>{t('conversation.replySelected')} <button onClick={() => setReplyTo(null)} type="button">{t('conversation.cancel')}</button></p> : null}
+          <Textarea aria-label={t('conversation.replyAria', { name: thread.thread.name })} dir="auto" onChange={(event) => setComposer(event.target.value)} placeholder={t('conversation.replyPlaceholder')} value={composer} />
+          <input aria-label={t('conversation.attachAria')} onChange={(event) => setAttachment(event.target.files?.[0] ?? null)} type="file" />
+          <Button disabled={busy || (!composer.trim() && !attachment)} type="submit">{busy ? t('conversation.sending') : t('conversation.send')}</Button>
         </form>
       ) : null}
     </main>
@@ -451,12 +455,13 @@ type ThreadMessageDetail = {
 
 function Unavailable({
   backHref,
-  detail = 'Thread unavailable or access changed.',
+  detail,
   retry = false,
 }: {
   backHref: string
   detail?: string
   retry?: boolean
 }) {
-  return <main className="track-thread-route"><h1>Thread unavailable</h1><p>{detail}</p>{retry ? <Button onClick={() => window.location.reload()}>Retry</Button> : null}<a href={backHref}>Back to Channel</a></main>
+  const { t } = useTranslation('threads')
+  return <main className="track-thread-route"><h1>{t('unavailable.title')}</h1><p>{detail ?? t('unavailable.detail')}</p>{retry ? <Button onClick={() => window.location.reload()}>{t('unavailable.retry')}</Button> : null}<a href={backHref}>{t('conversation.back')}</a></main>
 }
