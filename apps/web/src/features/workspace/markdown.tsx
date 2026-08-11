@@ -51,7 +51,7 @@ export function MarkdownText({
   flushList()
 
   return (
-    <div className={className}>
+    <div className={className} dir="auto">
       {blocks.map((block, blockIndex) =>
         block.kind === 'list' ? (
           <ul key={`list-${blockIndex}`}>

@@ -1,4 +1,6 @@
 import type { FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+import '#/i18n'
 
 import type { Doc, Id } from '../../../../../convex/_generated/dataModel'
 import { Button } from '#/components/ui/button'
@@ -76,6 +78,7 @@ export function WorkspaceDialogs({
   onCreateProjectSubmit: (event: FormEvent<HTMLFormElement>) => void
   onInviteSubmit: (event: FormEvent<HTMLFormElement>) => void
 }) {
+  const { t } = useTranslation('workspace')
   const selectedInviteGroup = inviteAccess.startsWith('group:')
     ? projectGroups.find((group) => `group:${group._id}` === inviteAccess)
     : null
@@ -88,16 +91,16 @@ export function WorkspaceDialogs({
         <DialogContent className="track-dialog">
           <form onSubmit={onCreateProjectSubmit}>
             <DialogHeader>
-              <DialogTitle>{projectDialogMode === 'edit' ? 'Edit project' : 'Create project'}</DialogTitle>
+              <DialogTitle>{projectDialogMode === 'edit' ? t('dialogs.editProject') : t('dialogs.createProject')}</DialogTitle>
               <DialogDescription>
                 {projectDialogMode === 'edit'
-                  ? 'Update the workspace name and client label.'
-                  : 'Add a workspace for a client/vendor project.'}
+                  ? t('dialogs.updateProjectDescription')
+                  : t('dialogs.createProjectDescription')}
               </DialogDescription>
             </DialogHeader>
             <div className="track-dialog-fields">
               <label className="track-dialog-field">
-                <span>Project name</span>
+                <span>{t('dialogs.projectName')}</span>
                 <Input
                   autoFocus
                   onChange={(event) => setProjectName(event.currentTarget.value)}
@@ -105,7 +108,7 @@ export function WorkspaceDialogs({
                 />
               </label>
               <label className="track-dialog-field">
-                <span>Client label</span>
+                <span>{t('dialogs.clientLabel')}</span>
                 <Input
                   onChange={(event) => setProjectClientLabel(event.currentTarget.value)}
                   value={projectClientLabel}
@@ -114,14 +117,14 @@ export function WorkspaceDialogs({
             </div>
             <DialogFooter>
               <Button className="track-button" type="button" onClick={() => setProjectDialogOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 className="track-button track-button-primary"
                 disabled={!projectName.trim() || busyAction === 'create-project' || busyAction === 'edit-project'}
                 type="submit"
               >
-                {projectDialogMode === 'edit' ? 'Save' : 'Create'}
+                {projectDialogMode === 'edit' ? t('common.save') : t('common.create')}
               </Button>
             </DialogFooter>
           </form>
@@ -132,16 +135,16 @@ export function WorkspaceDialogs({
         <DialogContent className="track-dialog">
           <form onSubmit={onCreateGroupSubmit}>
             <DialogHeader>
-              <DialogTitle>{groupDialogMode === 'edit' ? 'Edit group' : 'Create group'}</DialogTitle>
+              <DialogTitle>{groupDialogMode === 'edit' ? t('dialogs.editChannel') : t('dialogs.createChannel')}</DialogTitle>
               <DialogDescription>
                 {groupDialogMode === 'edit'
-                  ? 'Rename this project conversation lane.'
-                  : 'Add a conversation lane inside the active project.'}
+                  ? t('dialogs.updateChannelDescription')
+                  : t('dialogs.createChannelDescription')}
               </DialogDescription>
             </DialogHeader>
             <div className="track-dialog-fields">
               <label className="track-dialog-field">
-                <span>Group name</span>
+                <span>{t('dialogs.channelName')}</span>
                 <Input
                   autoFocus
                   onChange={(event) => setGroupName(event.currentTarget.value)}
@@ -151,14 +154,14 @@ export function WorkspaceDialogs({
             </div>
             <DialogFooter>
               <Button className="track-button" type="button" onClick={() => setGroupDialogOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 className="track-button track-button-primary"
                 disabled={!groupName.trim() || busyAction === 'create-group' || busyAction === 'edit-group'}
                 type="submit"
               >
-                {groupDialogMode === 'edit' ? 'Save' : 'Create'}
+                {groupDialogMode === 'edit' ? t('common.save') : t('common.create')}
               </Button>
             </DialogFooter>
           </form>
@@ -169,12 +172,12 @@ export function WorkspaceDialogs({
         <DialogContent className="track-dialog">
           <form onSubmit={onInviteSubmit}>
             <DialogHeader>
-              <DialogTitle>Invite member</DialogTitle>
-              <DialogDescription>Send access to this project, or only the current group.</DialogDescription>
+              <DialogTitle>{t('dialogs.inviteMember')}</DialogTitle>
+              <DialogDescription>{t('dialogs.inviteDescription')}</DialogDescription>
             </DialogHeader>
             <div className="track-dialog-fields">
               <label className="track-dialog-field">
-                <span>Email</span>
+                <span>{t('dialogs.email')}</span>
                 <Input
                   autoFocus
                   onChange={(event) => setInviteEmail(event.currentTarget.value)}
@@ -183,25 +186,25 @@ export function WorkspaceDialogs({
                 />
               </label>
               <label className="track-dialog-field">
-                <span>Role</span>
+                <span>{t('dialogs.role')}</span>
                 <Select
                   onValueChange={(value) => setInviteRole((value ?? 'staff') as typeof inviteRole)}
                   value={inviteRole}
                 >
                   <SelectTrigger className="track-dialog-select-trigger">
-                    <span className="track-dialog-select-value">{inviteRole}</span>
+                    <span className="track-dialog-select-value">{t(`dialogs.roles.${inviteRole}`)}</span>
                   </SelectTrigger>
                   <SelectContent className="track-dialog-select-content">
                     <SelectGroup>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="admin">{t('dialogs.roles.admin')}</SelectItem>
+                      <SelectItem value="staff">{t('dialogs.roles.staff')}</SelectItem>
+                      <SelectItem value="client">{t('dialogs.roles.client')}</SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </label>
               <label className="track-dialog-field">
-                <span>Access</span>
+                <span>{t('dialogs.access')}</span>
                 <Select
                   onValueChange={(value) => setInviteAccess(value ?? 'project')}
                   value={inviteAccess}
@@ -215,15 +218,15 @@ export function WorkspaceDialogs({
                         <span className="track-dialog-select-value">{selectedInviteGroup.name}</span>
                       </span>
                     ) : (
-                      <span className="track-dialog-select-value">Entire project</span>
+                      <span className="track-dialog-select-value">{t('dialogs.entireProject')}</span>
                     )}
                   </SelectTrigger>
                   <SelectContent className="track-dialog-select-content">
                     <SelectGroup>
-                      <SelectItem value="project">Entire project</SelectItem>
+                      <SelectItem value="project">{t('dialogs.entireProject')}</SelectItem>
                     </SelectGroup>
                     <SelectGroup>
-                      <SelectLabel>Groups</SelectLabel>
+                      <SelectLabel>{t('common.channels')}</SelectLabel>
                       {projectGroups.length > 0 ? (
                         projectGroups.map((group) => {
                           const { Icon, tone } = getGroupAvatar(group)
@@ -239,7 +242,7 @@ export function WorkspaceDialogs({
                               <span className="track-invite-access-option">
                                 <strong>{group.name}</strong>
                                 <small>
-                                  {group._id === activeGroupId ? 'Current group' : `${group.kind.replaceAll('_', ' ')} group`}
+                                  {group._id === activeGroupId ? t('dialogs.currentChannel') : t('dialogs.channelKind', { kind: group.kind.replaceAll('_', ' ') })}
                                 </small>
                               </span>
                             </SelectItem>
@@ -247,7 +250,7 @@ export function WorkspaceDialogs({
                         })
                       ) : (
                         <SelectItem disabled value="no-groups">
-                          No groups yet
+                          {t('sidebar.noChannels')}
                         </SelectItem>
                       )}
                     </SelectGroup>
@@ -257,14 +260,14 @@ export function WorkspaceDialogs({
             </div>
             <DialogFooter>
               <Button className="track-button" type="button" onClick={() => setInviteDialogOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 className="track-button track-button-primary"
                 disabled={!inviteEmail.trim() || busyAction === 'invite'}
                 type="submit"
               >
-                Invite
+                {t('common.invite')}
               </Button>
             </DialogFooter>
           </form>

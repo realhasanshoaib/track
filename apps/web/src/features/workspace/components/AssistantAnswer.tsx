@@ -1,4 +1,5 @@
 import { MessageSquare } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
@@ -8,6 +9,7 @@ import { MarkdownText } from '../markdown'
 import { MentionInline } from '../thread-item-components'
 import type { MessageCitationPreview } from '../thread-item-components'
 import { AssistantInlineTasks, CreateTaskFromAssistant } from '#/features/tasks/ConversationTaskActions'
+import { formatNumber, formatTime } from '#/i18n'
 
 export function AssistantAnswer({
   messageCitations,
@@ -26,17 +28,26 @@ export function AssistantAnswer({
   stream: Doc<'assistantStreams'>
   threadItemKey: string
 }) {
-  const isThinking = stream.status === 'running' && !stream.answer
-  const answer = stream.answer || stream.status
-  const sources = buildAssistantSourcePreviews(stream.evidence, messageCitations)
+  const { t } = useTranslation('workspace')
+  const isThinking = (stream.status === 'queued' || stream.status === 'running') && !stream.answer
+  const answer = stream.answer || (
+    stream.status === 'failed'
+      ? t('assistant.failed')
+      : stream.status === 'completed'
+        ? t('assistant.noAnswer')
+        : t('assistant.queued')
+  )
+  const sources = buildAssistantSourcePreviews(stream.evidence, messageCitations, {
+    messageFrom: t('assistant.messageFrom'),
+  })
   return (
     <article className="track-assistant-row" data-thread-item-key={threadItemKey}>
       <AvatarNameTooltip
         avatarUrl="/track-assistant-avatar.png"
         bannerStyle="silk"
-        bio="Project memory teammate that keeps decisions, evidence, risks, and follow-ups accessible."
-        detail="AI project memory teammate"
-        name="Track Assistant"
+        bio={t('assistant.bio')}
+        detail={t('assistant.detail')}
+        name={t('assistant.name')}
         side="right"
       >
         <Avatar className="track-message-avatar bot">
@@ -46,12 +57,12 @@ export function AssistantAnswer({
       </AvatarNameTooltip>
       <div className="track-assistant-body">
         <div className="track-message-meta">
-          <strong>Track Assistant</strong>
-          <time>{new Date(stream.createdAt).toLocaleTimeString()}</time>
+          <strong>{t('assistant.name')}</strong>
+          <time>{formatTime(stream.createdAt)}</time>
           <CreateTaskFromAssistant stream={stream} />
         </div>
         {isThinking ? (
-          <TextShimmer>Thinking</TextShimmer>
+          <TextShimmer>{t('assistant.thinking')}</TextShimmer>
         ) : (
           <MarkdownText
             className="track-markdown"
@@ -100,6 +111,7 @@ type AssistantSourcePreview = {
 function buildAssistantSourcePreviews(
   evidence: Array<{ attachmentId?: string; messageId?: string; quote: string; reason?: string }>,
   messageCitations: Map<string, MessageCitationPreview>,
+  labels: { messageFrom: string },
 ) {
   const sources: Array<AssistantSourcePreview> = []
   const seen = new Set<string>()
@@ -135,10 +147,10 @@ function buildAssistantSourcePreviews(
       key,
       messageId: item.messageId,
       meta: formatSourceMeta(
-        new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        formatTime(message.createdAt),
         preview,
       ),
-      title: `Message from ${message.author}`,
+      title: `${labels.messageFrom} ${message.author}`,
     })
   }
 
@@ -149,7 +161,7 @@ function formatAttachmentSourceTitle(
   attachment: MessageCitationPreview['attachments'][number],
   attachmentCount: number,
 ) {
-  const suffix = attachmentCount > 1 ? ` + ${attachmentCount - 1}` : ''
+  const suffix = attachmentCount > 1 ? ` + ${formatNumber(attachmentCount - 1)}` : ''
   return `${attachment.filename}${suffix}`
 }
 
@@ -165,9 +177,10 @@ function AssistantSourceList({
   onOpen: (messageId: Id<'messages'> | string) => void
   sources: Array<AssistantSourcePreview>
 }) {
+  const { t } = useTranslation('workspace')
   return (
-    <div className="track-assistant-sources" aria-label="Assistant sources">
-      <span className="track-assistant-sources-label">Sources</span>
+    <div className="track-assistant-sources" aria-label={t('assistant.sources')}>
+      <span className="track-assistant-sources-label">{t('assistant.sources')}</span>
       <div className="track-assistant-source-list">
         {sources.map((source) => (
           <button
@@ -217,10 +230,11 @@ function MessageCitation({
   message?: MessageCitationPreview
   onOpen: (messageId: Id<'messages'> | string) => void
 }) {
+  const { t } = useTranslation('workspace')
   if (!message) {
     return (
       <span className="track-citation-chip" key={`${citationId}-${index}`}>
-        source
+        {t('assistant.source')}
       </span>
     )
   }
@@ -234,18 +248,15 @@ function MessageCitation({
     >
       <span className="track-citation-source">
         {message.author} ·{' '}
-        {new Date(message.createdAt).toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
-        })}
+        {formatTime(message.createdAt)}
       </span>
-      <span className="track-citation-preview">{message.body || formatCitationAttachmentLabel(message.attachments)}</span>
+      <span className="track-citation-preview">{message.body || formatCitationAttachmentLabel(message.attachments, t('assistant.attachmentMessage'))}</span>
     </button>
   )
 }
 
-function formatCitationAttachmentLabel(attachments: MessageCitationPreview['attachments']) {
-  if (attachments.length === 0) return 'Attachment message'
-  if (attachments.length === 1) return attachments[0]?.filename ?? 'Attachment message'
-  return `${attachments[0]?.filename ?? 'Attachment'} + ${attachments.length - 1}`
+function formatCitationAttachmentLabel(attachments: MessageCitationPreview['attachments'], attachmentMessage: string) {
+  if (attachments.length === 0) return attachmentMessage
+  if (attachments.length === 1) return attachments[0]?.filename ?? attachmentMessage
+  return `${attachments[0]?.filename ?? attachmentMessage} + ${formatNumber(attachments.length - 1)}`
 }

@@ -1,6 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
+import { useTranslation } from 'react-i18next'
+import '#/i18n'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import type { GroupMessageItem } from '../thread-items'
@@ -87,6 +89,7 @@ export function useWorkspaceSynchronization({
   view: WorkspaceView
   visibleGroups: Array<Doc<'groups'>>
 }) {
+  const { t } = useTranslation('workspace')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -195,7 +198,7 @@ export function useWorkspaceSynchronization({
       if (firstGroupId && projectIdToOpen) {
         void navigate({ to: '/workspace/projects/$projectId/groups/$groupId', params: { groupId: firstGroupId, projectId: projectIdToOpen } })
       } else if (!visibleGroups.length) {
-        setUiError('This group is not visible in the selected project.')
+        setUiError(t('errors.groupNotVisible'))
       }
       return
     }
@@ -207,7 +210,7 @@ export function useWorkspaceSynchronization({
     if (!activeGroupId || !visibleGroups.some((group) => group._id === activeGroupId)) {
       setActiveGroupId(visibleGroups[0]?._id ?? null)
     }
-  }, [activeGroupId, activeProjectId, groups, navigate, routeGroupId, routeProjectId, setActiveGroupId, setShowJumpToLatest, setUiError, view, visibleGroups])
+  }, [activeGroupId, activeProjectId, groups, navigate, routeGroupId, routeProjectId, setActiveGroupId, setShowJumpToLatest, setUiError, t, view, visibleGroups])
 
   useEffect(() => {
     const firstGroupId = visibleGroups[0]?._id

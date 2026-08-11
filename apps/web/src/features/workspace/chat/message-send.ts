@@ -29,10 +29,13 @@ export function getAttachmentNotificationPreview({
 }: {
   body: string
   pendingAttachments: Array<PendingWorkspaceAttachment>
+}, labels: { voiceNote: string; attachment: string } = {
+  attachment: 'Sent an attachment.',
+  voiceNote: 'Sent a voice note.',
 }) {
   if (body) return undefined
-  if (pendingAttachments.some((attachment) => attachment.kind === 'voice_note')) return 'Sent a voice note.'
-  if (pendingAttachments.length > 0) return 'Sent an attachment.'
+  if (pendingAttachments.some((attachment) => attachment.kind === 'voice_note')) return labels.voiceNote
+  if (pendingAttachments.length > 0) return labels.attachment
   return undefined
 }
 

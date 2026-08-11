@@ -1,4 +1,5 @@
 import type { CSSProperties, Dispatch, RefObject, SetStateAction } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Navigate } from '@tanstack/react-router'
 
@@ -124,6 +125,7 @@ type WorkspacePageSurfaceModel = {
 }
 
 export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceModel }) {
+  const { t } = useTranslation('workspace')
   const {
     attachments,
     auth,
@@ -152,11 +154,11 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
     visibleGroups,
   } = data
 
-  if (auth.oauthCallbackPending) return <TrackLoading label="Finishing Google sign-in" />
-  if (auth.sessionPending && !auth.devAuthEnabled) return <TrackLoading label="Checking your session" />
+  if (auth.oauthCallbackPending) return <TrackLoading label={t('loading.finishingSignIn')} />
+  if (auth.sessionPending && !auth.devAuthEnabled) return <TrackLoading label={t('loading.checkingSession')} />
   if (!auth.hasSessionAccess || !auth.sessionUser) return <Navigate to="/sign-in" />
   if (!auth.trackUserId && state.uiError) return <TrackLoading label={state.uiError} />
-  if (!auth.trackUserId) return <TrackLoading label="Connecting your project session" />
+  if (!auth.trackUserId) return <TrackLoading label={t('loading.connectingSession')} />
 
   return (
     <main
@@ -243,7 +245,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
         />
 
         {route.isProjectLoading || route.isGroupLoading ? (
-          <WorkspaceRouteLoader label={route.view === 'group' ? 'Opening channel conversation' : route.view === 'settings' ? 'Loading project settings' : 'Loading project channels'} />
+          <WorkspaceRouteLoader label={route.view === 'group' ? t('loading.openingConversation') : route.view === 'settings' ? t('loading.loadingSettings') : t('loading.loadingChannels')} />
         ) : route.view === 'group' ? (
           <GroupChatPage
             activeGroup={activeGroup}
@@ -257,7 +259,10 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             composer={state.composer}
             composerPlaceholder={presentation.composerPlaceholder}
             composerRef={state.composerRef}
-            emojiGroups={emojiGroups}
+            emojiGroups={emojiGroups.map((group, index) => ({
+              ...group,
+              label: t(`emojiGroups.${index}`),
+            }))}
             emojiPickerOpen={state.emojiPickerOpen}
             fileInputRef={state.fileInputRef}
             filteredMentionOptions={conversation.filteredMentionOptions}
@@ -325,11 +330,11 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             onNotificationMode={notifications.handleNotificationMode}
           />
         ) : visibleGroups.length > 0 ? (
-          <WorkspaceRouteLoader label="Opening first channel" />
+          <WorkspaceRouteLoader label={t('loading.openingFirstChannel')} />
         ) : (
           <div className="track-empty">
-            <p className="mono-label m-0">No channels</p>
-            <p>Create a channel to start tracking project conversations.</p>
+            <p className="mono-label m-0">{t('chat.noChannels')}</p>
+            <p>{t('chat.createChannelDescription')}</p>
           </div>
         )}
       </section>
@@ -362,7 +367,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
         onOpenResult={threadInteractions.handleProjectSearchResult}
         onQueryChange={update.setProjectSearchQuery}
         open={state.projectSearchOpen}
-        projectName={activeProject?.project.name ?? 'Project'}
+        projectName={activeProject?.project.name ?? t('common.project')}
         query={state.projectSearchQuery}
         sections={presentation.projectSearchSections}
         total={presentation.projectSearchTotal}
