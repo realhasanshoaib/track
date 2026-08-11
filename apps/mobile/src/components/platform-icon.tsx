@@ -3,6 +3,8 @@ import { SymbolView } from 'expo-symbols';
 import type { SFSymbol } from 'expo-symbols';
 import { Platform } from 'react-native';
 
+import { useLocale } from '@/contexts/locale-context';
+
 export type IconName =
   | 'apple'
   | 'arrow-up'
@@ -142,9 +144,12 @@ const ION_MAP: Partial<Record<IconName, React.ComponentProps<typeof Ionicons>['n
   'moon-waning-crescent': 'moon-outline',
 };
 
-type Props = { name: IconName; size: number; color: string };
+type Props = { name: IconName; size: number; color: string; directional?: boolean };
 
-export function PlatformIcon({ name, size, color }: Props) {
+export function PlatformIcon({ directional = false, name, size, color }: Props) {
+  const { direction } = useLocale();
+  const iconStyle = directional && direction === 'rtl' ? { transform: [{ scaleX: -1 }] } : undefined;
+
   if (Platform.OS === 'ios') {
     const sf = SF_MAP[name];
     if (sf) {
@@ -153,19 +158,19 @@ export function PlatformIcon({ name, size, color }: Props) {
           name={sf}
           size={size}
           tintColor={color}
-          style={{ width: size, height: size }}
+          style={[{ width: size, height: size }, iconStyle]}
         />
       );
     }
     const ion = ION_MAP[name];
-    if (ion) return <Ionicons color={color} name={ion} size={size} />;
-    return <Ionicons color={color} name="help-circle-outline" size={size} />;
+    if (ion) return <Ionicons color={color} name={ion} size={size} style={iconStyle} />;
+    return <Ionicons color={color} name="help-circle-outline" size={size} style={iconStyle} />;
   }
 
   // Android: prefer Material Icons, then Ionicons
   const mat = ANDROID_MAP[name];
-  if (mat) return <MaterialIcons color={color} name={mat} size={size} />;
+  if (mat) return <MaterialIcons color={color} name={mat} size={size} style={iconStyle} />;
   const ion = ION_MAP[name];
-  if (ion) return <Ionicons color={color} name={ion} size={size} />;
-  return <Ionicons color={color} name="help-circle-outline" size={size} />;
+  if (ion) return <Ionicons color={color} name={ion} size={size} style={iconStyle} />;
+  return <Ionicons color={color} name="help-circle-outline" size={size} style={iconStyle} />;
 }

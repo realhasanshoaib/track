@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
+import { useLocale } from '@/contexts/locale-context';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -12,8 +13,9 @@ type Props = {
 
 export function EmptyState({ icon, title, body }: Props) {
   const theme = useTheme();
+  const { direction } = useLocale();
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { direction }]}>
       <View style={[styles.iconWrap, { backgroundColor: theme.backgroundElement }]}>
         <PlatformIcon color={theme.textSecondary} name={icon} size={28} />
       </View>
