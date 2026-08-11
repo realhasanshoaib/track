@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
@@ -10,6 +11,7 @@ import { Label } from "#/components/ui/label";
 type AsyncAction = (action: () => Promise<unknown>) => Promise<void>;
 
 export function CreateCompanyForm({ run }: { run: AsyncAction }) {
+  const { t } = useTranslation("company");
   const createCompany = useMutation(api.companies.create);
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
@@ -29,8 +31,9 @@ export function CreateCompanyForm({ run }: { run: AsyncAction }) {
       onSubmit={(event) => void submit(event)}
     >
       <div>
-        <Label htmlFor="company-name">Company name</Label>
+        <Label htmlFor="company-name">{t("forms.createCompany.name")}</Label>
         <Input
+          dir="auto"
           id="company-name"
           onChange={(event) => setDisplayName(event.target.value)}
           required
@@ -38,16 +41,19 @@ export function CreateCompanyForm({ run }: { run: AsyncAction }) {
         />
       </div>
       <div>
-        <Label htmlFor="company-handle">Private handle</Label>
+        <Label htmlFor="company-handle">
+          {t("forms.createCompany.privateHandle")}
+        </Label>
         <Input
           autoCapitalize="none"
+          dir="ltr"
           id="company-handle"
           onChange={(event) => setHandle(event.target.value)}
           required
           value={handle}
         />
       </div>
-      <Button type="submit">Create Company</Button>
+      <Button type="submit">{t("forms.createCompany.submit")}</Button>
     </form>
   );
 }
@@ -59,6 +65,7 @@ export function InviteMemberForm({
   actingCompanyId: Id<"companies">;
   run: AsyncAction;
 }) {
+  const { t } = useTranslation("company");
   const invite = useMutation(api.companies.inviteMember);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "member">("member");
@@ -74,8 +81,9 @@ export function InviteMemberForm({
       }}
     >
       <div>
-        <Label htmlFor="member-email">Email</Label>
+        <Label htmlFor="member-email">{t("forms.invite.email")}</Label>
         <Input
+          dir="ltr"
           id="member-email"
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -84,7 +92,7 @@ export function InviteMemberForm({
         />
       </div>
       <div>
-        <Label htmlFor="member-role">Role</Label>
+        <Label htmlFor="member-role">{t("forms.invite.role")}</Label>
         <select
           id="member-role"
           onChange={(event) =>
@@ -92,11 +100,11 @@ export function InviteMemberForm({
           }
           value={role}
         >
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
+          <option value="member">{t("roles.member")}</option>
+          <option value="admin">{t("roles.admin")}</option>
         </select>
       </div>
-      <Button type="submit">Invite member</Button>
+      <Button type="submit">{t("forms.invite.submit")}</Button>
     </form>
   );
 }
@@ -110,6 +118,7 @@ export function CompanyProfileForm({
   displayName: string;
   run: AsyncAction;
 }) {
+  const { t } = useTranslation("company");
   const updateProfile = useMutation(api.companies.updateProfile);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   return (
@@ -121,10 +130,12 @@ export function CompanyProfileForm({
       }}
     >
       <div>
-        <Label htmlFor="company-profile-name">Company display name</Label>
-        <Input id="company-profile-name" onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
+        <Label htmlFor="company-profile-name">
+          {t("forms.profile.displayName")}
+        </Label>
+        <Input dir="auto" id="company-profile-name" onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
       </div>
-      <Button type="submit">Save profile</Button>
+      <Button type="submit">{t("forms.profile.submit")}</Button>
     </form>
   );
 }
@@ -136,6 +147,7 @@ export function RelationshipForm({
   actingCompanyId: Id<"companies">;
   run: AsyncAction;
 }) {
+  const { t } = useTranslation("company");
   const createRelationship = useMutation(api.relationships.create);
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
@@ -161,8 +173,11 @@ export function RelationshipForm({
       }}
     >
       <div>
-        <Label htmlFor="relationship-name">Relationship name</Label>
+        <Label htmlFor="relationship-name">
+          {t("forms.relationship.name")}
+        </Label>
         <Input
+          dir="auto"
           id="relationship-name"
           onChange={(event) => setName(event.target.value)}
           required
@@ -170,9 +185,12 @@ export function RelationshipForm({
         />
       </div>
       <div>
-        <Label htmlFor="target-handle">Exact Company handle</Label>
+        <Label htmlFor="target-handle">
+          {t("forms.relationship.exactHandle")}
+        </Label>
         <Input
           autoCapitalize="none"
+          dir="ltr"
           id="target-handle"
           onChange={(event) => setHandle(event.target.value)}
           required
@@ -180,14 +198,14 @@ export function RelationshipForm({
         />
         <span className="company-field-hint">
           {match
-            ? `${match.displayName} · @${match.normalizedHandle}`
+            ? <><span dir="auto">{match.displayName}</span> · <span dir="ltr">@{match.normalizedHandle}</span></>
             : handle.length >= 3
-              ? "No exact active Company match."
-              : "Track has no public Company directory."}
+              ? t("forms.relationship.noMatch")
+              : t("forms.relationship.noDirectory")}
         </span>
       </div>
       <Button disabled={!match} type="submit">
-        Create Relationship
+        {t("forms.relationship.submit")}
       </Button>
     </form>
   );
@@ -202,6 +220,7 @@ export function RelationshipParticipantForm({
   relationshipId: Id<"relationships">;
   run: AsyncAction;
 }) {
+  const { t } = useTranslation("company");
   const inviteCompany = useMutation(api.relationships.inviteCompany);
   const [handle, setHandle] = useState("");
   const match = useQuery(
@@ -226,22 +245,23 @@ export function RelationshipParticipantForm({
     >
       <div>
         <Label htmlFor={`relationship-participant-${relationshipId}`}>
-          Add exact Company handle
+          {t("forms.relationshipParticipant.exactHandle")}
         </Label>
         <Input
           autoCapitalize="none"
+          dir="ltr"
           id={`relationship-participant-${relationshipId}`}
           onChange={(event) => setHandle(event.target.value)}
           value={handle}
         />
         <span className="company-field-hint">
           {match
-            ? `${match.displayName} · @${match.normalizedHandle}`
-            : "No public directory is exposed."}
+            ? <><span dir="auto">{match.displayName}</span> · <span dir="ltr">@{match.normalizedHandle}</span></>
+            : t("forms.relationshipParticipant.noDirectory")}
         </span>
       </div>
       <Button disabled={!match} type="submit">
-        Invite Company
+        {t("forms.relationshipParticipant.submit")}
       </Button>
     </form>
   );
@@ -261,6 +281,7 @@ export function SharedProjectForm({
   }>;
   run: AsyncAction;
 }) {
+  const { t } = useTranslation("company");
   const propose = useMutation(api.sharedProjects.propose);
   const [name, setName] = useState("");
   const [relationshipId, setRelationshipId] = useState<
@@ -292,8 +313,11 @@ export function SharedProjectForm({
       }}
     >
       <div>
-        <Label htmlFor="shared-project-name">Project name</Label>
+        <Label htmlFor="shared-project-name">
+          {t("forms.sharedProject.name")}
+        </Label>
         <Input
+          dir="auto"
           id="shared-project-name"
           onChange={(event) => setName(event.target.value)}
           required
@@ -301,7 +325,9 @@ export function SharedProjectForm({
         />
       </div>
       <div>
-        <Label htmlFor="shared-project-relationship">Relationship</Label>
+        <Label htmlFor="shared-project-relationship">
+          {t("forms.sharedProject.relationship")}
+        </Label>
         <select
           id="shared-project-relationship"
           onChange={(event) =>
@@ -310,7 +336,7 @@ export function SharedProjectForm({
           required
           value={relationshipId}
         >
-          <option value="">Select Relationship</option>
+          <option value="">{t("forms.sharedProject.selectRelationship")}</option>
           {relationships.map((item) => (
             <option key={item.relationship._id} value={item.relationship._id}>
               {item.relationship.name}
@@ -319,12 +345,14 @@ export function SharedProjectForm({
         </select>
         <span className="company-field-hint">
           {targets.length
-            ? `Invites ${targets.map((company) => company.displayName).join(", ")}`
-            : "Choose an active multi-Company Relationship."}
+            ? <span dir="auto">{t("forms.sharedProject.invites", {
+                companies: targets.map((company) => company.displayName).join(", "),
+              })}</span>
+            : t("forms.sharedProject.chooseActive")}
         </span>
       </div>
       <Button disabled={!relationshipId || targets.length === 0} type="submit">
-        Propose shared Project
+        {t("forms.sharedProject.submit")}
       </Button>
     </form>
   );
