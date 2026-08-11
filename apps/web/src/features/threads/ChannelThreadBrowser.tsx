@@ -1,11 +1,13 @@
 import { useMutation, useQuery } from 'convex/react'
 import { MessageSquare, Plus, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
 import type { Id } from '../../../../../convex/_generated/dataModel'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
+import { formatNumber, useLocale } from '#/i18n'
 import { useReleaseConfig } from '#/lib/release-config'
 import { threadHref, type RepresentedThreadContext } from './thread-navigation'
 
@@ -36,6 +38,8 @@ export function ChannelThreadBrowser({
   userId: Id<'users'>
   variant?: 'panel' | 'rail'
 }) {
+  const { locale } = useLocale()
+  const { t } = useTranslation('threads')
   const releaseConfig = useReleaseConfig()
   const [status, setStatus] = useState<'active' | 'archived'>('active')
   const [name, setName] = useState('')
@@ -88,7 +92,7 @@ export function ChannelThreadBrowser({
       groupId: item.groupId,
       messageId: item.messageId,
       threadId: item.threadId,
-      title: item.threadName ?? 'Thread reply',
+      title: item.threadName ?? t('browser.threadReply'),
       detail: `${item.preview} · ${item.groupName}`,
     }] : []),
     ...(searchResults?.files ?? []).flatMap((item) => item.threadId ? [{
@@ -97,9 +101,9 @@ export function ChannelThreadBrowser({
       messageId: item.messageId,
       threadId: item.threadId,
       title: item.title,
-      detail: `${item.threadName ?? 'Thread attachment'} · ${item.groupName}`,
+      detail: `${item.threadName ?? t('browser.threadAttachment')} · ${item.groupName}`,
     }] : []),
-  ], [searchResults])
+  ], [searchResults, t])
 
   if (!releaseConfig.threads) return null
 
@@ -122,49 +126,49 @@ export function ChannelThreadBrowser({
       })
       idempotencyKey.current = null
       window.location.assign(threadHref(projectId, groupId, threadId, context))
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't save")
+    } catch {
+      setError(t('errors.save'))
     } finally {
       setSaving(false)
     }
   }
 
   if (variant === 'rail') return (
-    <section aria-label="Channel threads" className="track-rail-thread-section">
-      <header><span>Threads</span></header>
-      {threads === undefined ? <p role="status">Loading threads…</p> : threads.length ? (
+    <section aria-label={t('browser.ariaLabel')} className="track-rail-thread-section">
+      <header><span>{t('browser.title')}</span></header>
+      {threads === undefined ? <p role="status">{t('browser.loading')}</p> : threads.length ? (
         <ul>{threads.slice(0, 4).map((item) => <li key={item.thread._id}><a href={threadHref(projectId, groupId, item.thread._id, context)}>
           <MessageSquare aria-hidden="true" size={13} />
-          <strong>{item.thread.name}</strong>
-          <span>{item.replyCount} {item.replyCount === 1 ? 'reply' : 'replies'}</span>
-          {item.unread ? <i aria-label="Unread thread" /> : null}
+          <strong dir="auto">{item.thread.name}</strong>
+          <span>{item.replyCount === 1 ? t('browser.replyOne', { count: formatNumber(locale, item.replyCount) }) : t('browser.replyMany', { count: formatNumber(locale, item.replyCount) })}</span>
+          {item.unread ? <i aria-label={t('browser.unreadAria')} /> : null}
         </a></li>)}</ul>
-      ) : <p className="track-rail-empty">No {status} threads.</p>}
+      ) : <p className="track-rail-empty">{t(status === 'active' ? 'browser.emptyActive' : 'browser.emptyArchived')}</p>}
       <details className="track-rail-thread-tools">
-        <summary><Search size={12} /> Find or start a thread</summary>
-        <div className="track-thread-tabs" role="tablist" aria-label="Thread status">
-          {(['active', 'archived'] as const).map((value) => <button aria-selected={status === value} className={status === value ? 'active' : ''} key={value} onClick={() => setStatus(value)} role="tab" type="button">{value}</button>)}
+        <summary><Search size={12} /> {t('browser.findOrStart')}</summary>
+        <div className="track-thread-tabs" role="tablist" aria-label={t('browser.statusAria')}>
+          {(['active', 'archived'] as const).map((value) => <button aria-selected={status === value} className={status === value ? 'active' : ''} key={value} onClick={() => setStatus(value)} role="tab" type="button">{value === 'active' ? t('browser.active') : t('browser.archived')}</button>)}
         </div>
-        <Input aria-label="Search Project threads and replies" onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search threads" value={searchQuery} />
-        {searchTerm.length >= 2 ? <ul className="track-thread-list">{searchRows.slice(0, 4).map((item) => <li key={item.id}><a href={threadHref(projectId, item.groupId, item.threadId, context, item.messageId)}><span><strong>{item.title}</strong><small>{item.detail}</small></span></a></li>)}</ul> : null}
+        <Input aria-label={t('browser.searchAria')} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('browser.searchPlaceholder')} value={searchQuery} />
+        {searchTerm.length >= 2 ? <ul className="track-thread-list">{searchRows.slice(0, 4).map((item) => <li key={item.id}><a href={threadHref(projectId, item.groupId, item.threadId, context, item.messageId)}><span><strong dir="auto">{item.title}</strong><small dir="auto">{item.detail}</small></span></a></li>)}</ul> : null}
         {!readOnly && status === 'active' ? <form className="track-thread-create" onSubmit={(event) => void submit(event)}>
-          <Input aria-label="Thread name" maxLength={100} onChange={(event) => setName(event.target.value)} placeholder="Thread name" required value={name} />
-          <label><span className="sr-only">Optional source message</span><select aria-label="Optional source message" onChange={(event) => setSourceMessageId(event.target.value as Id<'messages'> | '')} value={sourceMessageId}><option value="">Start directly in this Channel</option>{availableSources.map((item) => <option key={item.message._id} value={item.message._id}>{item.author?.displayName ?? 'Unknown member'}: {item.message.body || 'Attachment message'}</option>)}</select></label>
-          <Button disabled={saving || !name.trim()} size="sm" type="submit"><Plus size={12} /> {saving ? 'Starting…' : 'Start thread'}</Button>
+          <Input aria-label={t('browser.threadNameAria')} dir="auto" maxLength={100} onChange={(event) => setName(event.target.value)} placeholder={t('browser.threadNamePlaceholder')} required value={name} />
+          <label><span className="sr-only">{t('browser.optionalSourceAria')}</span><select aria-label={t('browser.optionalSourceAria')} onChange={(event) => setSourceMessageId(event.target.value as Id<'messages'> | '')} value={sourceMessageId}><option value="">{t('browser.startDirectly')}</option>{availableSources.map((item) => <option dir="auto" key={item.message._id} value={item.message._id}>{item.author?.displayName ?? t('browser.unknownMember')}: {item.message.body || t('browser.attachmentMessage')}</option>)}</select></label>
+          <Button disabled={saving || !name.trim()} size="sm" type="submit"><Plus size={12} /> {saving ? t('browser.starting') : t('browser.start')}</Button>
         </form> : null}
       </details>
-      {error ? <p className="track-error" role="alert">{error}. Retry keeps the same request.</p> : null}
+      {error ? <p className="track-error" role="alert">{t('browser.errorRetry', { error })}</p> : null}
     </section>
   )
 
   return (
-    <section className="track-channel-threads" aria-label="Channel threads">
+    <section className="track-channel-threads" aria-label={t('browser.ariaLabel')}>
       <header>
         <div>
-          <span className="mono-label">Threads</span>
-          <p>Focused conversations with the same Channel access.</p>
+          <span className="mono-label">{t('browser.title')}</span>
+          <p>{t('browser.description')}</p>
         </div>
-        <div className="track-thread-tabs" role="tablist" aria-label="Thread status">
+        <div className="track-thread-tabs" role="tablist" aria-label={t('browser.statusAria')}>
           {(['active', 'archived'] as const).map((value) => (
             <button
               aria-selected={status === value}
@@ -174,50 +178,50 @@ export function ChannelThreadBrowser({
               role="tab"
               type="button"
             >
-              {value === 'active' ? 'Active' : 'Archived'}
+              {value === 'active' ? t('browser.active') : t('browser.archived')}
             </button>
           ))}
         </div>
       </header>
 
       <Input
-        aria-label="Search Project threads and replies"
+        aria-label={t('browser.searchAria')}
         onChange={(event) => setSearchQuery(event.target.value)}
-        placeholder="Search Project threads and replies"
+        placeholder={t('browser.searchProjectPlaceholder')}
         value={searchQuery}
       />
 
       {searchTerm.length >= 2 ? searchResults === undefined ? (
-        <p role="status">Searching threads…</p>
+        <p role="status">{t('browser.searching')}</p>
       ) : searchRows.length === 0 ? (
-        <p className="track-thread-empty">No thread results for “{searchTerm}”.</p>
+        <p className="track-thread-empty" dir="auto">{t('browser.resultEmpty', { query: searchTerm })}</p>
       ) : (
-        <ul className="track-thread-list" aria-label="Thread search results">
+        <ul className="track-thread-list" aria-label={t('browser.searchResultsAria')}>
           {searchRows.map((item) => (
             <li key={item.id}>
               <a href={threadHref(projectId, item.groupId, item.threadId, context, item.messageId)}>
-                <span><strong>{item.title}</strong><small>{item.detail}</small></span>
+                <span><strong dir="auto">{item.title}</strong><small dir="auto">{item.detail}</small></span>
               </a>
             </li>
           ))}
         </ul>
       ) : threads === undefined ? (
-        <p role="status">Loading threads…</p>
+        <p role="status">{t('browser.loading')}</p>
       ) : threads.length === 0 ? (
-        <p className="track-thread-empty">No {status} threads.</p>
+        <p className="track-thread-empty">{t(status === 'active' ? 'browser.emptyActive' : 'browser.emptyArchived')}</p>
       ) : (
         <ul className="track-thread-list">
           {threads.map((item) => (
             <li key={item.thread._id}>
               <a href={threadHref(projectId, groupId, item.thread._id, context)}>
                 <span>
-                  <strong>{item.thread.name}</strong>
+                  <strong dir="auto">{item.thread.name}</strong>
                   <small>
-                    {item.replyCount} {item.replyCount === 1 ? 'reply' : 'replies'}
-                    {item.following ? ' · Following' : ''}
+                    {item.replyCount === 1 ? t('browser.replyOne', { count: formatNumber(locale, item.replyCount) }) : t('browser.replyMany', { count: formatNumber(locale, item.replyCount) })}
+                    {item.following ? ` · ${t('browser.following')}` : ''}
                   </small>
                 </span>
-                {item.unread ? <b aria-label="Unread thread">Unread</b> : null}
+                {item.unread ? <b aria-label={t('browser.unreadAria')}>{t('browser.unread')}</b> : null}
               </a>
             </li>
           ))}
@@ -227,34 +231,34 @@ export function ChannelThreadBrowser({
       {!readOnly && status === 'active' ? (
         <form className="track-thread-create" onSubmit={(event) => void submit(event)}>
           <Input
-            aria-label="Thread name"
+            aria-label={t('browser.threadNameAria')}
             maxLength={100}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Thread name"
+            placeholder={t('browser.threadNamePlaceholder')}
             required
             value={name}
           />
           <label>
-            <span className="sr-only">Optional source message</span>
+            <span className="sr-only">{t('browser.optionalSourceAria')}</span>
             <select
-              aria-label="Optional source message"
+              aria-label={t('browser.optionalSourceAria')}
               onChange={(event) => setSourceMessageId(event.target.value as Id<'messages'> | '')}
               value={sourceMessageId}
             >
-              <option value="">Start directly in this Channel</option>
+              <option value="">{t('browser.startDirectly')}</option>
               {availableSources.map((item) => (
                 <option key={item.message._id} value={item.message._id}>
-                  {item.author?.displayName ?? 'Unknown member'}: {item.message.body || 'Attachment message'}
+                  {item.author?.displayName ?? t('browser.unknownMember')}: {item.message.body || t('browser.attachmentMessage')}
                 </option>
               ))}
             </select>
           </label>
           <Button disabled={saving || !name.trim()} type="submit">
-            {saving ? 'Starting…' : 'Start thread'}
+            {saving ? t('browser.starting') : t('browser.start')}
           </Button>
         </form>
       ) : null}
-      {error ? <p className="track-error" role="alert">{error}. Retry keeps the same request.</p> : null}
+      {error ? <p className="track-error" role="alert">{t('browser.errorRetry', { error })}</p> : null}
     </section>
   )
 }

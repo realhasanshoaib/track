@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from 'convex/react'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
@@ -31,6 +32,7 @@ export function TaskCreateDialog({
   open: boolean
   projectId: Id<'projects'>
 }) {
+  const { t } = useTranslation('tasks')
   const createTask = useMutation(api.tasks.create)
   const [boardId, setBoardId] = useState('')
   const [title, setTitle] = useState('')
@@ -86,7 +88,7 @@ export function TaskCreateDialog({
       setLabelIds([])
       onCreated(result.publicKey)
     } catch (failure) {
-      setError(taskError(failure))
+      setError(taskError(failure, (key) => t(key)))
     } finally {
       setSaving(false)
     }
@@ -95,44 +97,52 @@ export function TaskCreateDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="task-create-dialog">
-        <DialogHeader><DialogTitle>Create task</DialogTitle><DialogDescription>Turn work into a durable Project task. Channel scope follows the selected board.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{t('create.title')}</DialogTitle><DialogDescription>{t('create.description')}</DialogDescription></DialogHeader>
         <form className="task-form" onSubmit={(event) => void submit(event)}>
-          <label>Title<Input autoFocus maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
-          <label>Description<Textarea maxLength={20_000} onChange={(event) => setDescription(event.target.value)} value={description} /></label>
+          <label>{t('create.titleLabel')}<Input autoFocus dir="auto" maxLength={180} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
+          <label>{t('create.descriptionLabel')}<Textarea dir="auto" maxLength={20_000} onChange={(event) => setDescription(event.target.value)} value={description} /></label>
           <div className="task-form-grid">
-            <label>Board<NativeSelect disabled={!boards.length} onChange={(event) => {
+            <label>{t('create.boardLabel')}<NativeSelect disabled={!boards.length} onChange={(event) => {
               const nextBoard = boards.find((item) => item.board._id === event.target.value)
               setBoardId(event.target.value)
               setWorkflowStateId(nextBoard?.states.find((item) => item.isDefault)?._id ?? nextBoard?.states[0]?._id ?? '')
             }} value={boardId}>
-              {!boards.length ? <NativeSelectOption value="">Project tasks (create automatically)</NativeSelectOption> : null}
-              {boards.map((item) => <NativeSelectOption key={item.board._id} value={item.board._id}>{item.board.name}</NativeSelectOption>)}
+              {!boards.length ? <NativeSelectOption value="">{t('create.projectTasksAutomatic')}</NativeSelectOption> : null}
+              {boards.map((item) => <NativeSelectOption dir="auto" key={item.board._id} value={item.board._id}>{item.board.name}</NativeSelectOption>)}
             </NativeSelect></label>
-            <label>Status<NativeSelect disabled={!board?.states.length} onChange={(event) => setWorkflowStateId(event.target.value)} value={workflowStateId}>
-              {board?.states.map((item) => <NativeSelectOption key={item._id} value={item._id}>{item.name}</NativeSelectOption>)}
+            <label>{t('create.statusLabel')}<NativeSelect disabled={!board?.states.length} onChange={(event) => setWorkflowStateId(event.target.value)} value={workflowStateId}>
+              {board?.states.map((item) => <NativeSelectOption dir="auto" key={item._id} value={item._id}>{item.name}</NativeSelectOption>)}
             </NativeSelect></label>
-            <label>Priority<NativeSelect onChange={(event) => setPriority(event.target.value as typeof priority)} value={priority}>
-              {['none', 'urgent', 'high', 'medium', 'low'].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}
+            <label>{t('create.priorityLabel')}<NativeSelect onChange={(event) => setPriority(event.target.value as typeof priority)} value={priority}>
+              {['none', 'urgent', 'high', 'medium', 'low'].map((value) => <NativeSelectOption key={value} value={value}>{t(`priority.${value}`)}</NativeSelectOption>)}
             </NativeSelect></label>
-            <label>Assignee<NativeSelect onChange={(event) => setAssignee(event.target.value)} value={assignee}>
-              <NativeSelectOption value="">Unassigned</NativeSelectOption>
-              {assignees?.map((item) => <NativeSelectOption key={item.member._id} value={item.member._id}>{item.user.displayName}{item.company ? ` · ${item.company.displayName}` : ''}</NativeSelectOption>)}
+            <label>{t('create.assigneeLabel')}<NativeSelect onChange={(event) => setAssignee(event.target.value)} value={assignee}>
+              <NativeSelectOption value="">{t('create.unassigned')}</NativeSelectOption>
+              {assignees?.map((item) => <NativeSelectOption dir="auto" key={item.member._id} value={item.member._id}>{item.user.displayName}{item.company ? ` · ${item.company.displayName}` : ''}</NativeSelectOption>)}
             </NativeSelect></label>
-            <label>Due date<Input onChange={(event) => setDueDate(event.target.value)} type="date" value={dueDate} /></label>
+            <label>{t('create.dueDateLabel')}<Input onChange={(event) => setDueDate(event.target.value)} type="date" value={dueDate} /></label>
           </div>
-          <fieldset><legend>Labels</legend><div className="task-detail-actions">{labels?.map((label) => <Button key={label._id} onClick={() => setLabelIds((current) => current.includes(label._id) ? current.filter((id) => id !== label._id) : [...current, label._id])} size="sm" type="button" variant={labelIds.includes(label._id) ? 'default' : 'outline'}>{label.name}</Button>)}</div></fieldset>
+          <fieldset><legend>{t('create.labels')}</legend><div className="task-detail-actions">{labels?.map((label) => <Button dir="auto" key={label._id} onClick={() => setLabelIds((current) => current.includes(label._id) ? current.filter((id) => id !== label._id) : [...current, label._id])} size="sm" type="button" variant={labelIds.includes(label._id) ? 'default' : 'outline'}>{label.name}</Button>)}</div></fieldset>
           {error ? <p className="task-form-error" role="alert">{error}</p> : null}
-          <DialogFooter><Button disabled={saving || !title.trim()} type="submit">{saving ? 'Creating…' : 'Create task'}</Button></DialogFooter>
+          <DialogFooter><Button disabled={saving || !title.trim()} type="submit">{saving ? t('create.creating') : t('create.create')}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   )
 }
 
-export function taskError(error: unknown) {
+export function taskError(error: unknown, translate?: (key: string) => string) {
   const message = error instanceof Error ? error.message : 'task_save_failed'
-  if (message.includes('task_conflict')) return 'This task changed while you were editing. Review the current values and try again.'
-  if (message.includes('task_access_changed')) return 'Task unavailable or access changed.'
-  if (message.includes('task_destination_invalid')) return 'The selected board or status is no longer available.'
+  const key = message.includes('task_conflict')
+    ? 'errors.conflict'
+    : message.includes('task_access_changed')
+      ? 'errors.accessChanged'
+      : message.includes('task_destination_invalid')
+        ? 'errors.destinationInvalid'
+        : 'errors.saveFailed'
+  if (translate) return translate(key)
+  if (key === 'errors.conflict') return 'This task changed while you were editing. Review the current values and try again.'
+  if (key === 'errors.accessChanged') return 'Task unavailable or access changed.'
+  if (key === 'errors.destinationInvalid') return 'The selected board or status is no longer available.'
   return "Couldn't save. Your draft is still here; retry when ready."
 }
