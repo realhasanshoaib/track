@@ -72,6 +72,25 @@ offline, denied, conflict, and read-only states without relying on color.
 - Announce async failures and significant state changes to assistive technology.
 - Keep references and permission explanations readable without hover.
 
+## Language and direction
+
+The web interface supports English and Modern Standard Arabic. Language controls
+show each language in its own name and never use national flags. The active
+locale owns root language, direction, and presentation formatting as one state;
+the interface never stores a separate RTL preference.
+
+Use logical CSS properties for layout edges, spacing, borders, and text alignment.
+Do not reverse every row or mirror every icon. Back, forward, collapse, and
+movement icons follow reading direction; play, pause, status, attachment, close,
+and product marks retain their normal form.
+
+Product-owned labels follow the interface direction. Messages, task text,
+evidence, filenames, and assistant output use natural direction. Email addresses,
+URLs, mentions, Channel references, task keys, IDs, and code stay isolated
+left-to-right so Arabic context cannot reorder their punctuation. Both directions
+must preserve keyboard order, visible focus, accessible names, and desktop and
+narrow-layout hierarchy.
+
 ## Product language
 
 Use the canonical nouns in [PRODUCT.md](./PRODUCT.md). Describe `@track` as an

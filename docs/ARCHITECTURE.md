@@ -10,7 +10,8 @@ Track is a pnpm monorepo with a TanStack Start web application, an Expo mobile a
 ## Runtime stack
 
 - Node.js 24, pnpm 10.19.0, TypeScript 7.0.2.
-- React 19, TanStack Start/Router, Vite, Tailwind CSS, and Base UI on web.
+- React 19, TanStack Start/Router, Vite, Tailwind CSS, Base UI, i18next, and
+  react-i18next on web.
 - Expo 55, Expo Router, and React Native on mobile.
 - Convex for persistence, realtime queries, files, scheduled jobs, search, and server functions.
 - Better Auth for sessions, OAuth, two-factor authentication, and the Convex auth bridge.
@@ -38,6 +39,31 @@ loading or offline startup.
 5. AI workflows assemble permission-filtered context, stream or persist results, and retain references.
 
 The schema in `convex/schema.ts` is the authoritative inventory of persisted data. Shared domain constants in `packages/shared/src/domain.ts` must match schema validators.
+
+## Web localization
+
+The web app bundles Git-owned English and Modern Standard Arabic catalogs. One
+typed locale registry owns each locale's self-name, text direction, and formatter
+locale. The active browser value is stored under `track:locale:v1`; it is not an
+account field and never reaches Convex. A root script applies language and
+direction before paint, while the React locale provider adopts the browser value
+after the stable English server render.
+
+English and Arabic namespaces must have the same keys, interpolation variables,
+and plural forms. The web i18n check enforces that shape without a runtime catalog
+backend. Browser language matching maps regional Arabic tags to generic `ar` for
+this release. Future `ar-SA` and `ar-AE` support requires separate registry values,
+catalogs, and switcher entries.
+
+Presentation formatters use the active locale, including `ar-u-nu-latn` for
+Arabic language rules with `0–9` digit glyphs. Machine dates, route values, IDs,
+and storage keys stay stable. Product chrome follows the locale direction;
+user-authored and model content keeps its natural direction, and technical tokens
+render as isolated left-to-right values.
+
+This boundary belongs to `apps/web`. Expo storage, native layout, and native
+release proof remain separate work, so the web implementation does not claim
+Arabic support on iOS or Android.
 
 ## Company collaboration and authorization
 

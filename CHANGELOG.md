@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-11
+
+### Added
+
+- Added bundled English and Modern Standard Arabic catalogs to the web app and
+  PWA, with a browser-local language control, locale-aware dates and numbers,
+  and an offline catalog gate.
+- Added Arabic right-to-left presentation across the web shell, conversation,
+  Company, task, thread, profile, settings, auth, support, and legal surfaces.
+
+### Changed
+
+- Web direction now comes from locale metadata, mixed user content keeps its
+  natural direction, and technical values remain isolated left-to-right.
+- Kept native iOS and Android localization outside this web release so browser
+  persistence and browser RTL proof are not presented as native support.
+
 ## 2026-07-30
 
 ### Added
