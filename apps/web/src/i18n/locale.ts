@@ -70,6 +70,10 @@ export function resolveBrowserLocale(
   return DEFAULT_LOCALE
 }
 
+export function resolveLocale(value: string | null | undefined): Locale {
+  return matchLocale(value) ?? DEFAULT_LOCALE
+}
+
 export function resolveInitialLocale(
   storedLocale: string | null | undefined,
   browserLanguages: readonly string[] | undefined,
