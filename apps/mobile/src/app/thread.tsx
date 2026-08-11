@@ -19,15 +19,17 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing, TouchTarget } from '@/constants/theme';
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useTheme } from '@/hooks/use-theme';
-import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
+import { channelHref } from '@/lib/company-navigation';
 import { hapticLight } from '@/lib/haptics';
 import { useReleaseConfig } from '@/lib/release-config';
 import type { MobileTaskIdentity } from '@/lib/task-navigation';
 import { threadConversationHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
+import { useTranslation } from 'react-i18next';
 
 export default function ThreadScreen() {
   const theme = useTheme();
+  const { t } = useTranslation('chat');
   const router = useRouter();
   const network = useNetworkState();
   const releaseConfig = useReleaseConfig();
@@ -162,8 +164,8 @@ export default function ThreadScreen() {
       sendKey.current = null;
       setComposer('');
       setReplyTo(null);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't save");
+    } catch {
+      setError(t('errors.save'));
     } finally {
       setBusy(false);
     }
@@ -171,10 +173,16 @@ export default function ThreadScreen() {
 
   async function pickAttachment(audioOnly = false) {
     if (!trackUserId || !pid || !gid || !tid || readOnly) return;
-    const picked = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      type: audioOnly ? 'audio/*' : '*/*',
-    });
+    let picked: Awaited<ReturnType<typeof DocumentPicker.getDocumentAsync>>;
+    try {
+      picked = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: audioOnly ? 'audio/*' : '*/*',
+      });
+    } catch {
+      setError(t('errors.uploadBody'));
+      return;
+    }
     if (picked.canceled || !picked.assets[0]) return;
     const file = picked.assets[0];
     setBusy(true);
@@ -187,7 +195,7 @@ export default function ThreadScreen() {
       const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': contentType }, body: blob });
       if (!response.ok) throw new Error('upload_failed');
       const { storageId } = await response.json() as { storageId: Id<'_storage'> };
-      const body = composer.trim() || (audioOnly ? 'Sent a voice note.' : `Attached ${file.name}`);
+      const body = composer.trim() || (audioOnly ? t('composer.voiceNoteSent') : t('composer.attached', { filename: file.name }));
       const messageId = await sendMessage({
         projectId: pid,
         groupId: gid,
@@ -206,8 +214,8 @@ export default function ThreadScreen() {
       sendKey.current = null;
       setComposer('');
       setReplyTo(null);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't save");
+    } catch {
+      setError(t('errors.save'));
     } finally {
       setBusy(false);
     }
@@ -216,9 +224,9 @@ export default function ThreadScreen() {
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
-      ...(!readOnly && actionTarget.kind === 'message' ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
+      ...(!readOnly && actionTarget.kind === 'message' ? [{ label: t('actions.reply'), icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
-        label: 'Create task',
+        label: t('actions.createTask'),
         icon: 'plus' as const,
         onPress: () => {
           if (!pid || !gid) return;
@@ -229,13 +237,13 @@ export default function ThreadScreen() {
           void createTask({
             projectId: pid,
             groupId: gid,
-            title: source.trim().slice(0, 180) || 'Follow up',
+            title: source.trim().slice(0, 180) || t('actions.followUp'),
             priority: 'none',
             references: [reference],
             idempotencyKey: `${actionTarget.key}:${Date.now()}`,
             actingCompanyId: cid,
             projectMemberId: pmid,
-          });
+          }).catch(() => setError(t('errors.task')));
         },
       }] : []),
       ...(!readOnly &&
@@ -243,17 +251,17 @@ export default function ThreadScreen() {
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
-        label: 'Delete message',
+        label: t('actions.deleteMessage'),
         icon: 'trash-can-outline' as const,
         destructive: true,
         onPress: () => {
           Alert.alert(
-            'Delete message?',
-            'This can’t be undone.',
+            t('alerts.deleteTitle'),
+            t('alerts.deleteBody'),
             [
-              { text: 'Cancel', style: 'cancel' },
+              { text: t('alerts.cancel'), style: 'cancel' },
               {
-                text: 'Delete',
+                text: t('alerts.delete'),
                 style: 'destructive',
                 onPress: () => {
                   setBusy(true);
@@ -265,9 +273,9 @@ export default function ThreadScreen() {
                     projectMemberId: pmid,
                   }).then(() => {
                     setReplyTo((current) => current?.message._id === actionTarget.item.message._id ? null : current);
-                    setNotice('Message deleted.');
-                  }).catch((caught) => {
-                    setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't delete message");
+                    setNotice(t('thread.deleted'));
+                  }).catch(() => {
+                    setError(t('errors.delete'));
                   }).finally(() => setBusy(false));
                 },
               },
@@ -275,7 +283,7 @@ export default function ThreadScreen() {
           );
         },
       }] : []),
-      { label: 'Report', icon: 'trash-can-outline' as const, destructive: true, onPress: () => {
+      { label: t('actions.report'), icon: 'trash-can-outline' as const, destructive: true, onPress: () => {
         if (!trackUserId || !pid) return;
         void createReport({
           projectId: pid,
@@ -286,10 +294,10 @@ export default function ThreadScreen() {
           targetMessageId: actionTarget.kind === 'message' ? actionTarget.item.message._id : undefined,
           targetAssistantStreamId: actionTarget.kind === 'assistant' ? actionTarget.stream._id : undefined,
           reason: 'other',
-        });
+        }).then(() => setNotice(t('report.submitted'))).catch(() => setError(t('errors.reportBody')));
       } },
     ];
-  }, [actionTarget, cid, createReport, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, trackUserId]);
+  }, [actionTarget, cid, createReport, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, t, trackUserId]);
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
     if (item.kind === 'date-sep') return null;
@@ -315,10 +323,10 @@ export default function ThreadScreen() {
     setError(null);
     try {
       await setFollowing({ ...queryArgs, following: !thread.following });
-      setNotice(thread.following ? 'Thread unfollowed.' : 'Thread followed.');
+      setNotice(thread.following ? t('thread.unfollowed') : t('thread.followed'));
       setToolsOpen(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't update follow state");
+    } catch {
+      setError(t('errors.follow'));
     }
   }
 
@@ -327,10 +335,10 @@ export default function ThreadScreen() {
     setError(null);
     try {
       const result = await setStatus({ ...queryArgs, expectedRevision: thread.thread.revision, status: thread.thread.status === 'active' ? 'archived' : 'active' });
-      setNotice(result.conflict ? 'Thread changed elsewhere. Refreshed current state.' : result.status === 'archived' ? 'Thread archived.' : 'Thread reopened.');
+      setNotice(result.conflict ? t('thread.conflictStatus') : result.status === 'archived' ? t('thread.archived') : t('thread.reopened'));
       setToolsOpen(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't update thread");
+    } catch {
+      setError(t('errors.status'));
     }
   }
 
@@ -339,30 +347,30 @@ export default function ThreadScreen() {
     setError(null);
     try {
       const result = await rename({ ...queryArgs, expectedRevision: thread.thread.revision, name: renameValue });
-      setNotice(result.conflict ? 'Thread changed elsewhere. Refresh and retry.' : 'Thread renamed.');
+      setNotice(result.conflict ? t('thread.conflictRename') : t('thread.renamed'));
       setToolsOpen(false);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message.replaceAll('_', ' ') : "Couldn't rename thread");
+    } catch {
+      setError(t('errors.rename'));
     }
   }
 
   if (!releaseConfig.threads || (navigation && !navigation.available) || thread === null) {
-    return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Thread unavailable' }} /><EmptyState body={navigationUnavailableCopy(Boolean(cid))} icon="forum-outline" title="Thread unavailable or access changed" /></ThemedView>;
+    return <ThemedView style={styles.screen}><Stack.Screen options={{ title: t('thread.unavailableTitle') }} /><EmptyState body={cid ? t('channel.navigationCompany') : t('channel.navigationProject')} icon="forum-outline" title={t('thread.unavailableTitle')} /></ThemedView>;
   }
   if ((network.isConnected === false || network.isInternetReachable === false) && thread === undefined) {
     return <ThemedView style={styles.screen}>
-      <Stack.Screen options={{ title: 'Thread unavailable' }} />
-      <EmptyState body="You're offline and this thread isn't available on this device." icon="forum-outline" title="Offline unavailable" />
+      <Stack.Screen options={{ title: t('thread.unavailableTitle') }} />
+      <EmptyState body={t('thread.offlineBody')} icon="forum-outline" title={t('thread.offlineTitle')} />
       <Pressable
         accessibilityRole="button"
         onPress={() => pid && gid && tid && router.replace(threadConversationHref(pid, gid, tid, context, targetMessageId) as never)}
         style={[styles.retry, { backgroundColor: theme.accent }]}>
-        <ThemedText style={{ color: '#1b1917' }} type="smallBold">Retry</ThemedText>
+        <ThemedText style={{ color: '#1b1917' }} type="smallBold">{t('thread.retry')}</ThemedText>
       </Pressable>
     </ThemedView>;
   }
   if (!trackUserId || navigation === undefined || thread === undefined) {
-    return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Thread' }} /><EmptyState body="Opening the authorized conversation…" icon="forum-outline" title="Loading thread" /></ThemedView>;
+    return <ThemedView style={styles.screen}><Stack.Screen options={{ title: t('thread.title') }} /><EmptyState body={t('thread.loadingBody')} icon="forum-outline" title={t('thread.loadingTitle')} /></ThemedView>;
   }
   const source = thread.source
 
@@ -370,7 +378,7 @@ export default function ThreadScreen() {
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{
         title: thread.thread.name,
-        headerRight: () => <Pressable accessibilityLabel="Thread options" hitSlop={8} onPress={() => setToolsOpen(true)} style={styles.headerButton}><PlatformIcon color={theme.text} name="dots-horizontal" size={22} /></Pressable>,
+        headerRight: () => <Pressable accessibilityLabel={t('thread.options')} hitSlop={8} onPress={() => setToolsOpen(true)} style={styles.headerButton}><PlatformIcon color={theme.text} name="dots-horizontal" size={22} /></Pressable>,
       }} />
       {source ? <Pressable
         onPress={() => pid && gid && router.push(channelHref(
@@ -380,12 +388,12 @@ export default function ThreadScreen() {
           'unavailable' in source ? undefined : source.messageId,
         ) as never)}
         style={[styles.source, { backgroundColor: theme.backgroundElement }]}>
-        <ThemedText type="code">REFERENCE MESSAGE</ThemedText>
-        <ThemedText numberOfLines={2} type="small">{'unavailable' in source ? 'Reference message unavailable.' : source.body || 'Attachment message'}</ThemedText>
+        <ThemedText type="code">{t('thread.referenceLabel')}</ThemedText>
+        <ThemedText contentDirection="auto" numberOfLines={2} type="small">{'unavailable' in source ? t('thread.referenceUnavailable') : source.body || t('thread.attachmentMessage')}</ThemedText>
       </Pressable> : null}
       {notice ? <ThemedText accessibilityLiveRegion="polite" style={styles.notice} type="small">{notice}</ThemedText> : null}
-      {error ? <ThemedText accessibilityLiveRegion="assertive" style={styles.error} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
-      {readOnly ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Archived thread</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">This conversation is read-only.</ThemedText></View> : null}
+      {error ? <ThemedText accessibilityLiveRegion="assertive" style={styles.error} type="small">{t('errors.unsentReply', { error })}</ThemedText> : null}
+      {readOnly ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">{t('archive.threadTitle')}</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">{t('archive.threadBody')}</ThemedText></View> : null}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <FlatList
           contentContainerStyle={styles.list}
@@ -394,13 +402,13 @@ export default function ThreadScreen() {
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.key}
           ListEmptyComponent={messagePageStatus === 'LoadingFirstPage'
-            ? <ThemedText style={{ color: theme.textSecondary, padding: Spacing.three }}>Loading replies…</ThemedText>
-            : <EmptyState body="Start the focused conversation." icon="forum-outline" title="No replies yet" />}
+            ? <ThemedText style={{ color: theme.textSecondary, padding: Spacing.three }}>{t('thread.loadingReplies')}</ThemedText>
+            : <EmptyState body={t('thread.noRepliesBody')} icon="forum-outline" title={t('thread.noRepliesTitle')} />}
           ListHeaderComponent={messagePageStatus === 'CanLoadMore' ? <Pressable
             accessibilityRole="button"
             onPress={() => loadMoreMessages(50)}
             style={styles.loadMore}>
-            <ThemedText type="smallBold">Load older replies</ThemedText>
+            <ThemedText type="smallBold">{t('thread.loadOlder')}</ThemedText>
           </Pressable> : null}
           onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 }))}
           ref={listRef}
@@ -420,18 +428,18 @@ export default function ThreadScreen() {
           value={composer}
         /> : null}
       </KeyboardAvoidingView>
-      <OptionsSheet onClose={() => setToolsOpen(false)} title="Thread" visible={toolsOpen}>
+      <OptionsSheet onClose={() => setToolsOpen(false)} title={t('thread.title')} visible={toolsOpen}>
         <SheetSection>
-          {!navigation.archived ? <SheetRow label={thread.following ? 'Unfollow' : 'Follow'} icon="bell-outline" onPress={() => void changeFollowing()} /> : null}
+          {!navigation.archived ? <SheetRow label={thread.following ? t('thread.unfollow') : t('thread.follow')} icon="bell-outline" onPress={() => void changeFollowing()} /> : null}
           {thread.canManage && !navigation.archived ? <SheetRow
-            label={thread.thread.status === 'active' ? 'Archive' : 'Reopen'}
+            label={thread.thread.status === 'active' ? t('thread.archive') : t('thread.reopen')}
             icon="clock-outline"
             onPress={() => void changeStatus()}
           /> : null}
         </SheetSection>
-        {thread.canManage && !navigation.archived ? <SheetSection title="Rename">
-          <SheetInput label="THREAD NAME" onChangeText={setRenameValue} value={renameValue} />
-          <SheetRow label="Save name" icon="check-circle" onPress={() => void saveRename()} />
+        {thread.canManage && !navigation.archived ? <SheetSection title={t('thread.renameSection')}>
+          <SheetInput label={t('thread.nameLabel')} onChangeText={setRenameValue} value={renameValue} />
+          <SheetRow label={t('thread.saveName')} icon="check-circle" onPress={() => void saveRename()} />
         </SheetSection> : null}
       </OptionsSheet>
       <MessageActions actions={messageActions} onClose={() => setActionsOpen(false)} visible={actionsOpen} />
@@ -448,6 +456,7 @@ const styles = StyleSheet.create({
   loadMore: { alignItems: 'center', minHeight: TouchTarget, justifyContent: 'center', padding: Spacing.two },
   notice: { color: '#166534', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   retry: { alignItems: 'center', alignSelf: 'center', borderRadius: 9, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.four },
+  rtlRow: { flexDirection: 'row-reverse' },
   screen: { flex: 1 },
   source: { gap: 3, margin: Spacing.three, marginBottom: 0, padding: Spacing.three, borderRadius: 10 },
 });

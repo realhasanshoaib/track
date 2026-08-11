@@ -10,8 +10,10 @@ import { ColoredAvatar } from '@/components/colored-avatar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { formatDuration, formatFileSize, formatNumber, formatTime, useLocale } from '@/i18n';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from 'react-i18next';
 
 export type DetailedMessage = {
   message: Doc<'messages'>;
@@ -72,12 +74,12 @@ function AnimatedDots() {
 
 function HighlightedText({ body }: { body: string }) {
   const theme = useTheme();
-  const parts = body.split(/(@\w+)/g);
+  const parts = body.split(/(@[\w.-]+|https?:\/\/\S+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})/g);
   return (
-    <ThemedText type="small">
+    <ThemedText contentDirection="auto" type="small">
       {parts.map((part, i) =>
-        part.startsWith('@') ? (
-          <ThemedText key={i} style={{ color: theme.accent, fontWeight: '600' }} type="small">
+        part.startsWith('@') || part.startsWith('http://') || part.startsWith('https://') || /^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(part) ? (
+          <ThemedText contentDirection="ltr" key={i} style={{ color: theme.accent, fontWeight: '600' }} type="small">
             {part}
           </ThemedText>
         ) : (
@@ -90,17 +92,24 @@ function HighlightedText({ body }: { body: string }) {
 
 export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onSwipeReply }: Props) {
   const theme = useTheme();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('chat');
+  const isRtl = direction === 'rtl';
   const translateX = useSharedValue(0);
 
   const gesture = Gesture.Pan()
     .activeOffsetX([-10, 10])
     .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = Math.min(e.translationX, 80);
+      const logicalTranslation = isRtl ? -e.translationX : e.translationX;
+      if (logicalTranslation > 0) {
+        translateX.value = Math.min(logicalTranslation, 80);
+      } else {
+        translateX.value = 0;
       }
     })
     .onEnd((e) => {
-      if (e.translationX > 60 && onSwipeReply) {
+      const logicalTranslation = isRtl ? -e.translationX : e.translationX;
+      if (logicalTranslation > 60 && onSwipeReply) {
         translateX.value = withSpring(0, { damping: 20 });
         runOnJS(onSwipeReply)();
       } else {
@@ -109,7 +118,7 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
     });
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
+    transform: [{ translateX: isRtl ? -translateX.value : translateX.value }],
   }));
 
   const replyIconStyle = useAnimatedStyle(() => ({
@@ -118,6 +127,7 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
 
   const rowStyle = [
     styles.row,
+    isRtl && styles.rtlRow,
     !isFirstInGroup && styles.rowGrouped,
   ];
 
@@ -134,10 +144,10 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
           )}
           <View style={styles.body}>
             {isFirstInGroup && (
-              <View style={styles.meta}>
-                <ThemedText type="smallBold">Track Assistant</ThemedText>
-                <ThemedText style={{ color: theme.textSecondary }} type="code">
-                  {fmtTime(item.stream.createdAt)}
+              <View style={[styles.meta, isRtl && styles.rtlRow]}>
+                <ThemedText type="smallBold">{t('assistant.name')}</ThemedText>
+                <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">
+                  {formatTime(locale, item.stream.createdAt)}
                 </ThemedText>
               </View>
             )}
@@ -145,17 +155,19 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
               <View style={styles.thinkingWrap}>
                 <AnimatedDots />
                 <ThemedText style={styles.thinkingLabel} themeColor="textSecondary" type="code">
-                  Track is thinking…
+                  {t('assistant.thinking')}
                 </ThemedText>
               </View>
             ) : (
-              <HighlightedText body={item.stream.answer || item.stream.status} />
+              <HighlightedText body={item.stream.answer || (item.stream.status === 'failed' ? t('assistant.failed') : t('assistant.completed'))} />
             )}
             {item.stream.evidence.length > 0 ? (
-              <View style={styles.evidenceRow}>
+              <View style={[styles.evidenceRow, isRtl && styles.rtlRow]}>
                 {item.stream.evidence.slice(0, 3).map((_, i) => (
                   <View key={i} style={[styles.evidenceChip, { backgroundColor: theme.accentSoft }]}>
-                    <ThemedText style={{ color: theme.accent }} type="code">Reference {i + 1}</ThemedText>
+                    <ThemedText contentDirection="ltr" style={{ color: theme.accent }} type="code">
+                      {t('assistant.reference', { count: formatNumber(locale, i + 1) })}
+                    </ThemedText>
                   </View>
                 ))}
               </View>
@@ -165,7 +177,7 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
       );
     }
 
-    const name = item.item.author?.displayName ?? 'Member';
+    const name = item.item.author?.displayName ?? t('composer.member');
     const authorId = item.item.author?._id ?? name;
     return (
       <Pressable hitSlop={4} onLongPress={onLongPress} style={rowStyle}>
@@ -181,46 +193,46 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
         ]}>
           <View style={styles.body}>
             {isFirstInGroup && (
-              <View style={styles.meta}>
-                <View style={styles.metaLeft}>
-                <ThemedText numberOfLines={1} style={styles.authorName} type="smallBold">{name}</ThemedText>
+              <View style={[styles.meta, isRtl && styles.rtlRow]}>
+                <View style={[styles.metaLeft, isRtl && styles.rtlRow]}>
+                <ThemedText contentDirection="auto" numberOfLines={1} style={styles.authorName} type="smallBold">{name}</ThemedText>
                   {item.item.authorRole ? (
                     <View style={[styles.roleChip, { backgroundColor: theme.backgroundElement }]}>
-                  <ThemedText numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
+                  <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
                         {item.item.authorRole}
                       </ThemedText>
                     </View>
                   ) : null}
                   {item.item.authorCompany ? (
                     <View style={[styles.roleChip, { backgroundColor: theme.accentSoft }]}>
-                      <ThemedText numberOfLines={1} style={{ color: theme.accent }} type="code">
+                      <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.accent }} type="code">
                         {item.item.authorCompany.displayName}
                       </ThemedText>
                     </View>
                   ) : null}
                 </View>
-                <ThemedText style={{ color: theme.textSecondary }} type="code">
-                  {fmtTime(item.item.message.createdAt)}
+                <ThemedText contentDirection="ltr" style={{ color: theme.textSecondary }} type="code">
+                  {formatTime(locale, item.item.message.createdAt)}
                 </ThemedText>
               </View>
             )}
 
             {item.item.replyTo ? (
-              <View style={[styles.quote, { borderLeftColor: theme.accent }]}>
-                <ThemedText style={{ color: theme.textSecondary }} type="code">
+              <View style={[styles.quote, isRtl ? styles.quoteRtl : styles.quoteLtr, { borderLeftColor: isRtl ? undefined : theme.accent, borderRightColor: isRtl ? theme.accent : undefined }]}>
+                <ThemedText contentDirection="auto" style={{ color: theme.textSecondary }} type="code">
                   {item.item.replyTo.authorName}
                 </ThemedText>
-                <ThemedText numberOfLines={2} type="small">{item.item.replyTo.body}</ThemedText>
+                <ThemedText contentDirection="auto" numberOfLines={2} type="small">{item.item.replyTo.body}</ThemedText>
               </View>
             ) : null}
 
             <HighlightedText body={item.item.message.body} />
 
             {item.item.channelThread ? (
-              <View style={[styles.threadChip, { backgroundColor: theme.accentSoft }]}>
+              <View style={[styles.threadChip, { backgroundColor: theme.accentSoft }, isRtl && styles.rtlRow]}>
                 <PlatformIcon color={theme.accent} name="forum-outline" size={14} />
-                <ThemedText numberOfLines={1} style={{ color: theme.accent }} type="code">
-                  {item.item.channelThread.name} · {item.item.channelThread.replyCount} {item.item.channelThread.replyCount === 1 ? 'reply' : 'replies'}
+                <ThemedText contentDirection="auto" numberOfLines={1} style={{ color: theme.accent }} type="code">
+                  {item.item.channelThread.name} · {t('threads.replyCount', { count: item.item.channelThread.replyCount, formattedCount: formatNumber(locale, item.item.channelThread.replyCount) })}
                 </ThemedText>
               </View>
             ) : null}
@@ -229,10 +241,10 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
               attachment.kind === 'voice_note' && url ? (
                 <VoiceRow attachment={attachment} key={attachment._id} url={url} />
               ) : (
-                <View key={attachment._id} style={[styles.fileChip, { backgroundColor: theme.backgroundElement }]}>
+                <View key={attachment._id} style={[styles.fileChip, { backgroundColor: theme.backgroundElement }, isRtl && styles.rtlRow]}>
                   <PlatformIcon color={theme.textSecondary} name="paperclip" size={14} />
-                  <ThemedText numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
-                    {attachment.filename}
+                  <ThemedText contentDirection="ltr" numberOfLines={1} style={{ color: theme.textSecondary }} type="code">
+                    {attachment.filename} · {formatFileSize(locale, attachment.size)}
                   </ThemedText>
                 </View>
               )
@@ -246,7 +258,7 @@ export function ThreadRow({ item, isFirstInGroup, isOwnMessage, onLongPress, onS
   return (
     <GestureDetector gesture={gesture}>
       <View style={styles.swipeContainer}>
-        <Animated.View style={[styles.replyIconContainer, replyIconStyle]}>
+        <Animated.View style={[styles.replyIconContainer, isRtl ? styles.replyIconRight : styles.replyIconLeft, replyIconStyle]}>
           <PlatformIcon color={theme.accent} name="arrow-up" size={20} />
         </Animated.View>
         <Animated.View style={animatedStyle}>
@@ -262,7 +274,7 @@ export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.dateSep}>
       <ThemedText style={[styles.dateSepLabel, { color: theme.textSecondary }]} type="code">
-        {label.toUpperCase()}
+        {label.toLocaleUpperCase()}
       </ThemedText>
     </View>
   );
@@ -270,6 +282,8 @@ export function DateSeparator({ label }: { label: string }) {
 
 function VoiceRow({ attachment, url }: { attachment: Doc<'attachments'>; url: string }) {
   const theme = useTheme();
+  const { direction, locale } = useLocale();
+  const { t } = useTranslation('chat');
   const player = useAudioPlayer(url);
   const status = useAudioPlayerStatus(player);
   const playing = status.playing;
@@ -285,17 +299,23 @@ function VoiceRow({ attachment, url }: { attachment: Doc<'attachments'>; url: st
           player.play();
         }
       }}
-      style={[styles.voiceChip, { backgroundColor: theme.accentSoft }]}>
+      style={[styles.voiceChip, { backgroundColor: theme.accentSoft }, direction === 'rtl' && styles.rtlRow]}>
       <PlatformIcon color={theme.accent} name={playing ? 'stop' : 'microphone-outline'} size={16} />
-      <ThemedText style={{ color: theme.accent }} type="code">
-        {attachment.durationMs ? `${Math.round(attachment.durationMs / 1000)}s voice note` : 'Voice note'}
+      <ThemedText contentDirection="ltr" style={{ color: theme.accent }} type="code">
+        {attachment.durationMs
+          ? t('voice.duration', { count: Math.max(0, Math.round(attachment.durationMs / 1000)), duration: formatDuration(locale, Math.max(0, Math.round(attachment.durationMs / 1000))) })
+          : t('composer.voiceNote')}
       </ThemedText>
     </Pressable>
   );
 }
 
-export function fmtTime(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+export function fmtTime(ts: number): string;
+export function fmtTime(locale: string, ts: number): string;
+export function fmtTime(localeOrTimestamp: string | number, timestamp?: number) {
+  const locale = typeof localeOrTimestamp === 'string' ? localeOrTimestamp : 'en';
+  const ts = typeof localeOrTimestamp === 'number' ? localeOrTimestamp : timestamp ?? 0;
+  return formatTime(locale as Parameters<typeof formatTime>[0], ts);
 }
 
 export function resolveMentionIds(body: string, members: ProjectMemberRow[]) {
@@ -371,16 +391,21 @@ const styles = StyleSheet.create({
   meta: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minWidth: 0 },
   metaLeft: { alignItems: 'center', flex: 1, flexDirection: 'row', flexShrink: 1, gap: Spacing.two, minWidth: 0 },
   quote: {
-    borderLeftWidth: 3, borderRadius: 4, gap: 2,
+    borderRadius: 4, gap: 2,
     marginTop: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: 4,
   },
+  quoteLtr: { borderLeftWidth: 3 },
+  quoteRtl: { borderRightWidth: 3 },
   roleChip: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 },
   row: {
     flexDirection: 'row', gap: Spacing.three,
     paddingHorizontal: Spacing.three, paddingVertical: Spacing.two,
   },
+  rtlRow: { flexDirection: 'row-reverse' },
   rowGrouped: { paddingVertical: Spacing.one },
-  replyIconContainer: { position: 'absolute', left: Spacing.three, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', width: 40 },
+  replyIconContainer: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', width: 40 },
+  replyIconLeft: { left: Spacing.three },
+  replyIconRight: { right: Spacing.three },
   swipeContainer: { position: 'relative' },
   voiceChip: {
     alignItems: 'center', alignSelf: 'flex-start', borderRadius: 8,
