@@ -130,8 +130,9 @@ current tab.
 
 The Expo app resolves its first locale in this order:
 
-1. A canonical device-local value under `track:locale:v1`, stored through the
-   existing platform storage adapter.
+1. A canonical device-local value under `track.locale.v1`, stored through the
+   existing platform storage adapter. The native key uses dots because Expo
+   SecureStore rejects the colon used by the web local-storage key.
 2. The first supported `expo-localization` device language, with regional Arabic
    tags mapped to generic `ar` for this release.
 3. English.
@@ -141,8 +142,10 @@ configuration. A locale provider loads before the routed app. When a native
 switch changes between `ltr` and `rtl`, it saves the locale, applies
 `I18nManager.allowRTL` and `I18nManager.forceRTL`, and reloads the app once through
 Expo's built-in `reloadAppAsync`. The provider compares desired and active native
-direction before reloading, so startup cannot enter a reload loop. A
-same-direction locale change does not need a native reload.
+direction before reloading. Startup reapplies a mismatched native direction flag
+without requesting a second reload, so runtimes such as Expo Go that ignore
+`forceRTL` cannot enter a reload loop. A same-direction locale change does not
+need a native reload.
 
 ### Arabic language and review
 
@@ -403,7 +406,29 @@ Lane contracts:
   accepted Arabic copy fixes.
 - [ ] G: Pass catalog checks, focused tests, full remote gate, and local browser
   proof in both directions.
-- [ ] C: Update maintained docs and changelog, stage only this scope, and commit.
+- [x] C: Update maintained docs and changelog, stage only this scope, and commit.
+
+## Verification record (2026-08-12)
+
+- A clean Node 24 install on the M4 verifier passed lint, typecheck, the complete
+  test command, and build. The catalog check covered 18 web catalog files and 50
+  opted-in source files; the mobile suite passed 48 tests in 12 files.
+- `pnpm audit --prod` reported the repository's unchanged baseline of 17
+  advisories: 1 low, 8 moderate, 8 high, and 0 critical. This is the only
+  non-zero command in the required automated gate.
+- A clean-install web development server returned HTTP 200 for `/` and emitted
+  `<html lang="en" dir="ltr">`. Pinning separate `react-i18next` patch versions
+  keeps its React peer aligned with web React 19.2.7 and Expo React 19.2.0 under
+  the repository's hoisted pnpm layout.
+- Expo Go on the iOS simulator switched English to Arabic, reloaded into native
+  RTL, retained the device-local locale, rendered the reviewed Arabic sign-in
+  copy, and switched back to English. The SecureStore-compatible key is
+  `track.locale.v1`; startup reapplies a mismatched native flag without entering
+  a reload loop.
+- Interactive web proof in both directions remains open because no controllable
+  browser session was attached and the local browser host registration was
+  stale. Android native visual proof was not run. These two visual checks keep G
+  open; they do not change the completed catalog, runtime, or AI-review scope.
 
 ## Anti-slop rules
 

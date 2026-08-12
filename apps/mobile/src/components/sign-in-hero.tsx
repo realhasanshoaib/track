@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -25,6 +26,7 @@ import trackMarkReversedImage from '@/assets/images/track-mark-reversed.png';
  */
 export function SignInHero() {
   const theme = useTheme();
+  const { t } = useTranslation('common');
   const { theme: themeName } = useThemeOverride();
   const markSource = themeName === 'dark' ? trackMarkReversedImage : trackMarkImage;
 
@@ -56,7 +58,7 @@ export function SignInHero() {
         </View>
         <ThemedText style={styles.name}>Track</ThemedText>
         <ThemedText style={[styles.tagline, { color: theme.textSecondary }]} type="small">
-          Project communication that keeps teams aligned
+          {t('auth.tagline')}
         </ThemedText>
       </View>
     </View>

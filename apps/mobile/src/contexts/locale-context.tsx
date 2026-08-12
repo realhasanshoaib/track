@@ -85,15 +85,23 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const reloadGuard = useRef(false);
 
-  const reconcileNativeDirection = useCallback(async (nextLocale: Locale) => {
+  const reconcileNativeDirection = useCallback(async (
+    nextLocale: Locale,
+    reloadAfterChange: boolean,
+  ) => {
     if (Platform.OS === 'web') return;
 
     const shouldUseRtl = getDirection(nextLocale) === 'rtl';
-    if (I18nManager.isRTL === shouldUseRtl || reloadGuard.current) return;
+    if (I18nManager.isRTL === shouldUseRtl) return;
 
-    reloadGuard.current = true;
     I18nManager.allowRTL(shouldUseRtl);
     I18nManager.forceRTL(shouldUseRtl);
+    // A user-initiated direction change reloads once. Startup only reapplies the
+    // saved native flag: Expo Go may ignore forceRTL, so reloading again during
+    // bootstrap would create an infinite restart loop.
+    if (!reloadAfterChange || reloadGuard.current) return;
+
+    reloadGuard.current = true;
     try {
       await reloadAppAsync();
     } catch {
@@ -111,7 +119,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
       setLocaleState(initialLocale);
       applyDocumentLocale(initialLocale);
-      await reconcileNativeDirection(initialLocale);
+      await reconcileNativeDirection(initialLocale, false);
       if (mounted) setIsReady(true);
     }
 
@@ -133,7 +141,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     await initializeI18n(nextLocale);
     setLocaleState(nextLocale);
     applyDocumentLocale(nextLocale);
-    await reconcileNativeDirection(nextLocale);
+    await reconcileNativeDirection(nextLocale, true);
   }, [reconcileNativeDirection]);
 
   const value = useMemo<LocaleContextValue>(() => ({

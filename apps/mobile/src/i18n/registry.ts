@@ -1,7 +1,10 @@
 import enCommon from '@/i18n/locales/en/common.json';
 import arCommon from '@/i18n/locales/ar/common.json';
 
-export const LOCALE_STORAGE_KEY = 'track:locale:v1';
+// Expo SecureStore only accepts alphanumeric characters, dots, dashes, and
+// underscores in keys. Keep the browser key separate because its colon-based
+// Ava contract is valid in localStorage but rejected on native platforms.
+export const LOCALE_STORAGE_KEY = 'track.locale.v1';
 
 export const LOCALES = ['en', 'ar'] as const;
 export type Locale = (typeof LOCALES)[number];

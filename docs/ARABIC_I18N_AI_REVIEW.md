@@ -26,8 +26,8 @@ or rely on a human translator.
 | Surface | Namespaces | English keys | Arabic keys |
 | --- | ---: | ---: | ---: |
 | Web | 9 | 1,075 | 1,075 |
-| Expo mobile | 3 | 530 | 530 |
-| Total | 12 | 1,605 | 1,605 |
+| Expo mobile | 3 | 531 | 531 |
+| Total | 12 | 1,606 | 1,606 |
 
 The final parity checks found no missing keys, extra keys, empty values, or
 interpolation-variable mismatches. The reviewers also found no Arabic-Indic
@@ -65,4 +65,6 @@ decimal value.
 The web reviewer rechecked every reported key and returned pass with no
 remaining exact-key defects. The mobile reviewer rechecked every reported key,
 plural call site, and placeholder set, then returned pass after the final three
-wording corrections.
+wording corrections. A final follow-up also reviewed the sign-in tagline found
+during native smoke testing and returned pass after its MSA wording was aligned
+with the English meaning.

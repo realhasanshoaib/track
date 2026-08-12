@@ -12,6 +12,7 @@ import {
   getDirection,
   getFormatterLocale,
   getSelfName,
+  LOCALE_STORAGE_KEY,
   parseStoredLocale,
   RESERVED_LOCALES,
   type LocaleCatalog,
@@ -49,6 +50,11 @@ describe('mobile locale registry', () => {
     expect(parseStoredLocale('ar-SA')).toBeNull();
     expect(parseStoredLocale('ar')).toBe('ar');
     expect(RESERVED_LOCALES).toEqual(['ar-SA', 'ar-AE']);
+  });
+
+  it('uses a native SecureStore-safe preference key', () => {
+    expect(LOCALE_STORAGE_KEY).toBe('track.locale.v1');
+    expect(LOCALE_STORAGE_KEY).toMatch(/^[\w.-]+$/);
   });
 });
 

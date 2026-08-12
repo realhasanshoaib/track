@@ -17,6 +17,7 @@
     "thread": "Thread"
   },
   "auth": {
+    "tagline": "Project communication that keeps teams aligned",
     "continueGoogle": "Continue with Google",
     "continueApple": "Continue with Apple",
     "fullName": "Full name",
