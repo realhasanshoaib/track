@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { authClient } from '../lib/auth-client'
+import { getSafeLocalReturnPath } from '../lib/url-policy'
 
 export const Route = createFileRoute('/two-factor')({ component: TwoFactor })
 
@@ -26,9 +27,9 @@ function TwoFactor() {
   const [message, setMessage] = useState('')
 
   function finishTwoFactor() {
-    const next = window.localStorage.getItem('track-login-return-to') || '/workspace'
+    const next = getSafeLocalReturnPath(window.localStorage.getItem('track-login-return-to'))
     window.localStorage.removeItem('track-login-return-to')
-    window.location.href = next.startsWith('/') ? next : '/workspace'
+    window.location.href = next
   }
 
   return (

@@ -1,7 +1,6 @@
 import { v } from 'convex/values'
 import { createClient, type GenericCtx } from '@convex-dev/better-auth'
 import { convex, crossDomain } from '@convex-dev/better-auth/plugins'
-import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth/minimal'
 import { twoFactor } from 'better-auth/plugins'
 import type { GenericDatabaseReader, GenericDatabaseWriter } from 'convex/server'
@@ -11,20 +10,13 @@ import type { DataModel } from './_generated/dataModel'
 import { mutation, query } from './_generated/server'
 import authConfig from './auth.config'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
+import { authTrustedOrigins, requireAuthSiteUrl } from './lib/authOrigins'
 import { devAuthBypassUser, isDevAuthBypassEnabled } from './lib/devAuth'
 
-const siteUrl = process.env.SITE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
-const trustedOrigins = [
-  siteUrl,
-  'https://track.q9labs.ai',
-  'http://localhost:3000',
-  'http://localhost:8081',
-  'http://localhost:8082',
-  'http://localhost:8083',
-  'track://',
-  'exp://',
-  'https://appleid.apple.com',
-]
+const siteUrl = requireAuthSiteUrl(
+  process.env.SITE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
+)
+const trustedOrigins = authTrustedOrigins(siteUrl)
 const stepUpFreshMs = 10 * 60 * 1000
 
 export const authComponent = createClient<DataModel>(components.betterAuth)
@@ -40,6 +32,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       enabled: true,
+      disableSignUp: !isDevAuthBypassEnabled(),
       minPasswordLength: 10,
       maxPasswordLength: 256,
       requireEmailVerification: false,
@@ -62,7 +55,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
     },
     plugins: [
       crossDomain({ siteUrl }),
-      expo(),
       convex({ authConfig }),
       twoFactor({
         issuer: 'Track',
@@ -126,7 +118,11 @@ async function assertCanManageTrackUser(ctx: WriteCtx, userId: string) {
 
 async function findTrackUserByAuth(
   ctx: ReadCtx,
-  authUser: { _id: string; email?: string | null },
+  authUser: {
+    _id: string
+    email?: string | null
+    emailVerified?: boolean | null
+  },
 ) {
   const byAuthId = await ctx.db
     .query('users')
@@ -139,6 +135,8 @@ async function findTrackUserByAuth(
     .withIndex('by_google_subject', (q) => q.eq('googleSubject', authUser._id))
     .unique()
   if (byLegacyAuthId) return byLegacyAuthId
+
+  if (authUser.emailVerified !== true) return null
 
   const normalizedEmail = normalizeEmail(authUser.email ?? '')
   if (!normalizedEmail) return null
@@ -154,6 +152,7 @@ async function upsertTrackUserFromAuth(
   authUser: {
     _id: string
     email?: string | null
+    emailVerified?: boolean | null
     name?: string | null
     twoFactorEnabled?: boolean | null
   },
@@ -169,6 +168,7 @@ async function upsertTrackUserFromAuth(
       normalizedEmail,
       googleSubject: existing.googleSubject || authUser._id,
       email: authUser.email ?? existing.email,
+      emailVerified: authUser.emailVerified === true,
       displayName: existing.displayName?.trim() ? existing.displayName : displayName,
       updatedAt: now,
     }
@@ -179,52 +179,20 @@ async function upsertTrackUserFromAuth(
     return existing._id
   }
 
+  if (authUser.emailVerified !== true) throw new Error('email_verification_required')
+
   return await ctx.db.insert('users', {
     googleSubject: authUser._id,
     authUserId: authUser._id,
     normalizedEmail,
     email: authUser.email ?? '',
+    emailVerified: authUser.emailVerified === true,
     displayName,
     twoFactorEnabled: Boolean(authUser.twoFactorEnabled),
     createdAt: now,
     updatedAt: now,
   })
 }
-
-export const getEmailAuthHint = query({
-  args: {
-    email: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const email = normalizeEmail(args.email)
-    if (!email.includes('@')) return { status: 'invalid' as const }
-
-    const authUser = await ctx.runQuery(components.betterAuth.adapter.findOne, {
-      model: 'user',
-      where: [{ field: 'email', value: email }],
-      select: ['_id', 'email'],
-    })
-
-    if (!authUser?._id) return { status: 'new' as const }
-
-    const accounts = await ctx.runQuery(components.betterAuth.adapter.findMany, {
-      model: 'account',
-      where: [{ field: 'userId', value: authUser._id }],
-      select: ['providerId', 'password'],
-      paginationOpts: { cursor: null, numItems: 20 },
-    })
-    const page = (Array.isArray(accounts?.page) ? accounts.page : []) as Array<{
-      password?: string | null
-      providerId?: string | null
-    }>
-    const hasCredential = page.some((account) => account.providerId === 'credential' && account.password)
-    const hasGoogle = page.some((account) => account.providerId === 'google')
-
-    if (hasCredential) return { status: 'credential' as const }
-    if (hasGoogle) return { status: 'google_only' as const }
-    return { status: 'existing_without_password' as const }
-  },
-})
 
 export const ensureCurrentUser = mutation({
   args: {},
@@ -260,6 +228,7 @@ export const syncGoogleUser = mutation({
     return await upsertTrackUserFromAuth(ctx, {
       _id: authUser._id,
       email: authUser.email,
+      emailVerified: authUser.emailVerified,
       name: authUser.name ?? args.displayName,
     })
   },
@@ -289,6 +258,7 @@ export const syncDevUser = mutation({
         authUserId: identity.subject,
         normalizedEmail: normalizeEmail(devAuthBypassUser.email),
         email: devAuthBypassUser.email,
+        emailVerified: true,
         displayName: devAuthBypassUser.displayName,
         profileDesignation: existing.profileDesignation ?? devAuthBypassUser.profileDesignation,
         profileBannerStyle: existing.profileBannerStyle ?? devAuthBypassUser.profileBannerStyle,
@@ -304,6 +274,7 @@ export const syncDevUser = mutation({
       authUserId: identity.subject,
       normalizedEmail: normalizeEmail(devAuthBypassUser.email),
       email: devAuthBypassUser.email,
+      emailVerified: true,
       displayName: devAuthBypassUser.displayName,
       profileDesignation: devAuthBypassUser.profileDesignation,
       profileBannerStyle: devAuthBypassUser.profileBannerStyle,

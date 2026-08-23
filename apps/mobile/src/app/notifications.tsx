@@ -26,7 +26,7 @@ export default function NotificationSettingsScreen() {
   const global = settings?.global ?? {
     globalMode: 'all' as const,
     taskMode: 'all' as const,
-    previewMode: 'full' as const,
+    previewMode: 'hidden' as const,
     soundEnabled: true,
     badgesEnabled: true,
   };

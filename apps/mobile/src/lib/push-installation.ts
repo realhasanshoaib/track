@@ -1,11 +1,12 @@
+import * as Crypto from 'expo-crypto';
+
 import { platformStorage } from '@/lib/platform-storage';
 
 const INSTALLATION_KEY = 'track.push.installation-id.v1';
 const LAST_RESPONSE_KEY = 'track.push.last-response-id.v1';
 
 function createInstallationId() {
-  const random = Math.random().toString(36).slice(2);
-  return `track-${Date.now().toString(36)}-${random}`;
+  return `track-${Crypto.randomUUID()}`;
 }
 
 export async function getPushInstallationId() {

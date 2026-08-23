@@ -4,6 +4,10 @@ packages:
 
 nodeLinker: hoisted
 
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+
 onlyBuiltDependencies:
   - esbuild
   - lightningcss

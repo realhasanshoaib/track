@@ -23,7 +23,8 @@
       "env": {
         "NPM_CONFIG_OPTIONAL": "true",
         "SHARP_IGNORE_GLOBAL_LIBVIPS": "1",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_MOBILE_AUTH_CALLBACK_URL": "https://your-domain.example/auth/mobile/callback"
       }
     }
   }

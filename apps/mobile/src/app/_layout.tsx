@@ -1,25 +1,20 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect, type ComponentProps } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
-import { authClient } from '@/lib/auth-client';
-import { convexClient } from '@/lib/convex-client';
+import { MobileConvexAuthProvider } from '@/components/mobile-convex-auth-provider';
 import { TrackUserProvider } from '@/contexts/track-user-context';
 import { CompanyProvider } from '@/contexts/company-context';
 import { ThemeOverrideProvider, useThemeOverride } from '@/contexts/theme-override-context';
 import { Colors } from '@/constants/theme';
 import { PushNotificationBridge } from '@/lib/push-notifications';
-
-type ProviderAuthClient = ComponentProps<typeof ConvexBetterAuthProvider>['authClient'];
-const providerAuthClient = authClient as unknown as ProviderAuthClient;
 
 const NAV_THEME_LIGHT = {
   ...DefaultTheme,
@@ -71,7 +66,7 @@ function AppLayout() {
   const navTheme = theme === 'dark' ? NAV_THEME_DARK : NAV_THEME_LIGHT;
 
   return (
-    <ConvexBetterAuthProvider client={convexClient} authClient={providerAuthClient}>
+    <MobileConvexAuthProvider>
       <ThemeProvider value={navTheme}>
         <TrackUserProvider>
           <PushNotificationBridge>
@@ -106,6 +101,6 @@ function AppLayout() {
           </PushNotificationBridge>
         </TrackUserProvider>
       </ThemeProvider>
-    </ConvexBetterAuthProvider>
+    </MobileConvexAuthProvider>
   );
 }

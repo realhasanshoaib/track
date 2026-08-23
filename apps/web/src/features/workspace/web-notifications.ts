@@ -175,16 +175,13 @@ async function createWebPushSubscription(
   const existingSubscription = await withTimeout('Push subscription lookup', registration.pushManager.getSubscription())
   logWebPushDebug('existing push subscription checked', {
     hasSubscription: Boolean(existingSubscription),
-    endpointPrefix: existingSubscription?.endpoint.slice(0, 80) ?? null,
     forceRefresh: Boolean(options.forceRefresh),
   })
   if (existingSubscription && !options.forceRefresh) return existingSubscription
   if (existingSubscription) {
     options.onStep?.('Refreshing push subscription...')
     await withTimeout('Push subscription refresh', existingSubscription.unsubscribe())
-    logWebPushDebug('existing push subscription unsubscribed', {
-      endpointPrefix: existingSubscription.endpoint.slice(0, 80),
-    })
+    logWebPushDebug('existing push subscription unsubscribed')
   }
 
   const applicationServerKey = urlBase64ToUint8Array(publicKey)
@@ -225,7 +222,6 @@ async function createWebPushSubscription(
       'The browser push service did not finish creating a subscription. Restart the browser or PWA, disable VPN/content blockers for Track, then try again.',
     )
     logWebPushDebug('push subscription creation succeeded', {
-      endpointPrefix: subscription.endpoint.slice(0, 80),
       expirationTime: subscription.expirationTime ?? null,
     })
     return subscription
@@ -236,6 +232,31 @@ async function createWebPushSubscription(
     })
     throw error
   }
+}
+
+export async function getCurrentWebPushSubscription() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return null
+  }
+  const registration = await withTimeout(
+    'Service worker lookup',
+    navigator.serviceWorker.getRegistration('/'),
+  )
+  if (!registration) return null
+  return await withTimeout('Push subscription lookup', registration.pushManager.getSubscription())
+}
+
+export async function unsubscribeFromWebPush(
+  subscription: Pick<PushSubscription, 'endpoint' | 'unsubscribe'>,
+) {
+  const unsubscribed = await withTimeout(
+    'Push subscription removal',
+    subscription.unsubscribe(),
+    8_000,
+    'The browser did not finish disconnecting Track notifications.',
+  )
+  if (!unsubscribed) throw new Error('The browser did not remove the Track notification subscription.')
+  logWebPushDebug('push subscription unsubscribed')
 }
 
 export function getWebPushDiagnostics() {

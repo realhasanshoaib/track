@@ -59,6 +59,7 @@ export function useWorkspaceNotifications({
   const groupNotificationMode =
     groupNotificationSettings.find((item) => item.groupId === activeGroupId)?.mode ?? 'inherit'
   const globalNotificationMode = notificationSettings?.global?.globalMode ?? 'all'
+  const globalNotificationPreviewMode = notificationSettings?.global?.previewMode ?? 'hidden'
 
   function setNotificationError(error: unknown, fallback = 'Something went wrong') {
     const message = error instanceof Error ? error.message : fallback
@@ -126,12 +127,29 @@ export function useWorkspaceNotifications({
       return
     }
 
+    const senderName = latestMessage.author?.displayName ?? 'A teammate'
+    const notificationCopy = globalNotificationPreviewMode === 'full'
+      ? {
+          body: getIncomingMessageNotificationBody({
+            body: latestMessage.message.body,
+            attachments: latestMessage.attachments,
+          }).slice(0, 160),
+          title: `${senderName} in ${activeGroup.name}`,
+        }
+      : globalNotificationPreviewMode === 'context'
+        ? {
+            body: `New message from ${senderName} in ${activeGroup.name}`,
+            title: 'Track',
+          }
+        : {
+            body: latestMessage.message.mentions.includes(trackUserId)
+              ? 'You were mentioned'
+              : 'New conversation activity',
+            title: 'Track',
+          }
+
     void showMessageNotification({
-      title: `${latestMessage.author?.displayName ?? 'New message'} in ${activeGroup.name}`,
-      body: getIncomingMessageNotificationBody({
-        body: latestMessage.message.body,
-        attachments: latestMessage.attachments,
-      }).slice(0, 160),
+      ...notificationCopy,
       tag: `track-message-${latestMessage.message._id}`,
       url: window.location.pathname,
     }).catch(setNotificationError)
@@ -140,6 +158,7 @@ export function useWorkspaceNotifications({
     activeGroupId,
     activeProject,
     globalNotificationMode,
+    globalNotificationPreviewMode,
     groupNotificationMode,
     messagesLoaded,
     notificationPermission,

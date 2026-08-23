@@ -88,7 +88,7 @@ cp apps/mobile/eas.example.json apps/mobile/eas.json
 pnpm --filter @track/mobile dev
 ```
 
-Set the `EXPO_PUBLIC_*` values from `.env.example` for the development environment. Native OAuth, push, and store builds also require operator-owned provider configuration.
+Set the `EXPO_PUBLIC_*` values from `.env.example` for the development environment. Native browser OAuth requires a dedicated HTTPS `EXPO_PUBLIC_MOBILE_AUTH_CALLBACK_URL`. The callback host must publish Apple `apple-app-site-association` and Android `assetlinks.json` records for the release identifiers before a production build can sign in. Track exchanges the callback's short-lived, single-use token for a session inside secure app storage, so custom-scheme callbacks are not accepted. Native OAuth, push, and store builds also require operator-owned provider configuration.
 
 ## Verification
 
@@ -106,6 +106,16 @@ CI runs the same gate after a frozen install. The mobile `build` script records 
 
 - Copy `wrangler.example.toml` to ignored `wrangler.toml` for Cloudflare variables.
 - Copy `convex.prod.env.example` to ignored `convex.prod.env` for the production deployment selector.
+- Set the production Convex `SITE_URL` and `BETTER_AUTH_URL` values to the exact
+  public HTTPS web origin. Non-loopback HTTP origins and path-scoped auth URLs
+  are rejected, and production no longer trusts localhost origins.
+- Run production Convex deployments only with an exact target confirmation:
+
+  ```sh
+  CONFIRM_CONVEX_PRODUCTION_DEPLOYMENT=prod:your-deployment pnpm convex:deploy:prod
+  ```
+
+  The command rejects missing, non-production, or mismatched deployment selectors before it invokes Convex.
 - Keep credentials in `.env.local`, `.credentials/`, EAS, Convex, Cloudflare, or another provider secret store.
 - Never commit deployment identifiers, credentials, personal data, working logs, crash reports, or store-submission material.
 - Report security vulnerabilities through GitHub private vulnerability reporting.

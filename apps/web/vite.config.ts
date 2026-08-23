@@ -9,6 +9,12 @@ import { nitro } from 'nitro/vite'
 
 const config = defineConfig(({ mode }) => {
   const env = loadEnv(mode, '../..', '')
+  if (
+    mode === 'production' &&
+    (env.VITE_DEV_AUTH_BYPASS || env.VITE_DEV_AUTH_BYPASS_PASSWORD)
+  ) {
+    throw new Error('Production web builds must not include development auth bypass values')
+  }
   for (const [key, value] of Object.entries(env)) {
     process.env[key] ??= value
   }

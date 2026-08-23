@@ -23,6 +23,10 @@ import { useWorkspaceTypingIndicators } from '#/features/workspace/hooks/useWork
 import { useWorkspaceSynchronization } from '#/features/workspace/hooks/useWorkspaceSynchronization'
 import { useWorkspaceThreadInteractions } from '#/features/workspace/hooks/useWorkspaceThreadInteractions'
 import { useWorkspaceNavigation } from '#/features/workspace/hooks/useWorkspaceNavigation'
+import {
+  getCurrentWebPushSubscription,
+  unsubscribeFromWebPush,
+} from '#/features/workspace/web-notifications'
 import type { ProjectSearchFilter } from '#/features/workspace/search/ProjectSearchDialog'
 import { authClient } from '#/lib/auth-client'
 import { disableDevAuthBypass, useDevAuthBypass } from '#/lib/dev-auth-bypass'
@@ -47,6 +51,7 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
   const syncDevUser = useMutation(api.auth.syncDevUser)
   const ensureStarterProject = useMutation(api.projects.ensureStarter)
   const acceptPendingInvitations = useMutation(api.invitations.acceptPendingForCurrentUser)
+  const detachWebPushSubscription = useMutation(api.notifications.detachWebPushSubscription)
 
   const [trackUserId, setTrackUserId] = useState<Id<'users'> | null>(() => {
     const sessionUser = getSessionUser(authClient.getSessionData?.())
@@ -384,6 +389,20 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
   async function handleSignOut() {
     setLogoutConfirmOpen(false)
     disableDevAuthBypass()
+    if (trackUserId) {
+      try {
+        const subscription = await getCurrentWebPushSubscription()
+        if (subscription) {
+          await detachWebPushSubscription({ endpoint: subscription.endpoint })
+          await unsubscribeFromWebPush(subscription)
+        }
+      } catch (error) {
+        setUiError(error instanceof Error
+          ? error.message
+          : 'Could not safely disconnect this device from notifications.')
+        return
+      }
+    }
     clearResolvedTrackUserIds()
     setTrackUserId(null)
     setActiveProjectId(null)

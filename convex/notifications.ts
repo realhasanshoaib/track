@@ -1,9 +1,17 @@
 import { v } from 'convex/values'
+import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter'
 
 import type { Id } from './_generated/dataModel'
+import { components } from './_generated/api'
 import { internalMutation, internalQuery, mutation, query } from './_generated/server'
+import type { MutationCtx } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
+import {
+  normalizeWebPushEndpoint,
+  serializeStoredWebPushSubscription,
+  storedWebPushEndpoint,
+} from './lib/webPushSubscription'
 import { isExpoPushToken } from './lib/pushTokens'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
 import { threadsEnabled } from './lib/channelThreadPolicy'
@@ -40,6 +48,10 @@ const pushEnvironment = v.union(
   v.literal('production'),
 )
 
+const notificationRateLimiter = new RateLimiter(components.rateLimiter, {
+  sendTestNotification: { kind: 'token bucket', rate: 1, period: MINUTE, capacity: 1 },
+})
+
 export function shouldNotifyForMessage(input: {
   globalMode: 'all' | 'mentions' | 'none'
   groupMode: 'inherit' | 'all' | 'mentions' | 'none'
@@ -65,6 +77,30 @@ function installationTokenValues(token: string) {
   return isExpoPushToken(token)
     ? { expoPushToken: token, nativePushToken: undefined }
     : { expoPushToken: undefined, nativePushToken: token }
+}
+
+async function requireNativePushTokenOwnership(
+  ctx: MutationCtx,
+  userId: Id<'users'>,
+  token: string,
+) {
+  const [installationOwners, iosSubscriptions, androidSubscriptions] = await Promise.all([
+    isExpoPushToken(token)
+      ? ctx.db.query('pushInstallations').withIndex('by_token', (q) => q.eq('expoPushToken', token)).collect()
+      : ctx.db.query('pushInstallations').withIndex('by_native_token', (q) => q.eq('nativePushToken', token)).collect(),
+    ctx.db.query('notificationSubscriptions')
+      .withIndex('by_platform_endpoint', (q) => q.eq('platform', 'ios').eq('endpoint', undefined))
+      .collect(),
+    ctx.db.query('notificationSubscriptions')
+      .withIndex('by_platform_endpoint', (q) => q.eq('platform', 'android').eq('endpoint', undefined))
+      .collect(),
+  ])
+  const foreignInstallation = installationOwners.some((owner) => owner.userId && owner.userId !== userId)
+  const foreignLegacySubscription = [...iosSubscriptions, ...androidSubscriptions].some((subscription) =>
+    subscription.enabled && subscription.userId !== userId && subscription.tokenOrEndpoint === token,
+  )
+  if (foreignInstallation || foreignLegacySubscription) throw new Error('push_token_owned_by_other_user')
+  return installationOwners
 }
 
 export function serverPushEnvironment(): 'development' | 'preview' | 'production' {
@@ -96,7 +132,7 @@ export const getSettings = query({
       global: {
         globalMode: global?.globalMode ?? 'all',
         taskMode: global?.taskMode ?? 'all',
-        previewMode: global?.previewMode ?? 'full',
+        previewMode: global?.previewMode ?? 'hidden',
         soundEnabled: global?.soundEnabled ?? true,
         badgesEnabled: global?.badgesEnabled ?? true,
       },
@@ -161,7 +197,7 @@ export const setMobilePreferences = mutation({
     const values = {
       globalMode: args.conversationMode ?? existing?.globalMode ?? 'all',
       taskMode: args.taskMode ?? existing?.taskMode ?? 'all',
-      previewMode: args.previewMode ?? existing?.previewMode ?? 'full',
+      previewMode: args.previewMode ?? existing?.previewMode ?? 'hidden',
       soundEnabled: args.soundEnabled ?? existing?.soundEnabled ?? true,
       badgesEnabled: args.badgesEnabled ?? existing?.badgesEnabled ?? true,
       updatedAt: now,
@@ -238,30 +274,45 @@ export const registerSubscription = mutation({
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
+    if (args.platform !== 'web') throw new Error('web_push_platform_required')
+    const endpoint = normalizeWebPushEndpoint(args.endpoint)
     console.info('[Track push] registerSubscription called', {
       platform: args.platform,
       userId: args.userId,
     })
-    const tokenOrEndpoint = JSON.stringify({
-      endpoint: args.endpoint,
+    const tokenOrEndpoint = serializeStoredWebPushSubscription({
+      endpoint,
       expirationTime: args.expirationTime ?? null,
       keys: args.keys,
     })
+    if (args.platform === 'web') {
+      const [indexedSubscriptions, legacySubscriptions] = await Promise.all([
+        ctx.db.query('notificationSubscriptions')
+          .withIndex('by_platform_endpoint', (q) => q.eq('platform', 'web').eq('endpoint', endpoint))
+          .collect(),
+        ctx.db.query('notificationSubscriptions')
+          .withIndex('by_platform_endpoint', (q) => q.eq('platform', 'web').eq('endpoint', undefined))
+          .collect(),
+      ])
+      const endpointOwnedByAnotherUser = [...indexedSubscriptions, ...legacySubscriptions].some((subscription) =>
+        subscription.enabled &&
+        subscription.userId !== args.userId &&
+        storedWebPushEndpoint(subscription.tokenOrEndpoint) === endpoint,
+      )
+      if (endpointOwnedByAnotherUser) throw new Error('web_push_endpoint_owned_by_other_user')
+    }
     const existingSubscriptions = await ctx.db
       .query('notificationSubscriptions')
       .withIndex('by_user', (q) => q.eq('userId', args.userId))
       .collect()
-    const existing = existingSubscriptions.find((subscription) => {
-      try {
-        return JSON.parse(subscription.tokenOrEndpoint).endpoint === args.endpoint
-      } catch {
-        return subscription.tokenOrEndpoint === args.endpoint
-      }
-    })
+    const existing = existingSubscriptions.find((subscription) =>
+      storedWebPushEndpoint(subscription.tokenOrEndpoint) === endpoint,
+    )
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         enabled: true,
+        endpoint,
         platform: args.platform,
         tokenOrEndpoint,
         updatedAt: Date.now(),
@@ -277,6 +328,7 @@ export const registerSubscription = mutation({
     const subscriptionId = await ctx.db.insert('notificationSubscriptions', {
       userId: args.userId,
       platform: args.platform,
+      endpoint,
       tokenOrEndpoint,
       enabled: true,
       createdAt: Date.now(),
@@ -312,7 +364,7 @@ export const registerNativeToken = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     const token = args.token.trim()
-    if (!token) throw new Error('push_token_required')
+    if (!token || token.length > 512) throw new Error('push_token_invalid')
     if (args.projectMemberId) {
       const projectMember = await ctx.db.get(args.projectMemberId)
       if (!projectMember || projectMember.userId !== actor.userId ||
@@ -335,6 +387,10 @@ export const registerNativeToken = mutation({
     const installation = await ctx.db.query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
+    if (installation?.userId && installation.userId !== actor.userId) {
+      throw new Error('push_installation_owned_by_other_user')
+    }
+    await requireNativePushTokenOwnership(ctx, actor.userId, token)
     const installationValues = {
       userId: args.userId,
       platform: args.platform,
@@ -402,15 +458,14 @@ export const registerNativeInstallation = mutation({
     const now = Date.now()
 
     const expoToken = isExpoPushToken(token)
-    const tokenOwners = expoToken
-      ? await ctx.db.query('pushInstallations')
-          .withIndex('by_token', (q) => q.eq('expoPushToken', token)).collect()
-      : await ctx.db.query('pushInstallations')
-          .withIndex('by_native_token', (q) => q.eq('nativePushToken', token)).collect()
     const existing = await ctx.db
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
+    if (existing?.userId && existing.userId !== actor.userId) {
+      throw new Error('push_installation_owned_by_other_user')
+    }
+    const tokenOwners = await requireNativePushTokenOwnership(ctx, actor.userId, token)
 
     for (const tokenOwner of tokenOwners) {
       if (tokenOwner._id === existing?._id) continue
@@ -474,6 +529,9 @@ export const reportNativePermission = mutation({
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
+    if (existing?.userId && existing.userId !== actor.userId) {
+      throw new Error('push_installation_owned_by_other_user')
+    }
     const enabled = (args.permissionState === 'granted' || args.permissionState === 'provisional') &&
       Boolean(existing?.nativePushToken)
     const values = {
@@ -532,6 +590,38 @@ export const detachNativeInstallation = mutation({
       updatedAt: now,
     })
     return true
+  },
+})
+
+export const detachWebPushSubscription = mutation({
+  args: { endpoint: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    const endpoint = normalizeWebPushEndpoint(args.endpoint)
+    const subscriptions = await ctx.db
+      .query('notificationSubscriptions')
+      .withIndex('by_user', (q) => q.eq('userId', actor.userId))
+      .collect()
+    const now = Date.now()
+    let detached = false
+    for (const subscription of subscriptions) {
+      if (subscription.platform !== 'web' || storedWebPushEndpoint(subscription.tokenOrEndpoint) !== endpoint) continue
+      detached = true
+      if (subscription.enabled) await ctx.db.patch(subscription._id, { enabled: false, updatedAt: now })
+    }
+    return detached
+  },
+})
+
+export const authorizeTestNotification = internalMutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    assertActorMatches(actor, args.userId)
+    await notificationRateLimiter.limit(ctx, 'sendTestNotification', {
+      key: String(actor.userId),
+      throws: true,
+    })
   },
 })
 
@@ -729,6 +819,7 @@ export const collectMessageNotificationTargets = internalQuery({
             projectMemberId,
             recipientUserId: membership.userId,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             exactMembership: subscription.projectMemberId === projectMemberId,
           }))
         const nativeTargets = installations
@@ -746,7 +837,7 @@ export const collectMessageNotificationTargets = internalQuery({
             actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
-            previewMode: globalSettings?.previewMode ?? 'full',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
@@ -765,7 +856,7 @@ export const collectMessageNotificationTargets = internalQuery({
             actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
-            previewMode: globalSettings?.previewMode ?? 'context',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',

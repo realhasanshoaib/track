@@ -22,6 +22,10 @@ import {
 
 const invitationRole = v.union(v.literal('admin'), v.literal('member'))
 
+function requireVerifiedTrackEmail(user: { emailVerified?: boolean }) {
+  if (user.emailVerified !== true) throw new Error('email_verification_required')
+}
+
 async function revokeCompanyMemberArchives(
   ctx: MutationCtx,
   companyId: Id<'companies'>,
@@ -81,6 +85,7 @@ export const getAdministration = query({
   handler: async (ctx, args) => {
     requireCompanyModelEnabled()
     const actor = await requireAuthenticatedActor(ctx)
+    requireVerifiedTrackEmail(actor.user)
     const { company, membership } = await requireActiveCompanyMembership(ctx, actor, args.companyId)
     const members = await ctx.db
       .query('companyMembers')
@@ -229,6 +234,7 @@ export const listPendingForMe = query({
   handler: async (ctx) => {
     requireCompanyModelEnabled()
     const actor = await requireAuthenticatedActor(ctx)
+    requireVerifiedTrackEmail(actor.user)
     const invites = await ctx.db
       .query('companyInvitations')
       .withIndex('by_email_status', (q) =>
@@ -247,6 +253,7 @@ export const decideInvitation = mutation({
   handler: async (ctx, args) => {
     requireCompanyModelEnabled()
     const actor = await requireAuthenticatedActor(ctx)
+    requireVerifiedTrackEmail(actor.user)
     const invitation = await ctx.db.get(args.invitationId)
     if (!invitation || invitation.status !== 'pending') return invitation?._id ?? null
     if (invitation.normalizedEmail !== normalizeEmail(actor.user.email)) throw new Error('invitation_unavailable')

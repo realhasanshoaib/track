@@ -13,11 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 
 import { authClient } from '@/lib/auth-client';
+import { createAuthFlowNonce } from '@/lib/auth-flow-nonce';
 import { useDevAuthBypass } from '@/lib/dev-auth-bypass';
-import { requiresTwoFactor, validateEmailSignIn, validateEmailSignUp } from '@/lib/email-auth';
+import { requiresTwoFactor, validateEmailSignIn } from '@/lib/email-auth';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
+import {
+  createMobileAuthFlowCallback,
+  mobileAuthFlowStorageKey,
+  readMobileAuthOneTimeToken,
+  requireMobileAuthCallback,
+} from '@/lib/mobile-auth-callback';
 import { PlatformIcon } from '@/components/platform-icon';
 import { SignInHero } from '@/components/sign-in-hero';
 import { ThemedText } from '@/components/themed-text';
@@ -34,8 +42,6 @@ export default function SignInScreen() {
   const session = authClient.useSession();
   const [busy, setBusy] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
-  const [emailIntent, setEmailIntent] = useState<'signIn' | 'signUp'>('signIn');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -54,13 +60,13 @@ export default function SignInScreen() {
     setError(null);
     hapticMedium();
     try {
-      const result =
-        provider === 'apple' && Platform.OS === 'ios'
-          ? await signInWithNativeApple()
-          : await authClient.signIn.social({ provider, callbackURL: '/' });
-      const err = (result as { error?: { code?: string; message?: string } | null }).error;
-      if (err) {
-        throw new Error(err.message ?? err.code ?? 'Sign-in failed');
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        await signInWithNativeApple();
+      } else if (Platform.OS === 'web') {
+        await signInWithWebProvider(provider);
+      } else {
+        const completed = await signInWithNativeBrowser(provider);
+        if (!completed) return;
       }
       await waitForSessionReady(session.refetch);
       router.replace('/');
@@ -107,38 +113,8 @@ export default function SignInScreen() {
     }
   }
 
-  async function signUpWithEmail() {
-    const input = validateEmailSignUp(name, email, password);
-    if (!input.ok) {
-      setError(input.error);
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    hapticMedium();
-    try {
-      const result = await authClient.signUp.email({
-        email: input.email,
-        name: input.name,
-        password,
-        callbackURL: '/',
-      });
-      if (result.error) {
-        throw new Error(result.error.message ?? 'Could not create the account.');
-      }
-      await waitForSessionReady(session.refetch);
-      router.replace('/');
-    } catch (e) {
-      hapticLight();
-      setError(e instanceof Error ? e.message : 'Could not create the account.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function submitEmail() {
-    void (emailIntent === 'signUp' ? signUpWithEmail() : signInWithEmail());
+    void signInWithEmail();
   }
 
   async function signInWithDevBypass() {
@@ -216,28 +192,6 @@ export default function SignInScreen() {
 
               {emailMode ? (
                 <View style={styles.emailFields}>
-                  {emailIntent === 'signUp' ? (
-                    <TextInput
-                      accessibilityLabel="Full name"
-                      autoCapitalize="words"
-                      autoComplete="name"
-                      editable={!busy}
-                      onChangeText={setName}
-                      placeholder="Full name"
-                      placeholderTextColor={theme.textSecondary}
-                      returnKeyType="next"
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor: theme.backgroundElement,
-                          borderColor: theme.hairline,
-                          color: theme.text,
-                        },
-                      ]}
-                      textContentType="name"
-                      value={name}
-                    />
-                  ) : null}
                   <TextInput
                     accessibilityLabel="Email address"
                     autoCapitalize="none"
@@ -262,7 +216,7 @@ export default function SignInScreen() {
                   <TextInput
                     accessibilityLabel="Password"
                     autoCapitalize="none"
-                    autoComplete={emailIntent === 'signUp' ? 'new-password' : 'current-password'}
+                    autoComplete="current-password"
                     editable={!busy}
                     onChangeText={setPassword}
                     onSubmitEditing={submitEmail}
@@ -278,7 +232,7 @@ export default function SignInScreen() {
                         color: theme.text,
                       },
                     ]}
-                    textContentType={emailIntent === 'signUp' ? 'newPassword' : 'password'}
+                    textContentType="password"
                     value={password}
                   />
                   <Pressable
@@ -288,26 +242,11 @@ export default function SignInScreen() {
                     style={[styles.authButton, { backgroundColor: theme.text, opacity: busy ? 0.7 : 1 }]}
                   >
                     <PlatformIcon color={theme.background} name="email-outline" size={20} />
-                    <ThemedText style={[styles.authLabel, { color: theme.background }]}>
-                      {emailIntent === 'signUp' ? 'Create account' : 'Sign in with email'}
-                    </ThemedText>
+                    <ThemedText style={[styles.authLabel, { color: theme.background }]}>Sign in with email</ThemedText>
                   </Pressable>
-                  <Pressable
-                    disabled={busy}
-                    hitSlop={8}
-                    onPress={() => {
-                      hapticLight();
-                      setError(null);
-                      setEmailIntent(emailIntent === 'signUp' ? 'signIn' : 'signUp');
-                    }}
-                    style={styles.emailLink}
-                  >
-                    <ThemedText style={{ color: theme.textSecondary }} type="small">
-                      {emailIntent === 'signUp'
-                        ? 'Already have an account? Sign in'
-                        : 'New to Track? Create an account'}
-                    </ThemedText>
-                  </Pressable>
+                  <ThemedText style={{ color: theme.textSecondary }} type="small">
+                    New accounts use Google or Apple first so Track can verify the email address.
+                  </ThemedText>
                 </View>
               ) : (
                 <Pressable
@@ -392,7 +331,7 @@ async function signInWithNativeApple() {
     throw new Error('Apple did not return an identity token.');
   }
 
-  return await authClient.signIn.social({
+  const result = await authClient.signIn.social({
     provider: 'apple',
     idToken: {
       token: credential.identityToken,
@@ -400,13 +339,62 @@ async function signInWithNativeApple() {
     },
     callbackURL: '/',
   });
+  if (result.error) {
+    throw new Error(result.error.message ?? result.error.code ?? 'Sign-in failed');
+  }
+}
+
+async function signInWithWebProvider(provider: 'google' | 'apple') {
+  const flowNonce = await createAuthFlowNonce();
+  globalThis.sessionStorage.setItem(mobileAuthFlowStorageKey, flowNonce);
+  const result = await authClient.signIn.social({
+    provider,
+    callbackURL: `/?flow=${encodeURIComponent(flowNonce)}`,
+  });
+  if (result.error) {
+    throw new Error(result.error.message ?? result.error.code ?? 'Sign-in failed');
+  }
+}
+
+async function signInWithNativeBrowser(provider: 'google' | 'apple') {
+  const callback = requireMobileAuthCallback(
+    process.env.EXPO_PUBLIC_MOBILE_AUTH_CALLBACK_URL,
+    process.env.EXPO_PUBLIC_APP_URL ?? process.env.EXPO_PUBLIC_CONVEX_SITE_URL,
+  );
+  const flowNonce = await createAuthFlowNonce();
+  const flowCallbackUrl = createMobileAuthFlowCallback(callback, flowNonce);
+  const start = await authClient.signIn.social({
+    provider,
+    callbackURL: flowCallbackUrl,
+    disableRedirect: true,
+  });
+  if (start.error) {
+    throw new Error(start.error.message ?? start.error.code ?? 'Sign-in failed');
+  }
+  if (!start.data?.url) {
+    throw new Error('The identity provider did not return an authorization URL.');
+  }
+
+  const browserResult = await WebBrowser.openAuthSessionAsync(start.data.url, flowCallbackUrl, {
+    preferEphemeralSession: true,
+    preferUniversalLinks: true,
+  });
+  if (browserResult.type !== 'success') return false;
+
+  const token = readMobileAuthOneTimeToken(browserResult.url, callback, flowNonce);
+  const exchange = await authClient.crossDomain.oneTimeToken.verify({ token });
+  if (exchange.error) {
+    throw new Error(exchange.error.message ?? exchange.error.code ?? 'Sign-in failed');
+  }
+  authClient.updateSession();
+  return true;
 }
 
 async function waitForSessionReady(refetch: ReturnType<typeof authClient.useSession>['refetch']) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await refetch({ query: { disableCookieCache: true } });
 
-    const snapshot = authClient.$store.atoms.session?.get() as { data?: unknown } | undefined;
+    const snapshot = authClient.$store.atoms.session?.get();
     if (snapshot?.data) return;
 
     await sleep(250);
@@ -433,7 +421,7 @@ function sleep(ms: number) {
 }
 
 function isAppleCancel(error: unknown) {
-  return error instanceof Error && (error as Error & { code?: string }).code === 'ERR_REQUEST_CANCELED';
+  return error instanceof Error && 'code' in error && error.code === 'ERR_REQUEST_CANCELED';
 }
 
 const styles = StyleSheet.create({

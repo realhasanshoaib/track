@@ -25,6 +25,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
+import { idempotencyKey } from '@/lib/idempotency';
 import { useReleaseConfig } from '@/lib/release-config';
 import { groupMobileTasksByState, taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
 import { taskPriorityLabel } from '@/lib/task-presentation';
@@ -191,7 +192,7 @@ export default function TasksScreen() {
         assigneeProjectMemberId: selectedCreateAssigneeId
           ? selectedCreateAssigneeId as Id<'projectMembers'>
           : undefined,
-        idempotencyKey: `${Date.now()}-${Math.random()}`,
+        idempotencyKey: idempotencyKey(),
         ...queryIdentity,
       });
       hapticMedium();

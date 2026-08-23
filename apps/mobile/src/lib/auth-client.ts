@@ -1,19 +1,20 @@
-import { expoClient } from '@better-auth/expo/client';
-import { convexClient } from '@convex-dev/better-auth/client/plugins';
-import Constants from 'expo-constants';
-import type { BetterAuthClientPlugin } from 'better-auth/client';
+import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
 import { twoFactorClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
 import { authStoragePrefix } from '@/lib/auth-storage';
 import { platformStorage } from '@/lib/platform-storage';
+import { requireServiceUrl } from '@/lib/service-url';
 
-const extraConfig = Constants.expoConfig?.extra as Record<string, string | undefined> | undefined;
-const authBaseURL =
+const configuredAuthBaseURL =
   process.env.EXPO_PUBLIC_APP_URL ??
-  process.env.EXPO_PUBLIC_CONVEX_SITE_URL ??
-  extraConfig?.EXPO_PUBLIC_APP_URL ??
-  extraConfig?.EXPO_PUBLIC_CONVEX_SITE_URL;
+  process.env.EXPO_PUBLIC_CONVEX_SITE_URL;
+const appEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+const authBaseURL = requireServiceUrl({
+  isProduction: process.env.NODE_ENV === 'production' || appEnvironment === 'production',
+  name: 'EXPO_PUBLIC_APP_URL or EXPO_PUBLIC_CONVEX_SITE_URL',
+  value: configuredAuthBaseURL,
+});
 
 let twoFactorRedirectHandler: ((methods: string[]) => void) | null = null;
 
@@ -24,11 +25,10 @@ export function setTwoFactorRedirectHandler(handler: ((methods: string[]) => voi
 export const authClient = createAuthClient({
   baseURL: authBaseURL,
   plugins: [
-    expoClient({
-      scheme: authStoragePrefix,
+    crossDomainClient({
       storagePrefix: authStoragePrefix,
       storage: platformStorage,
-    }) as unknown as BetterAuthClientPlugin,
+    }),
     convexClient(),
     twoFactorClient({
       onTwoFactorRedirect: ({ twoFactorMethods }) => {

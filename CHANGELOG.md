@@ -14,6 +14,30 @@
 - Updated direct and transitive production dependencies to resolve the current
   Hono, Undici, PostCSS, Nanoid, YAML, brace expansion, and image parser
   advisories reported by the package audit.
+- Disabled unverified credential sign-up and provider enumeration, required a
+  verified provider email before account provisioning or invitation acceptance,
+  and limited invitation visibility and Channel assignment to their owning
+  Project and its managers.
+- Enforced exact Project ownership for every Channel-scoped request and rejected
+  foreign Channel membership writes and malformed legacy invitations before
+  they can grant access.
+- Replaced native custom-scheme OAuth session callbacks with verified HTTPS app
+  links, device-bound flow nonces, and short-lived single-use session exchanges.
+  Production mobile builds now fail if the callback or service transport is not
+  securely configured.
+- Bound native installations, native push tokens, and browser push endpoints to
+  one active account; restricted web-push delivery to recognized HTTPS browser
+  push services; detached browser endpoints on sign-out; rate-limited test
+  delivery; made hidden previews the default; and restricted service-worker
+  caching and notification navigation to fixed same-origin resources.
+- Added safe return-path and Markdown URL policies plus CSP, HSTS, anti-framing,
+  no-store, permissions, MIME-sniffing, referrer, and server-function CSRF
+  protections at the web response boundary. Production auth now trusts only its
+  configured HTTPS app origin and fixed Apple provider origin, while loopback
+  and Expo ports remain development-only.
+- Pinned CI actions to immutable commits, added package-release trust controls
+  and dependency cooldowns, and required an exact production deployment
+  confirmation before the Convex release command can run.
 
 ## 2026-07-30
 

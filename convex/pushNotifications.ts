@@ -9,6 +9,7 @@ import { action, internalAction } from './_generated/server'
 import { sendNativePushBatch } from './lib/nativePush'
 import { messagePushCopy, taskPushCopy } from './lib/pushDelivery'
 import type { NativePushInput } from './lib/pushProviderTypes'
+import { parseStoredWebPushSubscription } from './lib/webPushSubscription'
 
 type NativeTarget = {
   actingCompanyId?: string
@@ -29,6 +30,7 @@ type WebTarget = {
   eventKind?: string
   kind: 'web'
   platform: 'web'
+  previewMode?: 'full' | 'context' | 'hidden'
   projectMemberId?: string
   recipientUserId?: Id<'users'>
   subscriptionId: Id<'notificationSubscriptions'>
@@ -109,12 +111,12 @@ export const deliverMessageNotifications = internalAction({
         groupName: notification.groupName,
         threadName: notification.channelThreadName,
         messagePreview: notification.messagePreview,
-        previewMode: target.kind === 'web' ? 'context' : target.previewMode,
+        previewMode: target.kind === 'web' ? target.previewMode ?? 'hidden' : target.previewMode,
       })
       if (target.kind === 'web') {
         if (!webConfigured) return
         try {
-          await webPush.sendNotification(JSON.parse(target.tokenOrEndpoint), JSON.stringify({
+          await webPush.sendNotification(parseStoredWebPushSubscription(target.tokenOrEndpoint), JSON.stringify({
             ...copy, icon: '/logo192.png', tag: `track-message-${args.messageId}`, url: urls.webUrl,
           }))
         } catch (error) {
@@ -196,12 +198,12 @@ export const deliverTaskNotification = internalAction({
         projectName: notification.projectName,
         publicKey: notification.publicKey,
         taskTitle: notification.taskTitle,
-        previewMode: rawTarget.kind === 'web' ? 'context' : rawTarget.previewMode,
+        previewMode: rawTarget.kind === 'web' ? rawTarget.previewMode ?? 'hidden' : rawTarget.previewMode,
       })
       if (rawTarget.kind === 'web') {
         if (!webConfigured) return
         try {
-          await webPush.sendNotification(JSON.parse(rawTarget.tokenOrEndpoint), JSON.stringify({
+          await webPush.sendNotification(parseStoredWebPushSubscription(rawTarget.tokenOrEndpoint), JSON.stringify({
             ...copy, icon: '/logo192.png', tag: `track-task-${args.notificationId}`, url: notification.url,
           }))
         } catch (error) {
@@ -393,6 +395,7 @@ export const verifyNativeProviderConnectivity = internalAction({
 export const sendTestNotification = action({
   args: { userId: v.id('users') },
   handler: async (ctx, args): Promise<{ attempted: number; queued: number; sent: number; failed: number }> => {
+    await ctx.runMutation(internal.notifications.authorizeTestNotification, args)
     const targets = await ctx.runQuery(internal.notifications.collectUserNotificationTargets, args)
     const webConfigured = webPushDetails()
     let queued = 0
@@ -402,7 +405,7 @@ export const sendTestNotification = action({
       if (target.kind === 'web') {
         if (!webConfigured) { failed += 1; continue }
         try {
-          await webPush.sendNotification(JSON.parse(target.tokenOrEndpoint), JSON.stringify({
+          await webPush.sendNotification(parseStoredWebPushSubscription(target.tokenOrEndpoint), JSON.stringify({
             title: 'Track test alert', body: 'Browser alerts are connected.', icon: '/logo192.png',
             tag: `track-test-${Date.now()}`, url: '/workspace',
           }))

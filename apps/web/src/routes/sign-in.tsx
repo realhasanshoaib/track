@@ -1,19 +1,18 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useConvex } from 'convex/react'
 import { Eye, EyeOff, KeyRound, Lock, Mail, MessageSquareText, Search, ShieldCheck } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 
-import { api } from '../../../../convex/_generated/api'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { enableDevAuthBypass, isDevAuthBypassAllowed } from '#/lib/dev-auth-bypass'
 import { authClient } from '../lib/auth-client'
+import { beginWebAuthFlow, clearWebAuthFlow } from '../lib/auth-flow'
 
 const pendingSetPasswordEmailKey = 'track-pending-set-password-email'
 const supportEmail = 'q9labs.ai@gmail.com'
 
-type AuthMode = 'continue' | 'confirm-new' | 'google-proof' | 'set-password'
+type AuthMode = 'continue' | 'google-proof' | 'set-password'
 type SignInVariant = 'default' | 'conversation-a' | 'conversation-b'
 
 export const Route = createFileRoute('/sign-in')({ component: () => <SignInExperience variant="conversation-b" /> })
@@ -113,7 +112,6 @@ function getPasswordMessage(error: unknown) {
 }
 
 export function SignInExperience({ variant }: { variant: SignInVariant }) {
-  const convex = useConvex()
   const navigate = useNavigate()
   const session = authClient.useSession()
   const [email, setEmail] = useState('')
@@ -121,16 +119,18 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
-  const [mode, setMode] = useState<AuthMode>(() => {
-    if (typeof window === 'undefined') return 'continue'
-    return window.localStorage.getItem(pendingSetPasswordEmailKey) ? 'set-password' : 'continue'
-  })
+  const [mode, setMode] = useState<AuthMode>('continue')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const pendingSetPasswordEmail = useMemo(() => {
     if (typeof window === 'undefined') return ''
     return window.localStorage.getItem(pendingSetPasswordEmailKey) ?? ''
   }, [mode])
+
+  useEffect(() => {
+    const pendingEmail = window.localStorage.getItem(pendingSetPasswordEmailKey)
+    if (pendingEmail) setMode(session.data ? 'set-password' : 'google-proof')
+  }, [session.data])
 
   async function handleDevBypass() {
     setBusy(true)
@@ -152,18 +152,26 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
     }
     setBusy(true)
     try {
+      const callbackURL = beginWebAuthFlow(
+        mode === 'google-proof' ? '/auth/callback?next=/sign-in' : '/auth/callback',
+      )
       const result = await authClient.signIn.social({
         provider: 'google',
-        callbackURL: mode === 'google-proof' ? '/auth/callback?next=/sign-in' : '/auth/callback',
+        callbackURL,
       })
       if (result.error) {
+        clearWebAuthFlow()
         setMessage(getPasswordMessage(result.error))
         return
       }
       if (result.data?.url) {
         window.location.href = result.data.url
+        return
       }
+      clearWebAuthFlow()
+      setMessage('The identity provider did not return an authorization URL.')
     } catch (error) {
+      clearWebAuthFlow()
       setMessage(getPasswordMessage(error))
     } finally {
       setBusy(false)
@@ -184,7 +192,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
       setMessage('Password must be at least 10 characters.')
       return
     }
-    if ((mode === 'confirm-new' || mode === 'set-password') && passwordValue !== confirmPassword.trim()) {
+    if (mode === 'set-password' && passwordValue !== confirmPassword.trim()) {
       setMessage('Passwords do not match.')
       return
     }
@@ -197,46 +205,22 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
           setMode('google-proof')
           return
         }
-        const client = authClient as typeof authClient & {
-          setPassword: (input: { newPassword: string }) => Promise<{ error?: { message?: string } | null }>
+        if (normalizeEmail(session.data.user.email) !== pendingSetPasswordEmail) {
+          window.localStorage.removeItem(pendingSetPasswordEmailKey)
+          setMode('continue')
+          setMessage('The Google account does not match the email you entered.')
+          return
         }
-        const result = await client.setPassword({ newPassword: passwordValue })
+        const result = await authClient.$fetch('/set-password', {
+          body: { newPassword: passwordValue },
+          method: 'POST',
+        })
         if (result.error) {
           setMessage(getPasswordMessage(result.error))
           return
         }
         window.localStorage.removeItem(pendingSetPasswordEmailKey)
         await navigate({ to: '/workspace' })
-        return
-      }
-
-      if (mode === 'confirm-new') {
-        const result = await authClient.signUp.email({
-          email: normalizedEmail,
-          password: passwordValue,
-          name: normalizedEmail.split('@')[0] || 'Track User',
-          callbackURL: '/workspace',
-        })
-        if (result.error) {
-          setMessage(getPasswordMessage(result.error))
-          return
-        }
-        await navigate({ to: '/workspace' })
-        return
-      }
-
-      const hint = await convex.query(api.auth.getEmailAuthHint, { email: normalizedEmail })
-      if (hint.status === 'new') {
-        setMode('confirm-new')
-        setConfirmPassword('')
-        return
-      }
-      if (hint.status === 'google_only' || hint.status === 'existing_without_password') {
-        setMode('google-proof')
-        return
-      }
-      if (hint.status === 'invalid') {
-        setMessage('Enter a valid email address.')
         return
       }
 
@@ -247,37 +231,32 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
         callbackURL: '/workspace',
       })
       if (result.error) {
-        setMessage('Email or password is incorrect.')
+        window.localStorage.setItem(pendingSetPasswordEmailKey, normalizedEmail)
+        setMode('google-proof')
+        setMessage('Email or password is incorrect. Continue with Google to verify your email.')
       }
-    } catch (error) {
-      setMessage(getPasswordMessage(error))
+    } catch {
+      window.localStorage.setItem(pendingSetPasswordEmailKey, normalizedEmail)
+      setMode('google-proof')
+      setMessage('Email or password is incorrect. Continue with Google to verify your email.')
     } finally {
       setBusy(false)
     }
   }
 
   const title =
-    mode === 'confirm-new'
-      ? 'Create your Track account'
-      : mode === 'google-proof'
+    mode === 'google-proof'
         ? 'Confirm this Google account'
         : mode === 'set-password'
           ? 'Add email password'
           : 'Sign in to continue'
   const copy =
-    mode === 'confirm-new'
-      ? `${normalizeEmail(email)} is new. Confirm your password before we create it.`
-      : mode === 'google-proof'
-        ? 'This email already uses Google. Continue with Google first, then add a password to the same Track profile.'
+    mode === 'google-proof'
+        ? 'If you use Google, continue with Google to verify your email before adding a password.'
         : mode === 'set-password'
           ? `Set a password for ${pendingSetPasswordEmail || 'this email'} after confirming your Google account.`
-          : 'Use email and password, or continue with Google. New email accounts are created after confirmation.'
-  const emailButtonLabel =
-    mode === 'confirm-new'
-      ? 'Create account'
-      : mode === 'set-password'
-        ? 'Add password'
-        : 'Continue with Email'
+          : 'Use email and password, or continue with Google.'
+  const emailButtonLabel = mode === 'set-password' ? 'Add password' : 'Continue with Email'
 
   const isConversationVariant = variant !== 'default'
 
@@ -370,7 +349,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
                   {passwordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </label>
-              {mode === 'confirm-new' || mode === 'set-password' ? (
+              {mode === 'set-password' ? (
                 <label>
                   <span>Confirm password</span>
                   <Input

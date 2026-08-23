@@ -169,6 +169,7 @@ export default defineSchema({
     timezone: v.optional(v.string()),
     avatarStorageId: v.optional(v.id('_storage')),
     profileCompletedAt: v.optional(v.number()),
+    emailVerified: v.optional(v.boolean()),
     twoFactorEnabled: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -549,11 +550,14 @@ export default defineSchema({
     userId: v.id('users'),
     projectMemberId: v.optional(v.id('projectMembers')),
     platform: v.union(v.literal('web'), v.literal('ios'), v.literal('android')),
+    endpoint: v.optional(v.string()),
     tokenOrEndpoint: v.string(),
     enabled: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index('by_user', ['userId']),
+  })
+    .index('by_user', ['userId'])
+    .index('by_platform_endpoint', ['platform', 'endpoint']),
 
   pushInstallations: defineTable({
     installationId: v.string(),

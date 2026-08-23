@@ -15,16 +15,16 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@10.19.0",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "turbo dev --parallel",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "test": "turbo test && vitest run --dir convex --environment node",
+    "test": "turbo test && vitest run --dir convex --environment node && node --test scripts/*.test.mjs",
     "convex:dev": "convex dev",
     "convex:deploy:dev": "convex deploy",
-    "convex:deploy:prod": "convex deploy --env-file convex.prod.env"
+    "convex:deploy:prod": "node scripts/deploy-convex-production.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
@@ -50,6 +50,7 @@
     "hono": "4.12.34",
     "jose": "6.2.5",
     "react": "19.2.7",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "4.4.3"
   }
 }
