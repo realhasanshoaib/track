@@ -6,7 +6,6 @@ import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContex
 import {
   canRoleJoinDefaultGroup,
   requireProjectManager,
-  requireProjectMember,
 } from './lib/permissions'
 
 const role = v.union(
@@ -24,6 +23,10 @@ function newInviteToken() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`
 }
 
+function requireVerifiedTrackEmail(user: { emailVerified?: boolean }) {
+  if (user.emailVerified !== true) throw new Error('email_verification_required')
+}
+
 export const listForProject = query({
   args: {
     projectId: v.id('projects'),
@@ -32,7 +35,8 @@ export const listForProject = query({
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
-    await requireProjectMember(ctx, args.projectId, args.userId)
+    requireVerifiedTrackEmail(actor.user)
+    await requireProjectManager(ctx, args.projectId, args.userId)
     return await ctx.db
       .query('invitations')
       .withIndex('by_project_status', (q) => q.eq('projectId', args.projectId))
@@ -55,6 +59,11 @@ export const create = mutation({
     await requireProjectManager(ctx, args.projectId, args.invitedBy)
     const email = normalizeEmail(args.email)
     if (!email.includes('@')) throw new Error('invalid_email')
+
+    if (args.groupId) {
+      const group = await ctx.db.get(args.groupId)
+      if (!group || group.projectId !== args.projectId) throw new Error('group_project_mismatch')
+    }
 
     const now = Date.now()
     const inviteId = await ctx.db.insert('invitations', {
@@ -95,6 +104,7 @@ export const acceptPendingForCurrentUser = mutation({
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
+    requireVerifiedTrackEmail(actor.user)
     const user = await ctx.db.get(args.userId)
     if (!user) throw new Error('user_not_found')
     const now = Date.now()

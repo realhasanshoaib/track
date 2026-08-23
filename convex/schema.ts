@@ -169,6 +169,7 @@ export default defineSchema({
     timezone: v.optional(v.string()),
     avatarStorageId: v.optional(v.id('_storage')),
     profileCompletedAt: v.optional(v.number()),
+    emailVerified: v.optional(v.boolean()),
     twoFactorEnabled: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
