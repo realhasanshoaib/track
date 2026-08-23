@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { getSafeMarkdownHref } from '#/lib/url-policy'
+
 export function MarkdownText({
   className,
   highlightQuery,
@@ -105,8 +107,13 @@ function renderMarkdownInline(
 
     const linkMatch = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part)
     if (linkMatch) {
+      const safeHref = getSafeMarkdownHref(linkMatch[2])
+      if (!safeHref) {
+        return <span key={`${part}-${index}`}>{highlightText(linkMatch[1], highlightQuery)}</span>
+      }
+
       return (
-        <a href={linkMatch[2]} key={`${part}-${index}`} rel="noreferrer" target="_blank">
+        <a href={safeHref} key={`${part}-${index}`} rel="noreferrer" target="_blank">
           {linkMatch[1]}
         </a>
       )

@@ -25,6 +25,7 @@ import { Textarea } from '#/components/ui/textarea'
 import TrackLoader from '#/components/TrackLoader'
 import { authClient } from '#/lib/auth-client'
 import { useDevAuthBypass } from '#/lib/dev-auth-bypass'
+import { getSafeLocalReturnPath } from '#/lib/url-policy'
 import { getAvatarTone, getAvatarToneColor, getInitials } from '#/features/workspace/identity'
 import { TeamMemberCard } from '#/features/workspace/avatar-tooltip'
 import {
@@ -307,8 +308,8 @@ export function ProfileSettingsPage({ mode }: ProfileSettingsPageProps) {
       })
       setProfileMessage('Profile saved.')
       if (mode === 'onboarding') {
-        const next = new URLSearchParams(window.location.search).get('next') || '/workspace'
-        window.location.href = next.startsWith('/') ? next : '/workspace'
+        const next = getSafeLocalReturnPath(new URLSearchParams(window.location.search).get('next'))
+        window.location.href = next
       }
     } catch (error) {
       setProfileMessage(getErrorMessage(error, 'Could not save profile.'))
