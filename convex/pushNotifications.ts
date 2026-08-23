@@ -29,6 +29,7 @@ type WebTarget = {
   eventKind?: string
   kind: 'web'
   platform: 'web'
+  previewMode?: 'full' | 'context' | 'hidden'
   projectMemberId?: string
   recipientUserId?: Id<'users'>
   subscriptionId: Id<'notificationSubscriptions'>
@@ -109,7 +110,7 @@ export const deliverMessageNotifications = internalAction({
         groupName: notification.groupName,
         threadName: notification.channelThreadName,
         messagePreview: notification.messagePreview,
-        previewMode: target.kind === 'web' ? 'context' : target.previewMode,
+        previewMode: target.kind === 'web' ? target.previewMode ?? 'hidden' : target.previewMode,
       })
       if (target.kind === 'web') {
         if (!webConfigured) return
@@ -196,7 +197,7 @@ export const deliverTaskNotification = internalAction({
         projectName: notification.projectName,
         publicKey: notification.publicKey,
         taskTitle: notification.taskTitle,
-        previewMode: rawTarget.kind === 'web' ? 'context' : rawTarget.previewMode,
+        previewMode: rawTarget.kind === 'web' ? rawTarget.previewMode ?? 'hidden' : rawTarget.previewMode,
       })
       if (rawTarget.kind === 'web') {
         if (!webConfigured) return
@@ -393,6 +394,7 @@ export const verifyNativeProviderConnectivity = internalAction({
 export const sendTestNotification = action({
   args: { userId: v.id('users') },
   handler: async (ctx, args): Promise<{ attempted: number; queued: number; sent: number; failed: number }> => {
+    await ctx.runMutation(internal.notifications.authorizeTestNotification, args)
     const targets = await ctx.runQuery(internal.notifications.collectUserNotificationTargets, args)
     const webConfigured = webPushDetails()
     let queued = 0

@@ -77,4 +77,15 @@ describe('web push subscription', () => {
     await expect(first).resolves.toBe(subscription)
     await expect(second).resolves.toBe(subscription)
   })
+
+  it('reports when the browser refuses to remove a push subscription', async () => {
+    const { unsubscribeFromWebPush } = await import('./web-notifications')
+    const subscription = {
+      endpoint: 'https://push.example.test/subscription',
+      unsubscribe: vi.fn().mockResolvedValue(false),
+    } satisfies Pick<PushSubscription, 'endpoint' | 'unsubscribe'>
+
+    await expect(unsubscribeFromWebPush(subscription))
+      .rejects.toThrow('did not remove the Track notification subscription')
+  })
 })

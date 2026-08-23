@@ -1,8 +1,10 @@
 import { convexTest } from 'convex-test'
+import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { describe, expect, it } from 'vitest'
 
 import { api, internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
+import { messagePushCopy } from './lib/pushDelivery'
 import schema from './schema'
 
 const modules = (import.meta as ImportMeta & {
@@ -10,7 +12,7 @@ const modules = (import.meta as ImportMeta & {
 }).glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 describe('durable mobile push lifecycle', () => {
-  it('keeps installation ownership and sign-out state isolated', async () => {
+  it('rejects cross-account installation takeover without mutating the owner', async () => {
     const t = convexTest(schema, modules)
     const first = await seedUser(t, 'push-first')
     const second = await seedUser(t, 'push-second')
@@ -20,18 +22,88 @@ describe('durable mobile push lifecycle', () => {
       token: 'apns-installation-token-1',
     }
     await asUser(t, first).mutation(api.notifications.registerNativeInstallation, { ...args, userId: first })
-    await asUser(t, second).mutation(api.notifications.registerNativeInstallation, { ...args, userId: second })
+    const before = await t.run(async (ctx) => ctx.db.query('pushInstallations')
+      .withIndex('by_installation_id', (q) => q.eq('installationId', args.installationId)).unique())
+    await expect(asUser(t, second).mutation(api.notifications.registerNativeInstallation, { ...args, userId: second }))
+      .rejects.toThrow('push_installation_owned_by_other_user')
+    await expect(asUser(t, second).mutation(api.notifications.reportNativePermission, {
+      userId: second,
+      installationId: args.installationId,
+      platform: 'ios',
+      environment: 'production',
+      permissionState: 'denied',
+      appVersion: 'attacker',
+    })).rejects.toThrow('push_installation_owned_by_other_user')
+    expect(await t.run(async (ctx) => ctx.db.query('pushInstallations')
+      .withIndex('by_installation_id', (q) => q.eq('installationId', args.installationId)).unique())).toEqual(before)
 
     expect(await asUser(t, first).mutation(api.notifications.detachNativeInstallation, {
       installationId: args.installationId,
-    })).toBe(false)
+    })).toBe(true)
     expect(await asUser(t, second).mutation(api.notifications.detachNativeInstallation, {
       installationId: args.installationId,
-    })).toBe(true)
+    })).toBe(false)
     const installation = await t.run(async (ctx) => ctx.db.query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', args.installationId)).unique())
     expect(installation).toMatchObject({ enabled: false, failureReason: 'signed_out' })
     expect(installation?.userId).toBeUndefined()
+  })
+
+  it('keeps a web endpoint bound to one account and supports actor-owned detach', async () => {
+    const t = convexTest(schema, modules)
+    const first = await seedUser(t, 'web-push-first')
+    const second = await seedUser(t, 'web-push-second')
+    const firstArgs = {
+      userId: first,
+      platform: 'web',
+      endpoint: 'https://push.example.test/account-switch',
+      keys: { auth: 'auth', p256dh: 'p256dh' },
+    } satisfies {
+      userId: Id<'users'>
+      platform: 'web'
+      endpoint: string
+      keys: { auth: string; p256dh: string }
+    }
+    await asUser(t, first).mutation(api.notifications.registerSubscription, firstArgs)
+    await expect(asUser(t, second).mutation(api.notifications.registerSubscription, {
+      ...firstArgs,
+      userId: second,
+    })).rejects.toThrow('web_push_endpoint_owned_by_other_user')
+    expect(await asUser(t, first).mutation(api.notifications.detachWebPushSubscription, {
+      endpoint: firstArgs.endpoint,
+    })).toBe(true)
+    await asUser(t, second).mutation(api.notifications.registerSubscription, {
+      ...firstArgs,
+      userId: second,
+    })
+    const subscriptions = await t.run(async (ctx) => ctx.db.query('notificationSubscriptions').collect())
+    expect(subscriptions.filter((subscription) => subscription.enabled)).toHaveLength(1)
+    expect(subscriptions.find((subscription) => subscription.enabled)?.userId).toBe(second)
+  })
+
+  it('defaults notification previews to hidden and requires an authenticated rate-limited actor for test pushes', async () => {
+    const t = convexTest(schema, modules)
+    registerRateLimiter(t)
+    const first = await seedUser(t, 'push-test-first')
+    const second = await seedUser(t, 'push-test-second')
+    const settings = await asUser(t, first).query(api.notifications.getSettings, { userId: first })
+    expect(settings.global.previewMode).toBe('hidden')
+    expect(messagePushCopy({
+      eventKind: 'message',
+      senderName: 'A teammate',
+      groupName: 'A Channel',
+      messagePreview: 'private message text',
+      previewMode: settings.global.previewMode,
+    })).toEqual({ title: 'Track', body: 'New conversation activity' })
+
+    await expect(t.action(api.pushNotifications.sendTestNotification, { userId: first }))
+      .rejects.toThrow('unauthenticated')
+    await expect(asUser(t, first).action(api.pushNotifications.sendTestNotification, { userId: second }))
+      .rejects.toThrow('actor_mismatch')
+    await expect(asUser(t, first).action(api.pushNotifications.sendTestNotification, { userId: first }))
+      .resolves.toMatchObject({ attempted: 0, queued: 0, sent: 0 })
+    await expect(asUser(t, first).action(api.pushNotifications.sendTestNotification, { userId: first }))
+      .rejects.toThrow()
   })
 
   it('expires legacy provider receipts terminally', async () => {

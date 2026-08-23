@@ -1,6 +1,8 @@
 import { v } from 'convex/values'
+import { MINUTE, RateLimiter } from '@convex-dev/rate-limiter'
 
 import type { Id } from './_generated/dataModel'
+import { components } from './_generated/api'
 import { internalMutation, internalQuery, mutation, query } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
@@ -39,6 +41,10 @@ const pushEnvironment = v.union(
   v.literal('preview'),
   v.literal('production'),
 )
+
+const notificationRateLimiter = new RateLimiter(components.rateLimiter, {
+  sendTestNotification: { kind: 'token bucket', rate: 1, period: MINUTE, capacity: 1 },
+})
 
 export function shouldNotifyForMessage(input: {
   globalMode: 'all' | 'mentions' | 'none'
@@ -96,7 +102,7 @@ export const getSettings = query({
       global: {
         globalMode: global?.globalMode ?? 'all',
         taskMode: global?.taskMode ?? 'all',
-        previewMode: global?.previewMode ?? 'full',
+        previewMode: global?.previewMode ?? 'hidden',
         soundEnabled: global?.soundEnabled ?? true,
         badgesEnabled: global?.badgesEnabled ?? true,
       },
@@ -161,7 +167,7 @@ export const setMobilePreferences = mutation({
     const values = {
       globalMode: args.conversationMode ?? existing?.globalMode ?? 'all',
       taskMode: args.taskMode ?? existing?.taskMode ?? 'all',
-      previewMode: args.previewMode ?? existing?.previewMode ?? 'full',
+      previewMode: args.previewMode ?? existing?.previewMode ?? 'hidden',
       soundEnabled: args.soundEnabled ?? existing?.soundEnabled ?? true,
       badgesEnabled: args.badgesEnabled ?? existing?.badgesEnabled ?? true,
       updatedAt: now,
@@ -247,6 +253,16 @@ export const registerSubscription = mutation({
       expirationTime: args.expirationTime ?? null,
       keys: args.keys,
     })
+    if (args.platform === 'web') {
+      const subscriptions = await ctx.db.query('notificationSubscriptions').collect()
+      const endpointOwnedByAnotherUser = subscriptions.some((subscription) =>
+        subscription.platform === 'web' &&
+        subscription.enabled &&
+        subscription.userId !== args.userId &&
+        subscriptionEndpoint(subscription.tokenOrEndpoint) === args.endpoint,
+      )
+      if (endpointOwnedByAnotherUser) throw new Error('web_push_endpoint_owned_by_other_user')
+    }
     const existingSubscriptions = await ctx.db
       .query('notificationSubscriptions')
       .withIndex('by_user', (q) => q.eq('userId', args.userId))
@@ -300,6 +316,17 @@ export const registerSubscription = mutation({
     return subscriptionId
   },
 })
+
+function subscriptionEndpoint(tokenOrEndpoint: string) {
+  try {
+    const parsed: unknown = JSON.parse(tokenOrEndpoint)
+    if (typeof parsed === 'object' && parsed !== null && 'endpoint' in parsed) {
+      const endpoint = parsed.endpoint
+      if (typeof endpoint === 'string') return endpoint
+    }
+  } catch {}
+  return tokenOrEndpoint
+}
 
 export const registerNativeToken = mutation({
   args: {
@@ -411,6 +438,9 @@ export const registerNativeInstallation = mutation({
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
+    if (existing?.userId && existing.userId !== actor.userId) {
+      throw new Error('push_installation_owned_by_other_user')
+    }
 
     for (const tokenOwner of tokenOwners) {
       if (tokenOwner._id === existing?._id) continue
@@ -474,6 +504,9 @@ export const reportNativePermission = mutation({
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
+    if (existing?.userId && existing.userId !== actor.userId) {
+      throw new Error('push_installation_owned_by_other_user')
+    }
     const enabled = (args.permissionState === 'granted' || args.permissionState === 'provisional') &&
       Boolean(existing?.nativePushToken)
     const values = {
@@ -532,6 +565,39 @@ export const detachNativeInstallation = mutation({
       updatedAt: now,
     })
     return true
+  },
+})
+
+export const detachWebPushSubscription = mutation({
+  args: { endpoint: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    const endpoint = args.endpoint.trim()
+    if (!endpoint) throw new Error('web_push_endpoint_required')
+    const subscriptions = await ctx.db
+      .query('notificationSubscriptions')
+      .withIndex('by_user', (q) => q.eq('userId', actor.userId))
+      .collect()
+    const now = Date.now()
+    let detached = false
+    for (const subscription of subscriptions) {
+      if (subscription.platform !== 'web' || subscriptionEndpoint(subscription.tokenOrEndpoint) !== endpoint) continue
+      detached = true
+      if (subscription.enabled) await ctx.db.patch(subscription._id, { enabled: false, updatedAt: now })
+    }
+    return detached
+  },
+})
+
+export const authorizeTestNotification = internalMutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    assertActorMatches(actor, args.userId)
+    await notificationRateLimiter.limit(ctx, 'sendTestNotification', {
+      key: String(actor.userId),
+      throws: true,
+    })
   },
 })
 
@@ -729,6 +795,7 @@ export const collectMessageNotificationTargets = internalQuery({
             projectMemberId,
             recipientUserId: membership.userId,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             exactMembership: subscription.projectMemberId === projectMemberId,
           }))
         const nativeTargets = installations
@@ -746,7 +813,7 @@ export const collectMessageNotificationTargets = internalQuery({
             actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
-            previewMode: globalSettings?.previewMode ?? 'full',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
@@ -765,7 +832,7 @@ export const collectMessageNotificationTargets = internalQuery({
             actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
-            previewMode: globalSettings?.previewMode ?? 'context',
+            previewMode: globalSettings?.previewMode ?? 'hidden',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',

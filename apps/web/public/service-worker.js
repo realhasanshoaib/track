@@ -1,4 +1,4 @@
-const CACHE_NAME = 'track-shell-v3'
+const CACHE_NAME = 'track-shell-v4'
 const SHELL_ASSETS = [
   '/manifest.json',
   '/favicon.ico',
@@ -7,6 +7,13 @@ const SHELL_ASSETS = [
   '/logo192.png',
   '/logo512.png',
 ]
+const SHELL_ASSET_PATHS = new Set(SHELL_ASSETS)
+
+function isCacheableShellRequest(request) {
+  if (request.method !== 'GET' || request.mode === 'navigate') return false
+  const url = new URL(request.url)
+  return url.origin === self.location.origin && url.search === '' && SHELL_ASSET_PATHS.has(url.pathname)
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -38,32 +45,15 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request
-  if (request.method !== 'GET') return
-
-  const url = new URL(request.url)
-  if (url.origin !== self.location.origin) return
-
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
-          return response
-        })
-        .catch(() => caches.match(request).then((cached) => cached ?? caches.match('/'))),
-    )
-    return
-  }
+  if (!isCacheableShellRequest(request)) return
 
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response.ok) {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
-        }
-        return response
+        if (!response.ok) return response
+        return caches.open(CACHE_NAME)
+          .then((cache) => cache.put(request, response.clone()))
+          .then(() => response)
       })
       .catch(() => caches.match(request)),
   )
