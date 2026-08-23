@@ -27,13 +27,19 @@ export async function authorizeScopedRequest(
   const project = await ctx.db.get(input.projectId)
   if (!project) throw new Error('project_unavailable')
 
+  const channelCapability = required === 'readChannel' || required === 'writeChannel' || required === 'stewardChannel'
+  if (channelCapability) {
+    const group = input.groupId ? await ctx.db.get(input.groupId) : null
+    if (!group || group.projectId !== project._id) throw new Error('channel_unavailable')
+  }
+
   if (resolveProjectAccessProfile(project.accessProfile) === 'legacy') {
     if (required === 'manageProject' || required === 'stewardChannel') {
       await requireProjectManager(ctx, project._id, actor.userId)
     } else {
       await requireProjectMember(ctx, project._id, actor.userId)
     }
-    if (input.groupId && (required === 'readChannel' || required === 'writeChannel' || required === 'stewardChannel')) {
+    if (input.groupId && channelCapability) {
       await requireGroupMember(ctx, input.groupId, actor.userId)
     }
     return { actor, project, companyAccess: null }

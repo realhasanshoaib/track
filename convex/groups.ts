@@ -298,6 +298,8 @@ export const addGroupMember = mutation({
     assertActorMatches(actor, args.actorId)
     await requireProjectManager(ctx, args.projectId, args.actorId)
     await requireProjectMember(ctx, args.projectId, args.userId)
+    const group = await ctx.db.get(args.groupId)
+    if (!group || group.projectId !== args.projectId) throw new Error('group_not_found')
     const now = Date.now()
     const existing = await ctx.db
       .query('groupMembers')
