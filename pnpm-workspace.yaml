@@ -26,13 +26,13 @@ supportedArchitectures:
     - x64
 
 overrides:
-  '@q9labsai/cli': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-cli-0.3.0.tgz
+  '@q9labsai/cli': https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-cli-0.4.0.tgz
   '@q9labsai/config-depcruise': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-depcruise-0.3.0.tgz
   '@q9labsai/config-oxlint': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-oxlint-0.3.0.tgz
   '@q9labsai/config-semgrep': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-semgrep-0.3.0.tgz
   '@q9labsai/config-tsconfig': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-config-tsconfig-0.3.0.tgz
-  '@q9labsai/diagnostics': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-diagnostics-0.3.0.tgz
-  '@q9labsai/gates': https://github.com/Q9Labs/q9stack/releases/download/v0.3.0/q9labsai-gates-0.3.0.tgz
+  '@q9labsai/diagnostics': https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz
+  '@q9labsai/gates': https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz
   '@xmldom/xmldom@>=0.7.0 <=0.8.14': 0.8.15
   '@xmldom/xmldom@>=0.9.0 <=0.9.11': 0.9.12
   brace-expansion@<=5.0.11: 5.0.12
