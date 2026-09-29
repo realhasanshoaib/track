@@ -7,6 +7,11 @@ import { api, internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import schema from './schema'
 
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error('Expected a value')
+  return value
+}
+
 const modules = (import.meta as ImportMeta & {
   glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
 }).glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
@@ -28,9 +33,9 @@ describe('durable mobile push lifecycle', () => {
       installationId, idempotencyKey: 'delivered-flow', title: 'Track', body: 'Test',
       data: {}, soundEnabled: true, ttlMs: 60_000, deferDispatch: true, sourceTraceId: traceId,
     })
-    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
     await t.mutation(internal.pushDelivery.recordDelivery, {
-      intentId: intentId!, attemptNumber: attemptNumber!, provider: 'fcm', providerLatencyMs: 18,
+      intentId: required(intentId), attemptNumber: required(attemptNumber), provider: 'fcm', providerLatencyMs: 18,
     })
     const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
     expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
@@ -56,13 +61,13 @@ describe('durable mobile push lifecycle', () => {
       installationId, idempotencyKey: 'expired-flow', title: 'Track', body: 'Test',
       data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
     })
-    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
     await t.mutation(internal.pushDelivery.recordFailure, {
-      intentId: intentId!, attemptNumber: attemptNumber!, category: 'provider_unavailable',
+      intentId: required(intentId), attemptNumber: required(attemptNumber), category: 'provider_unavailable',
       permanent: false, providerLatencyMs: 1,
     })
-    await t.run(async (ctx) => ctx.db.patch(intentId!, { expiresAt: Date.now() - 1 }))
-    expect(await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })).toBeNull()
+    await t.run(async (ctx) => ctx.db.patch(required(intentId), { expiresAt: Date.now() - 1 }))
+    expect(await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })).toBeNull()
     const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
     expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
       .toEqual([
@@ -76,7 +81,7 @@ describe('durable mobile push lifecycle', () => {
       .toBe('retrying')
     expect(checked.steps.find((step) => step.id === 'settled')?.event?.attributes?.outcome)
       .toBe('expired')
-    expect(await t.run(async (ctx) => ctx.db.get(intentId!))).toMatchObject({ status: 'expired' })
+    expect(await t.run(async (ctx) => ctx.db.get(required(intentId)))).toMatchObject({ status: 'expired' })
   })
 
   it('models cancellation and expiry before a send attempt without a failed flow', async () => {
@@ -89,10 +94,10 @@ describe('durable mobile push lifecycle', () => {
         data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
       })
       if (outcome === 'canceled') {
-        await t.mutation(internal.pushDelivery.cancelIntent, { intentId: intentId!, reason: 'eligibility_changed' })
+        await t.mutation(internal.pushDelivery.cancelIntent, { intentId: required(intentId), reason: 'eligibility_changed' })
       } else {
-        await t.run(async (ctx) => ctx.db.patch(intentId!, { expiresAt: Date.now() - 1 }))
-        expect(await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })).toBeNull()
+        await t.run(async (ctx) => ctx.db.patch(required(intentId), { expiresAt: Date.now() - 1 }))
+        expect(await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })).toBeNull()
       }
       const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
       expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
@@ -174,12 +179,12 @@ describe('durable mobile push lifecycle', () => {
     const first = await t.mutation(internal.pushDelivery.createIntent, args)
     expect(await t.mutation(internal.pushDelivery.createIntent, args)).toBe(first)
     expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryIntents').collect())).toHaveLength(1)
-    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: first! })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(first) })
     await t.mutation(internal.pushDelivery.recordFailure, {
-      intentId: first!, attemptNumber: attemptNumber!, category: 'rate_limited',
+      intentId: required(first), attemptNumber: required(attemptNumber), category: 'rate_limited',
       permanent: false, providerLatencyMs: 20,
     })
-    expect(await t.run(async (ctx) => ctx.db.get(first!))).toMatchObject({
+    expect(await t.run(async (ctx) => ctx.db.get(required(first)))).toMatchObject({
       attemptCount: 1, status: 'retry_wait',
     })
     {
@@ -197,12 +202,12 @@ describe('durable mobile push lifecycle', () => {
         title: 'Track', body: 'Direct provider test', data: { schemaVersion: '1' },
         soundEnabled: true, ttlMs: 60_000, deferDispatch: true,
       })
-      const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })
+      const directAttempt = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
       await t.mutation(internal.pushDelivery.recordDelivery, {
-        intentId: intentId!, attemptNumber: attemptNumber!, provider: 'fcm',
+        intentId: required(intentId), attemptNumber: required(directAttempt), provider: 'fcm',
         providerMessageId: 'projects/track/messages/provider-id', providerLatencyMs: 18,
       })
-      expect(await t.run(async (ctx) => ctx.db.get(intentId!))).toMatchObject({
+      expect(await t.run(async (ctx) => ctx.db.get(required(intentId)))).toMatchObject({
         body: '', status: 'delivered', terminalAt: expect.any(Number), title: 'Track',
       })
       expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryAttempts').first()))
