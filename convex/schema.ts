@@ -667,6 +667,7 @@ export default defineSchema({
     installationId: v.id('pushInstallations'),
     idempotencyKey: v.string(),
     diagnosticTraceId: v.optional(v.string()),
+    diagnosticSubjectId: v.optional(v.string()),
     title: v.string(),
     body: v.string(),
     data: v.any(),

@@ -14,11 +14,11 @@ const terminalContent = { title: 'Track', body: '' }
 async function recordPushStep(
   ctx: MutationCtx,
   intent: Doc<'pushDeliveryIntents'>,
-  step: 'queued' | 'sending' | 'result' | 'settled',
-  outcome?: 'delivered' | 'retrying' | 'expired' | 'failed',
+  step: 'queued' | 'dispatch' | 'sending' | 'result' | 'settled',
+  outcome?: 'sending' | 'canceled' | 'delivered' | 'retrying' | 'expired' | 'failed',
 ) {
-  const traceId = intent.diagnosticTraceId ?? createDiagnosticCode()
-  if (!intent.diagnosticTraceId) await ctx.db.patch(intent._id, { diagnosticTraceId: traceId })
+  const traceId = intent.diagnosticTraceId
+  if (!traceId) return
   const occurredAt = Date.now()
   const event = diagnosticEventSchema.parse({
     version: 1,
@@ -46,7 +46,7 @@ async function recordPushStep(
     flowRun: String(intent._id),
     occurredAt,
     receivedAt: occurredAt,
-    subjectId: String(intent.recipientUserId),
+    subjectId: intent.diagnosticSubjectId ?? String(intent.recipientUserId),
     sourceSurface: 'server',
   })
 }
@@ -109,8 +109,17 @@ export const createIntent = internalMutation({
     const installation = await ctx.db.get(args.installationId)
     if (!installation || !installation.enabled || !installation.nativePushToken ||
       installation.userId !== args.recipientUserId) return null
-    if (args.sourceTraceId && !diagnosticCodeSchema.safeParse(args.sourceTraceId).success)
+    const recipient = await ctx.db.get(args.recipientUserId)
+    if (!recipient) return null
+    const sourceTraceId = args.sourceTraceId
+    if (sourceTraceId && !diagnosticCodeSchema.safeParse(sourceTraceId).success)
       throw new Error('push_invalid_source_trace')
+    const sourceEvent = sourceTraceId
+      ? await ctx.db.query('diagnosticEvents')
+        .withIndex('by_trace_occurred_at', (q) => q.eq('traceId', sourceTraceId))
+        .first()
+      : null
+    if (sourceTraceId && !sourceEvent) throw new Error('push_source_trace_not_found')
     const now = Date.now()
     const intentId = await ctx.db.insert('pushDeliveryIntents', {
       sourceKind: args.sourceKind,
@@ -120,7 +129,8 @@ export const createIntent = internalMutation({
       recipientProjectMemberId: args.recipientProjectMemberId,
       installationId: args.installationId,
       idempotencyKey: args.idempotencyKey.slice(0, 300),
-      diagnosticTraceId: args.sourceTraceId ?? createDiagnosticCode(),
+      diagnosticTraceId: sourceTraceId ?? createDiagnosticCode(),
+      diagnosticSubjectId: sourceEvent?.subjectId ?? recipient.authUserId ?? recipient.googleSubject,
       title: args.title.slice(0, 80),
       body: args.body.slice(0, 180),
       data: args.data,
@@ -165,7 +175,8 @@ export const markSending = internalMutation({
         terminalAt: now,
         updatedAt: now,
       })
-      await recordPushResult(ctx, intent, 'expired')
+      if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'expired')
+      else await recordPushResult(ctx, intent, 'expired')
       return null
     }
     await ctx.db.patch(intent._id, {
@@ -174,6 +185,7 @@ export const markSending = internalMutation({
       nextAttemptAt: undefined,
       updatedAt: now,
     })
+    if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'sending')
     await recordPushStep(ctx, { ...intent, attemptCount: intent.attemptCount + 1 }, 'sending')
     return intent.attemptCount + 1
   },
@@ -191,7 +203,8 @@ export const cancelIntent = internalMutation({
       terminalAt: now,
       updatedAt: now,
     })
-    await recordPushResult(ctx, intent, 'failed')
+    if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'canceled')
+    else await recordPushResult(ctx, intent, 'failed')
     await ctx.db.insert('pushDeliveryAttempts', {
       intentId: intent._id,
       attemptNumber: intent.attemptCount,

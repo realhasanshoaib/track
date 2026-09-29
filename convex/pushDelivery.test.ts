@@ -16,8 +16,9 @@ describe('durable mobile push lifecycle', () => {
   it('records a delivered run on its source trace and finds it by flow run', async () => {
     const t = convexTest(schema, modules)
     const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-delivered-flow')
+    const sourceUserId = await seedUser(t, 'push-source-flow')
     const traceId = createDiagnosticCode()
-    await asUser(t, userId).mutation(api.diagnostics.ingest, { events: [{
+    await asUser(t, sourceUserId).mutation(api.diagnostics.ingest, { events: [{
       version: 1, traceId, spanId: '1234567890abcdef', eventId: 'source_event',
       occurredAt: Date.now(), source: 'browser', kind: 'event', name: 'browser.push_source',
       status: 'ok', level: 'info',
@@ -33,10 +34,16 @@ describe('durable mobile push lifecycle', () => {
     })
     const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
     expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
-      .toEqual([['queued', undefined], ['sending', undefined], ['result', 'delivered']])
+      .toEqual([
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'delivered'],
+      ])
     expect(checkFlowRun(pushFlow, run.events, Date.now()).verdict).toBe('ok')
     const trace = await t.query(internal.diagnostics.lookup.trace, { traceId })
-    expect(trace.events).toHaveLength(4)
+    expect(trace.events).toHaveLength(5)
+    expect(await t.run(async (ctx) => ctx.db.query('diagnosticEvents')
+      .withIndex('by_flow_run', (q) => q.eq('flowRun', String(intentId))).first()))
+      .toMatchObject({ subjectId: String(sourceUserId) })
     expect(await t.query(internal.diagnostics.lookup.trace, { flowRun: 'unknown-run' }))
       .toEqual({ events: [] })
   })
@@ -59,7 +66,8 @@ describe('durable mobile push lifecycle', () => {
     const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
     expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
       .toEqual([
-        ['queued', undefined], ['sending', undefined], ['result', 'retrying'],
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'retrying'],
         ['result', 'expired'], ['settled', 'expired'],
       ])
     const checked = checkFlowRun(pushFlow, run.events, Date.now())
@@ -69,6 +77,30 @@ describe('durable mobile push lifecycle', () => {
     expect(checked.steps.find((step) => step.id === 'settled')?.event?.attributes?.outcome)
       .toBe('expired')
     expect(await t.run(async (ctx) => ctx.db.get(intentId!))).toMatchObject({ status: 'expired' })
+  })
+
+  it('models cancellation and expiry before a send attempt without a failed flow', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-pre-send-flow')
+    for (const outcome of ['canceled', 'expired'] as const) {
+      const intentId = await t.mutation(internal.pushDelivery.createIntent, {
+        sourceKind: 'test', sourceId: outcome, eventKind: 'test', recipientUserId: userId,
+        installationId, idempotencyKey: `pre-send-${outcome}`, title: 'Track', body: 'Test',
+        data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
+      })
+      if (outcome === 'canceled') {
+        await t.mutation(internal.pushDelivery.cancelIntent, { intentId: intentId!, reason: 'eligibility_changed' })
+      } else {
+        await t.run(async (ctx) => ctx.db.patch(intentId!, { expiresAt: Date.now() - 1 }))
+        expect(await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })).toBeNull()
+      }
+      const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+      expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+        .toEqual([['queued', undefined], ['dispatch', outcome]])
+      const checked = checkFlowRun(pushFlow, run.events, Date.now())
+      expect(checked.verdict).toBe('ok')
+      expect(checked.steps.find((step) => step.id === 'sending')?.status).toBe('not_observable')
+    }
   })
 
   it('keeps installation ownership and sign-out state isolated', async () => {
@@ -123,6 +155,7 @@ describe('durable mobile push lifecycle', () => {
     })
     expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryAttempts').first()))
       .toMatchObject({ resultCategory: 'legacy_receipt_expired', status: 'permanent_failure' })
+    expect(await t.run(async (ctx) => ctx.db.query('diagnosticEvents').collect())).toEqual([])
   })
 
   it('converges duplicate scheduling, provider acceptance, and recovery', async () => {

@@ -75,10 +75,13 @@ reschedules when full. Mobile diagnostics and server-wide function-boundary
 instrumentation are not part of this implementation.
 
 Native push delivery records server-side `push.delivery` diagnostic events for
-queued, sending, and result transitions. After a retry, a conditional settled
-step records the final delivered, expired, or failed outcome. The delivery-intent ID is the flow run;
-it is not a user identity. An optional source diagnostic trace is reused when
-the producer has one, otherwise the intent gets its own trace. Internal lookup
+queued, dispatch, sending, and result transitions. The dispatch branch covers
+pre-send cancellation or expiry without inventing a send attempt. After a retry,
+a conditional settled step records the final delivered, expired, or failed
+outcome. The delivery-intent ID is the flow run; it is not a user identity.
+An existing source diagnostic trace is reused when supplied by the producer,
+including its verified subject, otherwise the intent gets its own trace.
+Pre-instrumentation intents do not gain partial flow histories. Internal lookup
 accepts either a diagnostic code or a flow run and uses an indexed run lookup
 to collect retained events across traces. Browser ingestion cannot submit flow
 steps. The flow definition lives in `diagnostics/flows.json`; `pnpm diag trace

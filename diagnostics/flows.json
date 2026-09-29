@@ -4,12 +4,19 @@
     "version": 1,
     "steps": [
       { "id": "queued" },
-      { "id": "sending", "after": ["queued"], "within": "4m" },
+      {
+        "id": "dispatch",
+        "after": ["queued"],
+        "within": "4m",
+        "oneOf": ["sending", "canceled", "expired"]
+      },
+      { "id": "sending", "after": ["dispatch:sending"], "within": "30s", "need": "conditional" },
       {
         "id": "result",
         "after": ["sending"],
         "within": "4m",
-        "oneOf": ["delivered", "retrying", "expired", "failed"]
+        "oneOf": ["delivered", "retrying", "expired", "failed"],
+        "need": "conditional"
       },
       {
         "id": "settled",
