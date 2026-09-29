@@ -1,0 +1,23 @@
+[
+  {
+    "id": "push.delivery",
+    "version": 1,
+    "steps": [
+      { "id": "queued" },
+      { "id": "sending", "after": ["queued"], "within": "4m" },
+      {
+        "id": "result",
+        "after": ["sending"],
+        "within": "4m",
+        "oneOf": ["delivered", "retrying", "expired", "failed"]
+      },
+      {
+        "id": "settled",
+        "after": ["result:retrying"],
+        "within": "24h",
+        "oneOf": ["delivered", "expired", "failed"],
+        "need": "conditional"
+      }
+    ]
+  }
+]

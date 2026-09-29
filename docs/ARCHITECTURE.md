@@ -74,6 +74,16 @@ cleanup removes at most 500 events per run after 14 days from receipt and
 reschedules when full. Mobile diagnostics and server-wide function-boundary
 instrumentation are not part of this implementation.
 
+Native push delivery records server-side `push.delivery` diagnostic events for
+queued, sending, and result transitions. After a retry, a conditional settled
+step records the final delivered, expired, or failed outcome. The delivery-intent ID is the flow run;
+it is not a user identity. An optional source diagnostic trace is reused when
+the producer has one, otherwise the intent gets its own trace. Internal lookup
+accepts either a diagnostic code or a flow run and uses an indexed run lookup
+to collect retained events across traces. Browser ingestion cannot submit flow
+steps. The flow definition lives in `diagnostics/flows.json`; `pnpm diag trace
+<code>` shows its verdict alongside the events.
+
 ## Verification
 
 Canonical q9 type-aware lint scans the checked TypeScript source roots in web,

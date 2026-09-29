@@ -32,6 +32,9 @@ export const ingest = mutation({
       if (
         !result.success ||
         result.data.source !== 'browser' ||
+        result.data.attributes?.flow !== undefined ||
+        result.data.attributes?.flow_run !== undefined ||
+        result.data.attributes?.flow_step !== undefined ||
         Math.abs(result.data.occurredAt - now) > 7 * DAY
       ) {
         throw new Error('diagnostics_invalid_event')
@@ -88,6 +91,7 @@ export const ingest = mutation({
         traceId: event.traceId,
         eventId: event.eventId,
         journeyTraceId: event.journeyTraceId,
+        flowRun: typeof event.attributes?.flow_run === 'string' ? event.attributes.flow_run : undefined,
         occurredAt: event.occurredAt,
         receivedAt: now,
         subjectId: actor.authSubject,
@@ -105,9 +109,20 @@ export const ingest = mutation({
 })
 
 export const trace = internalQuery({
-  args: { traceId: v.string() },
-  handler: async (ctx, { traceId }) => {
-    if (!diagnosticCodeSchema.safeParse(traceId).success)
+  args: { traceId: v.optional(v.string()), flowRun: v.optional(v.string()) },
+  handler: async (ctx, { traceId, flowRun }) => {
+    if ((traceId === undefined) === (flowRun === undefined))
+      throw new Error('diagnostics_invalid_lookup')
+    if (flowRun !== undefined) {
+      if (!/^[a-zA-Z0-9_-]{1,96}$/.test(flowRun))
+        throw new Error('diagnostics_invalid_flow_run')
+      const rows = await ctx.db.query('diagnosticEvents')
+        .withIndex('by_flow_run', (q) => q.eq('flowRun', flowRun))
+        .take(2001)
+      if (rows.length > 2000) console.warn('diagnostics.flow_run.truncated', flowRun)
+      return { events: rows.slice(0, 2000).map((row) => row.event) }
+    }
+    if (traceId === undefined || !diagnosticCodeSchema.safeParse(traceId).success)
       throw new Error('diagnostics_invalid_code')
     const direct = await ctx.db
       .query('diagnosticEvents')
