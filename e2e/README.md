@@ -26,11 +26,16 @@ uploads those files as the `track-browser-evidence` artifact.
 `pnpm perf:fixture` performs repeated navigation to the seeded conversation
 and task routes, sends real messages through the composer, scrolls the visible
 conversation surface, and records browser resource timing. Its report is
-written to `artifacts/performance/fixture-performance.json` and checked
+written separately for each attempt to
+`artifacts/performance/fixture-performance.chromium.retry-<n>.json` and checked
 against [`performance/budgets.json`](./performance/budgets.json).
 Its separate guarded fixture adds 24 older messages and requires the actual
 conversation scroller to overflow and move on every measured step. These are
-local development-fixture timings, not production field measurements.
+production-build fixture timings, not production field measurements. The
+performance command builds an isolated checkout and serves the Cloudflare
+worker locally through Wrangler, using the same deterministic Convex backend.
+It signs in through normal email authentication; the development demo bypass
+remains disabled in the production build. Browser journeys still use Vite dev.
 
 The report labels only browser-observable values: route/task/send/scroll
 durations, same-origin resource entry count and transfer/encoded bytes, and

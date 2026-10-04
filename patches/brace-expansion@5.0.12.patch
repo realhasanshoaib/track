@@ -1,12 +1,11 @@
 diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
-index 34e543264889be2018fd72e310acf815245dadba..1316892f3711e365794244fc181734861da527b0 100644
 --- a/dist/commonjs/index.js
 +++ b/dist/commonjs/index.js
-@@ -284,4 +284,7 @@ function expand_(str, max, maxLength, isTop) {
-     }
+@@ -330,3 +330,6 @@
      return acc;
  }
 +// Keep the v1 CommonJS callable export while exposing the patched v5 named API.
 +// Older minimatch releases require the package as a function.
 +module.exports = Object.assign(expand, exports);
  //# sourceMappingURL=index.js.map
+\ No newline at end of file
