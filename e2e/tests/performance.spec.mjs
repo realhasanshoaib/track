@@ -19,13 +19,29 @@ async function resetFixture() {
 
 async function signIn(page) {
   await page.goto('/sign-in', { waitUntil: 'domcontentloaded' })
-  const demoButton = page.getByRole('button', { name: 'Use Hasan Demo' })
-  await expect(demoButton).toBeVisible({ timeout: 60_000 })
-  await expect.poll(
-    () => page.evaluate(() => window.localStorage.getItem('better-auth_session_data')),
-    { timeout: 60_000 },
-  ).toBe('null')
-  await demoButton.click()
+  if (process.env.TRACK_E2E_PRODUCTION === '1') {
+    // Production deliberately has no demo bypass; use the normal email auth flow.
+    const password = process.env.VITE_DEV_AUTH_BYPASS_PASSWORD ?? 'track-e2e-local-password'
+    await page.getByPlaceholder('you@example.com').fill('developer@track.local')
+    await page.getByPlaceholder('At least 10 characters').fill(password)
+    await page.getByRole('button', { name: 'Continue with Email', exact: true }).click()
+    const confirmation = page.getByPlaceholder('Repeat password')
+    await expect.poll(async () =>
+      /\/workspace/.test(page.url()) || await confirmation.isVisible(),
+    { timeout: 60_000 }).toBe(true)
+    if (await confirmation.isVisible()) {
+      await confirmation.fill(password)
+      await page.getByRole('button', { name: 'Create account', exact: true }).click()
+    }
+  } else {
+    const demoButton = page.getByRole('button', { name: 'Use Hasan Demo' })
+    await expect(demoButton).toBeVisible({ timeout: 60_000 })
+    await expect.poll(
+      () => page.evaluate(() => window.localStorage.getItem('better-auth_session_data')),
+      { timeout: 60_000 },
+    ).toBe('null')
+    await demoButton.click()
+  }
   await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/\/workspace/)
   await expect(page.getByText(/E2E .* Primary/, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
 }
@@ -158,7 +174,9 @@ test('real app operation timings and resource bytes stay inside budgets', async 
     },
     samples: { routeNavigationMs, taskRouteMs, sendAcknowledgementMs },
   }
-  const outputPath = process.env.PERF_OUTPUT_PATH ?? testInfo.outputPath('fixture-performance.json')
+  const outputPath = process.env.PERF_OUTPUT_PATH
+    ? process.env.PERF_OUTPUT_PATH.replace(/\.json$/, `.${testInfo.project.name}.retry-${testInfo.retry}.json`)
+    : testInfo.outputPath('fixture-performance.json')
   mkdirSync(dirname(outputPath), { recursive: true })
   writeFileSync(outputPath, JSON.stringify(report, null, 2) + '\n')
 

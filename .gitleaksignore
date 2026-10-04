@@ -4,3 +4,9 @@
 e3213aa5681231bc8485665b0d8c8d520c1f103f:scratchpad/history/2026-W28.md:generic-api-key:135
 # The same prose false positive appears in a later revision of that note.
 9a41ff89b368bf846fd814cf06feccf4c26f1a40:scratchpad/history/2026-W28.md:generic-api-key:135
+# Historical Android UI dump contains a React duplicate-key warning, not an API credential.
+7a3113953d5c00d27de0c118677737a6908fa98f:apps/mobile/qa-my-tasks.xml:generic-api-key:1
+# Historical Android UI dump contains a React duplicate-key warning, not an API credential.
+7a3113953d5c00d27de0c118677737a6908fa98f:apps/mobile/emulator-window.xml:generic-api-key:1
+# Historical Android UI dump contains a React duplicate-key warning, not an API credential.
+7a3113953d5c00d27de0c118677737a6908fa98f:apps/mobile/qa-window.xml:generic-api-key:1

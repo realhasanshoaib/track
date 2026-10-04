@@ -50,6 +50,8 @@ cpSync(repoRoot, isolatedRoot, {
 })
 // The workspace packages are only needed for Convex bundling; reuse the installed dependency graph.
 symlinkSync(join(repoRoot, 'node_modules'), join(isolatedRoot, 'node_modules'), 'dir')
+// Preserve the web workspace's React/React DOM resolution rather than the mobile hoist.
+symlinkSync(join(repoRoot, 'apps/web/node_modules'), join(isolatedRoot, 'apps/web/node_modules'), 'dir')
 
 writeFileSync(envFile, 'CONVEX_DEPLOYMENT=anonymous-agent\n')
 writeFileSync(convexEnvFile, [
@@ -285,9 +287,11 @@ async function main() {
     },
   }, null, 2) + '\n', { mode: 0o600 })
 
-  start('pnpm', ['--filter', '@track/web', 'dev', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], {
+  const webEnv = {
     VITE_CONVEX_URL: convexUrl,
     VITE_CONVEX_SITE_URL: convexSiteUrl,
+    VITE_CONVEX_URL_PROD: convexUrl,
+    VITE_CONVEX_SITE_URL_PROD: convexSiteUrl,
     CONVEX_URL: convexUrl,
     CONVEX_SITE_URL: convexSiteUrl,
     SITE_URL: siteUrl,
@@ -298,7 +302,23 @@ async function main() {
     VITE_DEVTOOLS: '0',
     TRACK_E2E_FIXTURE: '1',
     TRACK_E2E_FIXTURE_TOKEN: fixtureToken,
-  }, repoRoot)
+  }
+  if (process.env.TRACK_E2E_PRODUCTION === '1') {
+    // Build only the disposable checkout; never reuse or overwrite a developer's output.
+    // pnpm 12 refuses script task state beneath the reused node_modules symlink.
+    const webRoot = join(isolatedRoot, 'apps/web')
+    const build = start('node', [join(repoRoot, 'node_modules/vite/bin/vite.js'), 'build'], webEnv, webRoot)
+    const [code] = await once(build, 'exit')
+    if (code !== 0) throw new Error(`E2E production build failed (${code})`)
+    start('node', [
+      join(repoRoot, 'node_modules/wrangler/bin/wrangler.js'), 'dev',
+      '--config', '.output/server/wrangler.json', '--local', '--ip', '127.0.0.1', '--port', '4173',
+      '--var', `VITE_CONVEX_URL_PROD:${convexUrl}`,
+      '--var', `VITE_CONVEX_SITE_URL_PROD:${convexSiteUrl}`,
+    ], webEnv, webRoot)
+  } else {
+    start('pnpm', ['--filter', '@track/web', 'dev', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], webEnv, repoRoot)
+  }
   await waitForHttp(`${siteUrl}/sign-in`, 180_000)
 
   await new Promise(() => {})
