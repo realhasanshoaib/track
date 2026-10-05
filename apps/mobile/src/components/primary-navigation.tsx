@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react';
 import { BlurView } from 'expo-blur';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useKeyboardState } from 'react-native-keyboard-controller';
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
+import { usePrimaryTabSwipe } from '@/components/primary-tab-swipe';
 import { ThemedText } from '@/components/themed-text';
 import { AndroidBottomTabHeight, BottomTabInset, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
@@ -48,6 +49,7 @@ export function StandalonePrimaryNavigation({ active }: { active?: StandaloneTab
 /** Four peer destinations with platform-specific selection feedback. */
 export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
   const router = useRouter();
+  const tabSwipe = usePrimaryTabSwipe();
   const pathname = usePathname();
   const release = useReleaseConfig();
   const keyboardVisible = useKeyboardState((keyboard) => keyboard.isVisible);
@@ -75,6 +77,25 @@ export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
     )
     : '/tasks?create=1';
 
+  const selectItem = useCallback((item: NavigationItem | (PrimaryDestination & { href: string })) => {
+    const route = visibleRoutes.find((candidate) => candidate.name === item.href);
+    if (!route || item.disabled) return false;
+    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    if (event.defaultPrevented) return false;
+    const resetTarget = primaryTabResetTarget(item.key);
+    if (resetTarget) navigation.navigate(route.name, resetTarget);
+    else navigation.navigate(route.name, route.params);
+    return true;
+  }, [navigation, visibleRoutes]);
+
+  useEffect(() => tabSwipe.registerNavigation((direction) => {
+    const activeIndex = items.findIndex((candidate) => candidate.key === activeKey);
+    const item = items[activeIndex + direction];
+    return item ? selectItem(item) : false;
+  }), [activeKey, items, selectItem, tabSwipe]);
+
+  useEffect(() => tabSwipe.setActiveKey(activeKey), [activeKey, tabSwipe]);
+
   useEffect(() => setHidden(false), [pathname, setHidden]);
 
   if (keyboardVisible || !primaryNavigationVisibleForPath(pathname)) return null;
@@ -91,15 +112,7 @@ export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
       }
       router.push(createHref as never);
     }}
-    onSelect={(item) => {
-      const route = visibleRoutes.find((candidate) => candidate.name === item.href);
-      if (!route || item.disabled) return;
-      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-      if (event.defaultPrevented) return;
-      const resetTarget = primaryTabResetTarget(item.key);
-      if (resetTarget) navigation.navigate(route.name, resetTarget);
-      else navigation.navigate(route.name, route.params);
-    }}
+    onSelect={selectItem}
   />;
 }
 

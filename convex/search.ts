@@ -59,6 +59,7 @@ export const project = query({
     projectId: v.id('projects'),
     query: v.string(),
     userId: v.id('users'),
+    groupId: v.optional(v.id('groups')),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
     threadStatus: v.optional(searchThreadStatus),
@@ -122,7 +123,14 @@ export const project = query({
             title: archivedProject.name,
           }]
         : []
-      return { ...archivedResults, people, projects }
+      return {
+        ...archivedResults,
+        messages: args.groupId
+          ? archivedResults.messages.filter((message) => message.groupId === args.groupId)
+          : archivedResults.messages,
+        people,
+        projects,
+      }
     }
 
     const groupMemberships = access.companyAccess
@@ -135,6 +143,9 @@ export const project = query({
     const visibleGroupIdValues = access.companyAccess?.entitlement?.channelIds ?? groupMemberships
         .filter((membership) => membership.projectId === args.projectId)
         .map((membership) => membership.groupId)
+    const searchableGroupIds = args.groupId
+      ? visibleGroupIdValues.filter((groupId) => groupId === args.groupId)
+      : visibleGroupIdValues
     const cutoff = access.companyAccess?.entitlement?.exitAt
     const channelSnapshotValues = (access.companyAccess?.entitlement?.channelSnapshots ?? []) as Array<ArchivedChannelSnapshot>
     const threadSnapshotValues = (access.companyAccess?.entitlement?.threadSnapshots ?? []) as Array<ArchivedThreadSnapshot>
@@ -143,14 +154,14 @@ export const project = query({
     const threadSnapshots = new Map(threadSnapshotValues.map((thread) => [String(thread._id), thread]))
 
     const messages = enabled(filter, 'messages')
-      && visibleGroupIdValues.length > 0
+      && searchableGroupIds.length > 0
       ? await ctx.db
           .query('messages')
           .withSearchIndex('search_body_by_project', (q) =>
             q.search('body', term).eq('projectId', args.projectId),
           )
           .filter((q) => q.and(
-            q.or(...visibleGroupIdValues.map((groupId) => q.eq(q.field('groupId'), groupId))),
+            q.or(...searchableGroupIds.map((groupId) => q.eq(q.field('groupId'), groupId))),
             ...(cutoff ? [q.lte(q.field('createdAt'), cutoff)] : []),
             ...(!threadsEnabled()
               ? [q.eq(q.field('channelThreadId'), undefined)]

@@ -3,6 +3,11 @@ export function resolvePushHref(data: Record<string, unknown> | null | undefined
   if (typeof data?.url !== 'string' || !data.url.startsWith('/') || data.url.startsWith('//')) return null;
   const base = new URL(data.url, 'https://track.local');
   if (base.pathname === '/projects' && !base.search) return '/projects';
+  if (base.pathname === '/inbox' &&
+    base.searchParams.get('filter') === 'invitations' &&
+    base.searchParams.get('invitationId')) {
+    return `${base.pathname}${base.search}`;
+  }
   if (base.pathname === '/task') {
     if (!base.searchParams.get('projectId') || !base.searchParams.get('taskKey')) return null;
     const companyId = base.searchParams.get('companyId');

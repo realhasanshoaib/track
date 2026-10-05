@@ -209,6 +209,7 @@ export default defineSchema({
     participantRevision: v.optional(v.number()),
     revision: v.optional(v.number()),
     archiveReason: v.optional(v.string()),
+    archivedAt: v.optional(v.number()),
     createdBy: v.id('users'),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -622,7 +623,7 @@ export default defineSchema({
     .index('by_native_token', ['nativePushToken']),
 
   pushDeliveryIntents: defineTable({
-    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('test')),
+    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('company_invitation'), v.literal('project_invitation'), v.literal('test')),
     sourceId: v.string(),
     eventKind: v.string(),
     recipientUserId: v.id('users'),
@@ -651,7 +652,7 @@ export default defineSchema({
     .index('by_created_at', ['createdAt']),
 
   pushNotificationEvents: defineTable({
-    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('test')),
+    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('company_invitation'), v.literal('project_invitation'), v.literal('test')),
     sourceId: v.string(),
     eventKind: v.string(),
     eligibleRecipientCount: v.number(),

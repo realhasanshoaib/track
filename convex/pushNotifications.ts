@@ -112,6 +112,7 @@ export const deliverMessageNotifications = internalAction({
         previewMode: target.kind === 'web' ? 'context' : target.previewMode,
       })
       if (target.kind === 'web') {
+        if (['mention', 'direct_reply', 'thread_reply'].includes(target.eventKind ?? 'message')) return
         if (!webConfigured) return
         try {
           await webPush.sendNotification(JSON.parse(target.tokenOrEndpoint), JSON.stringify({
@@ -199,6 +200,7 @@ export const deliverTaskNotification = internalAction({
         previewMode: rawTarget.kind === 'web' ? 'context' : rawTarget.previewMode,
       })
       if (rawTarget.kind === 'web') {
+        if (['assignment', 'comment', 'due_soon', 'mention', 'overdue', 'task_changed', 'urgent_update'].includes(notification.eventKind)) return
         if (!webConfigured) return
         try {
           await webPush.sendNotification(JSON.parse(rawTarget.tokenOrEndpoint), JSON.stringify({
@@ -256,6 +258,102 @@ export const deliverTaskNotification = internalAction({
   },
 })
 
+export const deliverCompanyInvitation = internalAction({
+  args: { invitationId: v.id('companyInvitations') },
+  handler: async (ctx, args) => {
+    const invitation = await ctx.runQuery(internal.notifications.collectCompanyInvitationPushTargets, args)
+    const sourceId = String(args.invitationId)
+    if (!invitation?.targets.length) {
+      await ctx.runMutation(internal.pushDelivery.recordEvent, {
+        sourceKind: 'company_invitation', sourceId, eventKind: 'company_invitation',
+        eligibleRecipientCount: 0, createdIntentCount: 0, webTargetCount: 0,
+      })
+      return
+    }
+    const intentIds: Array<Id<'pushDeliveryIntents'>> = []
+    for (const target of invitation.targets) {
+      const copy = target.previewMode === 'hidden'
+        ? { title: 'Track', body: 'You have a new Company invitation.' }
+        : target.previewMode === 'context'
+          ? { title: 'Track', body: 'You were invited to join a Company.' }
+          : {
+              title: `Invitation to ${invitation.companyName}`,
+              body: `You were invited to join as ${invitation.role}.`,
+            }
+      const intentId = await ctx.runMutation(internal.pushDelivery.createIntent, {
+        sourceKind: 'company_invitation', sourceId, eventKind: 'company_invitation',
+        recipientUserId: target.recipientUserId,
+        installationId: target.installationId,
+        idempotencyKey: `company-invitation:${args.invitationId}:${target.installationId}`,
+        ...copy,
+        data: {
+          schemaVersion: '1', eventKind: 'company_invitation',
+          url: `/inbox?filter=invitations&invitationId=${encodeURIComponent(sourceId)}`,
+        },
+        soundEnabled: target.soundEnabled,
+        ttlMs: 60 * 60 * 1_000,
+        deferDispatch: true,
+      })
+      if (intentId) intentIds.push(intentId)
+    }
+    for (let index = 0; index < intentIds.length; index += 100) {
+      await ctx.runAction(internal.pushNotifications.dispatchDeliveryBatch, {
+        intentIds: intentIds.slice(index, index + 100),
+      })
+    }
+    await ctx.runMutation(internal.pushDelivery.recordEvent, {
+      sourceKind: 'company_invitation', sourceId, eventKind: 'company_invitation',
+      eligibleRecipientCount: 1, createdIntentCount: intentIds.length, webTargetCount: 0,
+    })
+  },
+})
+
+export const deliverProjectInvitation = internalAction({
+  args: { invitationId: v.id('invitations') },
+  handler: async (ctx, args) => {
+    const invitation = await ctx.runQuery(internal.notifications.collectProjectInvitationPushTargets, args)
+    const sourceId = String(args.invitationId)
+    if (!invitation?.targets.length) {
+      await ctx.runMutation(internal.pushDelivery.recordEvent, {
+        sourceKind: 'project_invitation', sourceId, eventKind: 'project_invitation',
+        eligibleRecipientCount: 0, createdIntentCount: 0, webTargetCount: 0,
+      })
+      return
+    }
+    const intentIds: Array<Id<'pushDeliveryIntents'>> = []
+    for (const target of invitation.targets) {
+      const copy = target.previewMode === 'hidden'
+        ? { title: 'Track', body: 'You have a new Project invitation.' }
+        : target.previewMode === 'context'
+          ? { title: 'Track', body: 'You were invited to join a Project.' }
+          : { title: `Invitation to ${invitation.projectName}`, body: 'You were invited to join a Project.' }
+      const intentId = await ctx.runMutation(internal.pushDelivery.createIntent, {
+        sourceKind: 'project_invitation', sourceId, eventKind: 'project_invitation',
+        recipientUserId: target.recipientUserId,
+        installationId: target.installationId,
+        idempotencyKey: `project-invitation:${args.invitationId}:${target.installationId}`,
+        ...copy,
+        data: {
+          schemaVersion: '1', eventKind: 'project_invitation', url: '/projects',
+        },
+        soundEnabled: target.soundEnabled,
+        ttlMs: 60 * 60 * 1_000,
+        deferDispatch: true,
+      })
+      if (intentId) intentIds.push(intentId)
+    }
+    for (let index = 0; index < intentIds.length; index += 100) {
+      await ctx.runAction(internal.pushNotifications.dispatchDeliveryBatch, {
+        intentIds: intentIds.slice(index, index + 100),
+      })
+    }
+    await ctx.runMutation(internal.pushDelivery.recordEvent, {
+      sourceKind: 'project_invitation', sourceId, eventKind: 'project_invitation',
+      eligibleRecipientCount: 1, createdIntentCount: intentIds.length, webTargetCount: 0,
+    })
+  },
+})
+
 async function isIntentStillEligible(ctx: any, row: any) {
   const { intent, installation } = row
   if (!installation || !installation.enabled || !installation.nativePushToken ||
@@ -269,6 +367,22 @@ async function isIntentStillEligible(ctx: any, row: any) {
     return Boolean(current?.targets.some((target: any) =>
       target.kind === 'native' && target.installationId === intent.installationId &&
       target.projectMemberId === intent.recipientProjectMemberId,
+    ))
+  }
+  if (intent.sourceKind === 'company_invitation') {
+    const current = await ctx.runQuery(internal.notifications.collectCompanyInvitationPushTargets, {
+      invitationId: intent.sourceId as Id<'companyInvitations'>,
+    })
+    return Boolean(current?.targets.some((target: any) =>
+      target.installationId === intent.installationId && target.recipientUserId === intent.recipientUserId,
+    ))
+  }
+  if (intent.sourceKind === 'project_invitation') {
+    const current = await ctx.runQuery(internal.notifications.collectProjectInvitationPushTargets, {
+      invitationId: intent.sourceId as Id<'invitations'>,
+    })
+    return Boolean(current?.targets.some((target: any) =>
+      target.installationId === intent.installationId && target.recipientUserId === intent.recipientUserId,
     ))
   }
   const current = await ctx.runQuery((internal as any).taskNotifications.collectPushTargets, {

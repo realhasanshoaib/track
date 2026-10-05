@@ -10,6 +10,7 @@ import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { CompactPillButton } from '@/components/compact-pill-button';
 import { EntityMark } from '@/components/entity-mark';
 import { EmptyState } from '@/components/empty-state';
+import { IconButton } from '@/components/icon-button';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ConversationProjectTabs } from '@/components/conversation-project-tabs';
 import { ScreenLoading } from '@/components/screen-loading';
@@ -443,8 +444,8 @@ const styles = StyleSheet.create({
   filters: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   footerSpace: { height: Spacing.four },
   headerStack: { gap: Spacing.three, paddingBottom: Spacing.two },
-  headingRow: { alignItems: 'center', flexDirection: 'row', minHeight: TouchTarget },
-  headingCopy: { flex: 1, gap: 1, minWidth: 0 },
+  headingRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget },
+  headingCopy: { flex: 1, gap: Spacing.two, minWidth: 0 },
   headingTitle: { flex: 1, flexShrink: 1, minWidth: 0 },
   loadMore: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, marginHorizontal: Spacing.three, marginVertical: Spacing.two, minHeight: TouchTarget, justifyContent: 'center' },
   moreButton: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, marginHorizontal: Spacing.three, marginVertical: Spacing.two, minHeight: TouchTarget, justifyContent: 'center' },

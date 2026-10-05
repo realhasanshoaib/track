@@ -274,6 +274,7 @@ export function CompanyProjectNavigation({
             setMobileMenuOpen(false);
           }
         }}
+        searchable={companies.length >= 8}
         value={actingCompanyId ?? ""}
       >
         {companies.flatMap((item) => item.company ? [

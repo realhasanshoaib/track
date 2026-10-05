@@ -132,6 +132,22 @@ function ToastHost({ item, onDismiss }: { item: AppToastItem; onDismiss: () => v
     opacity: opacity.get(),
     transform: [{ translateY: translateY.get() }, { scale: scale.get() }],
   }));
+  const copy = <>
+    <View style={[styles.iconWell, { backgroundColor: item.tone === 'success' ? theme.successSoft : item.tone === 'error' ? theme.dangerSoft : theme.accentSoft }]}>
+      <PlatformIcon
+        animationSpec={reduceMotion ? undefined : { effect: { type: 'bounce', wholeSymbol: true }, repeatCount: 1 }}
+        color={toneColor}
+        name={icon}
+        size={20}
+        variant="filled"
+        weight="semibold"
+      />
+    </View>
+    <View style={styles.copy}>
+      <ThemedText numberOfLines={largeText ? undefined : 2} type="title">{item.title}</ThemedText>
+      {item.message ? <ThemedText numberOfLines={largeText ? undefined : 3} themeColor="textSecondary" type="caption">{item.message}</ThemedText> : null}
+    </View>
+  </>;
   const leftDropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(bloom.get(), [0, 0.35, 1], [0, 0.8, 0], Extrapolation.CLAMP),
     transform: [
@@ -174,20 +190,16 @@ function ToastHost({ item, onDismiss }: { item: AppToastItem; onDismiss: () => v
           <Animated.View accessibilityElementsHidden pointerEvents="none" style={[styles.rightDrop, rightDropStyle, { backgroundColor: theme.navigationGlass }]} />
         </> : null}
         <View style={styles.content}>
-          <View style={[styles.iconWell, { backgroundColor: item.tone === 'success' ? theme.successSoft : item.tone === 'error' ? theme.dangerSoft : theme.accentSoft }]}>
-            <PlatformIcon
-              animationSpec={reduceMotion ? undefined : { effect: { type: 'bounce', wholeSymbol: true }, repeatCount: 1 }}
-              color={toneColor}
-              name={icon}
-              size={20}
-              variant="filled"
-              weight="semibold"
-            />
-          </View>
-          <View style={styles.copy}>
-            <ThemedText numberOfLines={largeText ? undefined : 2} type="title">{item.title}</ThemedText>
-            {item.message ? <ThemedText numberOfLines={largeText ? undefined : 3} themeColor="textSecondary" type="caption">{item.message}</ThemedText> : null}
-          </View>
+          {item.onPress ? <Pressable
+            accessibilityHint="Opens the notification"
+            accessibilityLabel={[item.title, item.message, 'Open notification'].filter(Boolean).join('. ')}
+            accessibilityRole="button"
+            onPress={() => { hapticLight(); dismiss(); item.onPress?.(); }}
+            style={({ pressed }) => [styles.toastAction, { opacity: pressed ? 0.72 : 1 }]}
+          >
+            {copy}
+            <PlatformIcon color={theme.textSecondary} name="chevron-right" size={18} />
+          </Pressable> : <View style={styles.toastAction}>{copy}</View>}
           <Pressable accessibilityLabel="Dismiss notification" accessibilityRole="button" hitSlop={4} onPress={() => { hapticLight(); dismiss(); }} style={({ pressed }) => [styles.dismiss, { opacity: pressed ? 0.5 : 1 }]}>
             <PlatformIcon color={theme.textTertiary} name="close" size={16} />
           </Pressable>
@@ -239,6 +251,7 @@ const styles = StyleSheet.create({
   provider: { flex: 1 },
   rightDrop: { borderRadius: Radius.pill, height: 20, position: 'absolute', right: 46, top: -3, width: 20 },
   toastShell: { alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.xlarge, boxShadow: '0 10px 34px rgba(27,25,23,0.18)', maxWidth: 390, minWidth: 280, overflow: 'visible', width: '100%' },
+  toastAction: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: Spacing.three, minWidth: 0 },
   toneRail: { borderBottomRightRadius: Radius.medium, borderTopRightRadius: Radius.medium, bottom: 12, left: 0, position: 'absolute', top: 12, width: 4, zIndex: 2 },
   viewport: { left: Spacing.four, position: 'absolute', right: Spacing.four, top: 0, zIndex: 100 },
 });

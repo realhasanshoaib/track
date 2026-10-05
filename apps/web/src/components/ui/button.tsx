@@ -21,14 +21,14 @@ const buttonVariants = cva(
       },
       size: {
         default:
-          "h-9 gap-1.5 px-3 text-xs/relaxed has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3.5",
-        xs: "h-7 gap-1 rounded-sm px-2 text-[0.6875rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-10 gap-2 px-3.5 text-sm/relaxed has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
-        icon: "size-9 [&_svg:not([class*='size-'])]:size-4",
-        "icon-xs": "size-7 rounded-sm [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8 [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-lg": "size-10 [&_svg:not([class*='size-'])]:size-4",
+          "h-[var(--control-md,2.5rem)] gap-1.5 px-3 text-xs/relaxed has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3.5",
+        xs: "h-[var(--control-xs,2rem)] gap-1 rounded-sm px-2 text-[0.6875rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-[var(--control-sm,2.25rem)] gap-1.5 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-[var(--control-lg,2.75rem)] gap-2 px-3.5 text-sm/relaxed has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
+        icon: "h-[var(--control-md,2.5rem)] w-[var(--control-md,2.5rem)] [&_svg:not([class*='size-'])]:size-4",
+        "icon-xs": "h-[var(--control-xs,2rem)] w-[var(--control-xs,2rem)] rounded-sm [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "h-[var(--control-sm,2.25rem)] w-[var(--control-sm,2.25rem)] [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-lg": "h-[var(--control-lg,2.75rem)] w-[var(--control-lg,2.75rem)] [&_svg:not([class*='size-'])]:size-4",
       },
     },
     defaultVariants: {
@@ -47,6 +47,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

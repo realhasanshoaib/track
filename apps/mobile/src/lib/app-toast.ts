@@ -6,6 +6,7 @@ export type AppToastInput = {
   durationMs?: number;
   icon?: IconName;
   message?: string;
+  onPress?: () => void;
   title: string;
   tone?: AppToastTone;
 };
@@ -23,7 +24,8 @@ export function enqueueToast(queue: AppToastItem[], next: AppToastItem) {
   return [queue[0], ...queue.slice(-(maximumVisibleQueue - 2)), next];
 }
 
-export function toastDuration({ durationMs, message }: AppToastInput) {
+export function toastDuration({ durationMs, message, onPress }: AppToastInput) {
+  if (onPress) return Math.min(8_000, Math.max(5_000, durationMs ?? 8_000));
   if (durationMs !== undefined) return Math.min(8_000, Math.max(2_000, durationMs));
   return message && message.length > 72 ? 4_800 : 3_600;
 }

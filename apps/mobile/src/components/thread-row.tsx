@@ -35,6 +35,7 @@ const SWIPE_THRESHOLD = 56;
 const SWIPE_ACTION_WIDTH = TouchTarget;
 
 type Props = {
+  highlighted?: boolean;
   item: Exclude<GroupedThreadItem, { kind: 'date-sep' }>;
   isFirstInGroup: boolean;
   isOwnMessage?: boolean;
@@ -52,6 +53,7 @@ type Props = {
 };
 
 export function ThreadRow({
+  highlighted = false,
   item,
   isFirstInGroup,
   isOwnMessage,
@@ -170,6 +172,7 @@ export function ThreadRow({
             />
           ) : (
             <MessageBubble
+              highlighted={highlighted}
               isFirstInGroup={isFirstInGroup}
               isOwnMessage={Boolean(isOwnMessage)}
               message={item.item}

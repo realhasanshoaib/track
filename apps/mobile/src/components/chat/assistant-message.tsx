@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
 import { AssistantMark } from '@/components/chat/assistant-mark';
+import { MessageActionShortcut } from '@/components/chat/message-action-shortcut';
 import {
   assistantFailureHint,
   assistantProgressLabel,
@@ -19,7 +20,6 @@ import type { Doc } from '../../../../../convex/_generated/dataModel';
 
 const MARK_SIZE = 32;
 const VISIBLE_EVIDENCE = 3;
-const ASSISTANT_ACCESSIBILITY_ACTIONS = [{ name: 'openMessageActions', label: 'Open response actions' }] as const;
 
 type Props = {
   isFirstInGroup: boolean;
@@ -43,10 +43,6 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
   const hiddenEvidence = stream.evidence.length - evidence.length;
   // Only an answer that closes the bubble can tuck the time into its last line.
   const timeInline = Boolean(answer) && evidence.length === 0;
-  const onAccessibilityAction = (event: AccessibilityActionEvent) => {
-    if (event.nativeEvent.actionName === 'openMessageActions') onLongPress();
-  };
-
   return (
     <View style={styles.row}>
       {isFirstInGroup ? <AssistantMark size={MARK_SIZE} /> : <View style={styles.markSpacer} />}
@@ -98,16 +94,10 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
               }
             />
             {timeInline ? (
-              <ThemedText
-                accessibilityActions={ASSISTANT_ACCESSIBILITY_ACTIONS}
-                accessibilityHint="Use accessibility actions to open actions for this response."
-                accessibilityLabel={`Answered at ${timeLabel}`}
-                onAccessibilityAction={onAccessibilityAction}
-                style={styles.timeInline}
-                themeColor="textSecondary"
-                type="caption">
-                {timeLabel}
-              </ThemedText>
+              <View style={styles.timeMeta}>
+                <ThemedText style={styles.timeInline} themeColor="textSecondary" type="caption">{timeLabel}</ThemedText>
+                <MessageActionShortcut authorName="Track Assistant" onPress={onLongPress} timeLabel={timeLabel} />
+              </View>
             ) : null}
           </View>
         ) : (
@@ -147,16 +137,10 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
         ) : null}
 
         {timeInline ? null : (
-          <ThemedText
-            accessibilityActions={ASSISTANT_ACCESSIBILITY_ACTIONS}
-            accessibilityHint="Use accessibility actions to open actions for this response."
-            accessibilityLabel={`Answered at ${timeLabel}`}
-            onAccessibilityAction={onAccessibilityAction}
-            style={styles.timeFooter}
-            themeColor="textSecondary"
-            type="caption">
-            {timeLabel}
-          </ThemedText>
+          <View style={styles.timeMeta}>
+            <ThemedText style={styles.timeFooter} themeColor="textSecondary" type="caption">{timeLabel}</ThemedText>
+            <MessageActionShortcut authorName="Track Assistant" onPress={onLongPress} timeLabel={timeLabel} />
+          </View>
         )}
       </Pressable>
     </View>
@@ -259,8 +243,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius.small,
   },
   timeFooter: {
-    alignSelf: 'flex-end',
+    alignSelf: 'center',
   },
+  timeMeta: { alignItems: 'center', alignSelf: 'flex-end', flexDirection: 'row', gap: 1 },
   timeInline: {
     bottom: 1,
     position: 'absolute',

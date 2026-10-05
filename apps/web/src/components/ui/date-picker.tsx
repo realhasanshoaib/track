@@ -53,12 +53,16 @@ function clampToMonth(date: Date, month: Date) {
 
 function DatePicker({
   'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
   className,
   disabled = false,
   onChange,
   value,
 }: {
   'aria-label': string
+  'aria-describedby'?: string
+  'aria-invalid'?: boolean | 'grammar' | 'spelling'
   className?: string
   disabled?: boolean
   onChange: (value: string) => void
@@ -161,6 +165,8 @@ function DatePicker({
             render={
               <button
                 aria-label={ariaLabel}
+                aria-describedby={ariaDescribedBy}
+                aria-invalid={ariaInvalid}
                 aria-description={value ? `Selected ${formatLabel(value)}` : undefined}
                 className={`track-date-picker-trigger${className ? ` ${className}` : ''}`}
                 disabled={disabled}

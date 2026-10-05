@@ -3,7 +3,12 @@ import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
+import { BlurView } from 'expo-blur';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { KeyboardEvents } from 'react-native-keyboard-controller';
+import { parseMentions } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
 import { ActionButton } from '@/components/action-button';
@@ -12,19 +17,23 @@ import { useAppToast } from '@/components/app-toast';
 import { Composer } from '@/components/composer';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
+import { EntityMark } from '@/components/entity-mark';
 import { IconButton } from '@/components/icon-button';
 import { MessageActions } from '@/components/message-actions';
 import { ForwardMessageSheet } from '@/components/forward-message-sheet';
+import { MessageReportSheet, type ReportReason } from '@/components/message-report-sheet';
+import { MessageTaskReviewSheet } from '@/components/message-task-review-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
 import { TaskInlineCards } from '@/components/task-inline-cards';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { DateSeparator, ThreadRow, type DetailedMessage, type GroupedThreadItem, resolveMentionIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
+import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
 import { OptionsSheet, SheetInput, SheetSection, SheetRow } from '@/components/options-sheet';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
-import { hapticLight, hapticMedium, hapticSuccess, hapticDestructive } from '@/lib/haptics';
+import { hapticLight, hapticMedium, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy, projectChannelsHref } from '@/lib/company-navigation';
@@ -32,26 +41,16 @@ import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { shouldShowJumpToLatest, stickyDateHeaderIndices } from '@/lib/thread-list';
 import { useReleaseConfig } from '@/lib/release-config';
 import type { MobileTaskIdentity } from '@/lib/task-navigation';
-import { messageTaskDraft } from '@/lib/message-task-draft';
+import { assistantTaskDraft, messageTaskDraft, type ReviewableMessageTaskDraft } from '@/lib/message-task-draft';
 import { threadConversationHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { reconcilePendingMessages, type PendingMessage } from '@/lib/pending-messages';
+import { archivePresentation } from '@/lib/archive-presentation';
 
 /** WhatsApp-style grouping gap: a longer pause re-states who is speaking. */
 const FIVE_MINUTES = 5 * 60 * 1000;
-
-const reportReasons = ['inaccurate', 'unsafe', 'spam', 'harassment', 'privacy', 'other'] as const;
-
-const reportReasonLabels: Record<(typeof reportReasons)[number], string> = {
-  harassment: 'Harassment',
-  inaccurate: 'Inaccurate',
-  other: 'Something else',
-  privacy: 'Privacy',
-  spam: 'Spam',
-  unsafe: 'Unsafe',
-};
 
 function dateSepLabel(ts: number) {
   const d = new Date(ts);
@@ -63,8 +62,19 @@ function dateSepLabel(ts: number) {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function safeGlassAvailable() {
+  if (Platform.OS !== 'ios') return false;
+  try {
+    return isGlassEffectAPIAvailable();
+  } catch {
+    return false;
+  }
+}
+
 export default function ConversationScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const hasLiquidGlass = safeGlassAvailable();
   const { showToast } = useAppToast();
   const network = useNetworkState();
   const router = useRouter();
@@ -97,8 +107,10 @@ export default function ConversationScreen() {
     return () => setActivePushContext(null);
   }, [gid, pid]));
   const navigation = useQuery(api.mobile.resolveNavigation, trackUserId && pid && gid ? { userId: trackUserId, projectId: pid, groupId: gid, actingCompanyId: cid, projectMemberId: pmid } : 'skip');
-  const readOnly = archive === '1' || navigation?.archived === true;
-  const channelContext = cid && pmid ? { archived: readOnly, companyId: cid, membershipId: pmid } : null;
+  const archiveContext = archive === '1' || navigation?.readStateImmutable === true || navigation?.project?.status === 'archived';
+  const readOnly = archiveContext || navigation?.archived === true;
+  const archiveBanner = readOnly ? archivePresentation(navigation?.archiveDetails ?? null) : null;
+  const channelContext = useMemo(() => cid && pmid ? { archived: archiveContext, companyId: cid, membershipId: pmid } : null, [archiveContext, cid, pmid]);
   // Memoised so composing a message does not rebuild every row's identity props.
   const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
     archived: readOnly,
@@ -153,6 +165,25 @@ export default function ConversationScreen() {
   const projectMembers = projectMembersPage.status === 'LoadingFirstPage'
     ? undefined
     : projectMembersPage.results;
+  const [channelSearchOpen, setChannelSearchOpen] = useState(false);
+  const [channelSearchText, setChannelSearchText] = useState('');
+  const channelSearchQuery = channelSearchText.trim();
+  const channelSearch = useQuery(api.search.project,
+    trackUserId && pid && gid && channelSearchOpen && channelSearchQuery.length >= 2
+      ? {
+          actingCompanyId: cid,
+          filter: 'messages',
+          groupId: gid,
+          limit: 12,
+          projectId: pid,
+          projectMemberId: pmid,
+          query: channelSearchQuery,
+          userId: trackUserId,
+        }
+      : 'skip',
+  );
+  const currentCompany = navigation?.company ?? null;
+  const currentProject = navigation?.project ?? null;
 
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
   /** Tracks whether the reader is pinned to the newest message, so arriving messages never yank them off history. */
@@ -162,6 +193,10 @@ export default function ConversationScreen() {
   const acknowledgedMessageIdRef = useRef<Id<'messages'> | null>(null);
   const acknowledgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
+  const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
+  const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
@@ -176,12 +211,16 @@ export default function ConversationScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [creatingTaskKey, setCreatingTaskKey] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
+  const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [groupSwitchOpen, setGroupSwitchOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState<GroupedThreadItem | null>(null);
-  const [reportReason, setReportReason] = useState<(typeof reportReasons)[number]>('inaccurate');
+  const [reportError, setReportError] = useState<string | null>(null);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
+  const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
+  const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editBusy, setEditBusy] = useState(false);
@@ -219,7 +258,7 @@ export default function ConversationScreen() {
 
   const groupItems = useMemo(() => (groups ?? []) as { group: Doc<'groups'>; membership: Doc<'groupMembers'>; lastMessage: Doc<'messages'> | null; unreadCount: number }[], [groups]);
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
-  const activeGroup = groupItems.find((g) => g.group._id === gid)?.group ?? null;
+  const activeGroup = groupItems.find((g) => g.group._id === gid)?.group ?? navigation?.channel ?? null;
   const globalMode = notifSettings?.global?.globalMode ?? 'all';
   const groupMode = notifSettings?.groups?.find((g) => g.groupId === gid)?.mode ?? 'inherit';
 
@@ -304,12 +343,14 @@ export default function ConversationScreen() {
   }, []);
   const scrollToLatest = useCallback(() => {
     atBottomRef.current = true;
+    setNewMessageCount(0);
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
     atBottomRef.current = distanceFromBottom < 80;
+    if (atBottomRef.current) setNewMessageCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
   }, []);
 
@@ -324,11 +365,41 @@ export default function ConversationScreen() {
   }, [pinToLatest]);
 
   useEffect(() => {
-    if (!targetMessageId) return;
+    if (!targetMessageId) {
+      handledTargetMessageIdRef.current = null;
+      positionedTargetMessageIdRef.current = null;
+      return;
+    }
+    if (targetMessageId !== handledTargetMessageIdRef.current) {
+      handledTargetMessageIdRef.current = null;
+      positionedTargetMessageIdRef.current = null;
+    }
+    if (handledTargetMessageIdRef.current === targetMessageId) return;
     const index = threadItems.findIndex((item) => item.kind === 'message' && item.item.message._id === targetMessageId);
     if (index < 0) return;
-    requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 }));
+    handledTargetMessageIdRef.current = targetMessageId;
+    setHighlightedMessageId(targetMessageId);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      positionedTargetMessageIdRef.current = targetMessageId;
+    });
   }, [targetMessageId, threadItems]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) return;
+    const timer = setTimeout(() => setHighlightedMessageId((current) => current === highlightedMessageId ? null : current), 1800);
+    return () => clearTimeout(timer);
+  }, [highlightedMessageId]);
+
+  const scrollToMessage = useCallback((messageId: Id<'messages'>) => {
+    const index = threadItemsRef.current.findIndex((item) => item.kind === 'message' && item.item.message._id === messageId);
+    if (index >= 0) {
+      setHighlightedMessageId(messageId);
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      return;
+    }
+    if (pid && gid) router.replace(channelHref(pid, gid, channelContext, messageId) as never);
+  }, [channelContext, gid, pid, router]);
 
   const hasMoreMessages = messagePage.status === 'CanLoadMore' || assistantPage.status === 'CanLoadMore';
   const loadingOlderMessages = messagePage.status === 'LoadingMore' || assistantPage.status === 'LoadingMore';
@@ -338,15 +409,75 @@ export default function ConversationScreen() {
     if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(120);
   }, [assistantPage, hasMoreMessages, loadingOlderMessages, messagePage]);
 
+  const copyMessageText = useCallback(async (text: string) => {
+    try {
+      await Clipboard.setStringAsync(text);
+      showToast({ title: 'Copied', message: 'Message text copied to your clipboard.', tone: 'success' });
+    } catch {
+      showToast({ title: 'Could not copy', message: 'Try selecting the message text and copying it again.', tone: 'error' });
+    }
+  }, [showToast]);
+
+  const requestTrackResponse = useCallback((promptMessageId: Id<'messages'>, question: string) => {
+    if (readOnly || !trackUserId || !pid || !gid) return;
+    if (pendingTrackPromptIdsRef.current.has(promptMessageId)) return;
+    pendingTrackPromptIdsRef.current.add(promptMessageId);
+    setPendingTrackPrompts((current) => new Set(current).add(promptMessageId));
+    void askTrack({
+      actingCompanyId: cid,
+      groupId: gid,
+      projectId: pid,
+      projectMemberId: pmid,
+      promptMessageId,
+      question,
+      requesterId: trackUserId,
+    }).catch(() => {
+      showToast({ title: 'Track could not start', message: 'Your message is still in the Channel. Use its message actions to retry Track; it was not sent again.', tone: 'error' });
+    }).finally(() => {
+      pendingTrackPromptIdsRef.current.delete(promptMessageId);
+      setPendingTrackPrompts((current) => {
+        const next = new Set(current);
+        next.delete(promptMessageId);
+        return next;
+      });
+    });
+  }, [askTrack, cid, gid, pid, pmid, readOnly, showToast, trackUserId]);
+
+  const retryAssistantAnswer = useCallback((stream: Doc<'assistantStreams'>) => {
+    const prompt = threadItems.find((entry) => entry.kind === 'message' && entry.item.message._id === stream.promptMessageId);
+    if (!prompt || prompt.kind !== 'message') {
+      showToast({ title: 'Question unavailable', message: 'The original question is not loaded in this Channel.', tone: 'error' });
+      return;
+    }
+    requestTrackResponse(prompt.item.message._id, prompt.item.message.body);
+  }, [requestTrackResponse, showToast, threadItems]);
+
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     const existingThread = actionTarget.kind === 'message' ? actionTarget.item.channelThread : null;
+    const copyText = actionTarget.kind === 'message'
+      ? actionTarget.item.message.body.trim()
+      : actionTarget.stream.status === 'failed' ? '' : actionTarget.stream.answer.trim();
     return [
+      ...(copyText ? [{
+        label: 'Copy message',
+        icon: 'content-copy' as const,
+        onPress: () => { void copyMessageText(copyText); },
+      }] : []),
+      ...(actionTarget.kind === 'message' &&
+        !readOnly &&
+        parseMentions(actionTarget.item.message.body).includes('track') &&
+        !actionTarget.item.message.trackInvocationId &&
+        !pendingTrackPrompts.has(actionTarget.item.message._id) ? [{
+        label: 'Retry Track response',
+        icon: 'refresh' as const,
+        onPress: () => requestTrackResponse(actionTarget.item.message._id, actionTarget.item.message.body),
+      }] : []),
       ...(releaseConfig.threads && actionTarget.kind === 'message' && existingThread && pid && gid ? [{
         label: 'Open thread',
         icon: 'thread' as const,
         onPress: () => {
-          router.push(threadConversationHref(pid, gid, existingThread.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
+          router.push(threadConversationHref(pid, gid, existingThread.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: archiveContext } : null) as never);
         },
       }] : []),
       ...(!readOnly ? [{
@@ -359,35 +490,27 @@ export default function ConversationScreen() {
       ...(!readOnly && releaseConfig.tasks ? [{
         label: 'Create task',
         icon: 'plus' as const,
-        onPress: async () => {
+        onPress: () => {
           if (!pid || !gid) return;
           const draft = actionTarget.kind === 'message'
             ? messageTaskDraft(actionTarget.item.message.body, actionTarget.item.message._id, actionTarget.key)
-            : {
-              idempotencyKey: `message-task:${actionTarget.key}`,
-              references: [{ type: 'assistant_answer' as const, assistantStreamId: actionTarget.stream._id, isPrimary: true }],
-              title: actionTarget.stream.answer.trim().slice(0, 180) || 'Follow up',
-            };
-          if (creatingTaskKey === draft.idempotencyKey) return;
-          setCreatingTaskKey(draft.idempotencyKey);
-          try {
-            const task = await createTask({
-              projectId: pid,
-              groupId: gid,
-              title: draft.title,
-              priority: 'none',
-              references: draft.references,
-              idempotencyKey: draft.idempotencyKey,
-              actingCompanyId: cid,
-              projectMemberId: pmid,
-            });
-            showToast({ title: 'Task created', message: `Task ${task.publicKey} is ready to review.`, tone: 'success' });
-          } catch (failure) {
-            showToast({ title: 'Task not created', message: taskErrorMessage(failure, 'The task could not be created. Check your connection and try again.'), tone: 'error' });
-          } finally {
-            setCreatingTaskKey(null);
-          }
+            : assistantTaskDraft(actionTarget.stream.answer, actionTarget.stream._id, actionTarget.key);
+          setTaskReviewDraft(draft);
+          setTaskReviewError(null);
         },
+      }] : []),
+      ...(!readOnly && actionTarget.kind === 'message' ? [{
+        label: 'Forward',
+        icon: 'forward' as const,
+        onPress: () => {
+          setForwardError(null);
+          setForwardTarget(actionTarget.item);
+        },
+      }] : []),
+      ...(!readOnly && actionTarget.kind === 'assistant' && actionTarget.stream.status === 'failed' && actionTarget.stream.promptMessageId && !pendingTrackPrompts.has(actionTarget.stream.promptMessageId) ? [{
+        label: 'Retry Track response',
+        icon: 'refresh' as const,
+        onPress: () => retryAssistantAnswer(actionTarget.stream),
       }] : []),
       ...(!readOnly &&
         actionTarget.kind === 'message' &&
@@ -438,12 +561,11 @@ export default function ConversationScreen() {
       }] : []),
       {
         label: 'Report',
-        icon: 'trash-can-outline' as const,
-        destructive: true,
-        onPress: () => setReportTarget(actionTarget),
+        icon: 'flag' as const,
+        onPress: () => { setReportError(null); setReportTarget(actionTarget); },
       },
     ];
-  }, [actionTarget, cid, createTask, creatingTaskKey, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, router, setReplyTo, trackUserId]);
+  }, [actionTarget, archiveContext, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, requestTrackResponse, retryAssistantAnswer, router, setReplyTo, trackUserId]);
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -490,12 +612,12 @@ export default function ConversationScreen() {
     );
 
     if (previousMessageIds && previousStreams) {
-      const hasNewIncomingMessage = messageItems.some(({ message }) => (
+      const newIncomingMessages = messageItems.filter(({ message }) => (
         !previousMessageIds.has(message._id) &&
         message.authorId !== trackUserId &&
         message.createdAt >= previousNewestTime
       ));
-      const hasNewAssistantAnswer = streams.some((stream) => {
+      const newAssistantAnswers = streams.filter((stream) => {
         const previous = previousStreams.get(stream._id);
         const completed = stream.status === 'completed' && Boolean(stream.answer.trim());
         return completed && (
@@ -506,8 +628,11 @@ export default function ConversationScreen() {
       });
 
       if (screenActiveRef.current) {
-        if (hasNewIncomingMessage) hapticLight();
-        if (hasNewAssistantAnswer) hapticSuccess();
+        if (newIncomingMessages.length) hapticLight();
+        if (newAssistantAnswers.length) hapticSuccess();
+      }
+      if (!atBottomRef.current && (newIncomingMessages.length || newAssistantAnswers.length)) {
+        setNewMessageCount((count) => count + newIncomingMessages.length + newAssistantAnswers.length);
       }
 
       knownMessageIdsRef.current = new Set([...previousMessageIds, ...currentMessageIds]);
@@ -540,14 +665,14 @@ export default function ConversationScreen() {
   }, [cid, gid, navigation?.available, pid, pmid, setLastActive, trackUserId]);
 
   const acknowledgeViewedMessage = useCallback((viewedMessageId: Id<'messages'>) => {
-    if (!trackUserId || !gid || !screenActiveRef.current || navigation?.readStateImmutable) return;
+    if (!trackUserId || !gid || readOnly || !screenActiveRef.current) return;
     if (viewedMessageId === acknowledgedMessageIdRef.current) return;
     viewedMessageIdRef.current = viewedMessageId;
     if (acknowledgeTimeoutRef.current) return;
     acknowledgeTimeoutRef.current = setTimeout(() => {
       acknowledgeTimeoutRef.current = null;
       const nextMessageId = viewedMessageIdRef.current;
-      if (!nextMessageId || !trackUserId || !gid || !screenActiveRef.current || nextMessageId === acknowledgedMessageIdRef.current) return;
+      if (!nextMessageId || !trackUserId || !gid || readOnly || !screenActiveRef.current || nextMessageId === acknowledgedMessageIdRef.current) return;
       acknowledgedMessageIdRef.current = nextMessageId;
       void markRead({
         userId: trackUserId,
@@ -559,7 +684,7 @@ export default function ConversationScreen() {
         acknowledgedMessageIdRef.current = null;
       });
     }, 150);
-  }, [cid, gid, markRead, navigation?.readStateImmutable, pmid, trackUserId]);
+  }, [cid, gid, markRead, pmid, readOnly, trackUserId]);
 
   const onViewableItemsChanged = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onViewableItemsChanged']>>(({ viewableItems }) => {
     const visibleMessages = viewableItems
@@ -578,10 +703,10 @@ export default function ConversationScreen() {
   }
 
   async function handleSendMessage(payload: ComposerSubmission): Promise<ComposerSubmissionResult> {
-    if (!trackUserId || !pid || !gid) return { failedIds: payload.attachments.map((a) => a.id), messageId: null };
+    if (!trackUserId || !pid || !gid || readOnly) throw new Error('channel_unavailable');
     if (screenActiveRef.current) hapticMedium();
     const body = payload.body.trim();
-    const replyToMessageId = replyTo?.message._id;
+    const replyToMessageId = payload.replyToMessageId;
     const sendSignature = JSON.stringify({
       attachmentIds: payload.attachments.map((attachment) => attachment.id),
       body,
@@ -646,50 +771,65 @@ export default function ConversationScreen() {
         scrollToLatest();
       }
 
-      const { parseMentions } = await import('@track/shared');
       if (result.messageId && parseMentions(body).includes('track')) {
-        try {
-          await askTrack({
-            projectId: pid, groupId: gid, requesterId: trackUserId,
-            actingCompanyId: cid, projectMemberId: pmid,
-            promptMessageId: result.messageId, question: body,
-          });
-        } catch {
-          showToast({
-            title: 'Message sent',
-            message: 'Track Assistant could not respond. Retry the Assistant request.',
-            tone: 'error',
-          });
-        }
+        requestTrackResponse(result.messageId, body);
       }
       if (result.failedIds.length === 0) {
         sendKey.current = null;
         sendSignatureRef.current = null;
       }
       return result;
-    } catch {
+    } catch (failure) {
       if (pendingId) setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
-      showToast({ title: 'Message not sent', message: 'Check your connection and try again.', tone: 'error' });
-      return { failedIds: payload.attachments.map((a) => a.id), messageId: null };
+      throw failure;
     } finally {
       setBusy(null);
     }
   }
 
-  async function submitReport() {
-    if (!trackUserId || !pid || !reportTarget || reportTarget.kind === 'date-sep') return;
-    hapticDestructive();
-    await withBusy('report', async () => {
-      await createReport({
+  async function submitReport(reason: ReportReason, note: string) {
+    if (!trackUserId || !pid || !reportTarget || reportTarget.kind === 'date-sep' || busy === 'report') return;
+    setReportError(null);
+    hapticLight();
+    try {
+      await withBusy('report', async () => createReport({
         projectId: pid, reporterId: trackUserId, groupId: gid,
         actingCompanyId: cid, projectMemberId: pmid,
         targetType: reportTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
         targetMessageId: reportTarget.kind === 'message' ? reportTarget.item.message._id : undefined,
         targetAssistantStreamId: reportTarget.kind === 'assistant' ? reportTarget.stream._id : undefined,
-        reason: reportReason, note: '',
-      });
+        reason, note,
+      }));
       setReportTarget(null);
-    });
+      showToast({ icon: 'flag', message: 'Thanks. The report was submitted for review.', title: 'Message reported', tone: 'success' });
+    } catch (failure) {
+      setReportError(communicationErrorMessage(failure, 'submit this report'));
+    }
+  }
+
+  async function createReviewedTask() {
+    const draft = taskReviewDraft;
+    if (!draft || !trackUserId || !pid || !gid || creatingTaskKey === draft.idempotencyKey) return;
+    setCreatingTaskKey(draft.idempotencyKey);
+    setTaskReviewError(null);
+    try {
+      const task = await createTask({
+        projectId: pid,
+        groupId: gid,
+        title: draft.title.trim(),
+        priority: 'none',
+        references: draft.references,
+        idempotencyKey: draft.idempotencyKey,
+        actingCompanyId: cid,
+        projectMemberId: pmid,
+      });
+      setTaskReviewDraft(null);
+      showToast({ title: 'Task created', message: `Task ${task.publicKey} is ready to review.`, tone: 'success' });
+    } catch (failure) {
+      setTaskReviewError(taskErrorMessage(failure, 'The task could not be created. Check your connection and try again.'));
+    } finally {
+      setCreatingTaskKey(null);
+    }
   }
 
   async function handleForward(
@@ -738,6 +878,7 @@ export default function ConversationScreen() {
     return (
       <View>
         <ThreadRow
+          highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
           item={item}
           isFirstInGroup={item.isFirstInGroup}
           isOwnMessage={isOwnMessage}
@@ -750,7 +891,7 @@ export default function ConversationScreen() {
             hapticLight();
             if (item.kind === 'message') setReplyTo(item.item);
           }}
-          onSwipeForward={item.kind === 'message' ? () => {
+          onSwipeForward={!readOnly && item.kind === 'message' ? () => {
             hapticLight();
             setForwardError(null);
             setForwardTarget(item.item);
@@ -760,12 +901,11 @@ export default function ConversationScreen() {
             setReportTarget(item);
           }}
           onOpenThread={releaseConfig.threads && pid && gid && item.kind === 'message' && item.item.channelThread ? () => {
-            router.push(threadConversationHref(pid, gid, item.item.channelThread!.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
+            router.push(threadConversationHref(pid, gid, item.item.channelThread!.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: archiveContext } : null) as never);
           } : undefined}
           onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
             const quotedId = item.item.replyTo?.messageId;
-            const index = threadItemsRef.current.findIndex((entry) => entry.kind === 'message' && entry.item.message._id === quotedId);
-            if (index >= 0) listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+            if (quotedId) scrollToMessage(quotedId);
           } : undefined}
         />
         {releaseConfig.tasks && pid ? <TaskInlineCards
@@ -779,11 +919,11 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [cid, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
+  }, [archiveContext, channelContext, cid, gid, highlightedMessageId, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, scrollToMessage, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
-  if (isOffline && messages === undefined) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable offline</ThemedText><ThemedText style={{ color: theme.textSecondary }}>Connect to the internet to load this Channel.</ThemedText><Pressable accessibilityRole="button" onPress={() => pid && gid && router.replace(channelHref(pid, gid, cid && pmid ? { archived: readOnly, companyId: cid, membershipId: pmid } : null))} style={[styles.retry, { backgroundColor: theme.accent }]}><ThemedText style={{ color: theme.accentInk }} type="smallBold">Try again</ThemedText></Pressable></View></ThemedView>;
+  if (isOffline && messages === undefined) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable offline</ThemedText><ThemedText style={{ color: theme.textSecondary }}>Connect to the internet to load this Channel.</ThemedText><Pressable accessibilityRole="button" onPress={() => pid && gid && router.replace(channelHref(pid, gid, channelContext))} style={[styles.retry, { backgroundColor: theme.accent }]}><ThemedText style={{ color: theme.accentInk }} type="smallBold">Try again</ThemedText></Pressable></View></ThemedView>;
   const initialConversationDataLoading = messages === undefined || (!isOffline && (assistantStreams === undefined || groups === undefined));
   if (navigation === undefined || (navigation.available && initialConversationDataLoading)) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Conversation' }} /><ConversationLoading label={`Loading ${activeGroup?.name ?? 'conversation'}`} /></ThemedView>;
 
@@ -795,9 +935,11 @@ export default function ConversationScreen() {
       <Stack.Screen
         options={{
           contentStyle: { backgroundColor: theme.homeSurface },
-          headerTransparent: Platform.OS === 'ios',
+          headerShown: Platform.OS !== 'ios',
+          headerTransparent: false,
+          headerBackVisible: false,
           headerBlurEffect: 'none',
-          headerBackground: () => <View pointerEvents="none" style={StyleSheet.absoluteFill} />,
+          headerBackground: () => <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.homeSurface }]} />,
           headerLeft: () => <Pressable
             accessibilityLabel="Back to conversations"
             accessibilityRole="button"
@@ -806,8 +948,25 @@ export default function ConversationScreen() {
               if (router.canGoBack()) router.back();
               else router.replace(pid ? projectChannelsHref(pid, channelContext) as never : '/conversations' as never);
             }}
-            style={({ pressed }) => [styles.headerCircle, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
-          ><PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} /></Pressable>,
+            style={({ pressed }) => [styles.headerCircle, Platform.OS === 'ios'
+              ? { backgroundColor: 'transparent', borderColor: 'transparent', opacity: pressed ? 0.76 : 1 }
+              : { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
+          >
+            {Platform.OS === 'ios' ? hasLiquidGlass ? <GlassView
+              colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'}
+              glassEffectStyle="regular"
+              isInteractive={false}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
+              tintColor={theme.navigationGlass}
+            /> : <BlurView
+              intensity={52}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
+              tint={theme.background === '#1b1917' ? 'dark' : 'light'}
+            /> : null}
+            <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
+          </Pressable>,
           headerRight: () => !readOnly ? <IconButton
             accessibilityLabel="Channel options"
             appearance="plain"
@@ -824,15 +983,131 @@ export default function ConversationScreen() {
               style={({ pressed }) => [styles.channelHeaderButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
             >
               <PlatformIcon color={theme.textSecondary} name="channel" size={17} />
-              <ThemedText numberOfLines={1} style={styles.channelTitle} type="title">{activeGroup?.name ?? 'Conversation'}</ThemedText>
+              <ThemedText numberOfLines={2} style={styles.channelTitle} type="title">{activeGroup?.name ?? 'Conversation'}</ThemedText>
               <PlatformIcon color={theme.textSecondary} name="chevron-down" size={15} />
             </Pressable>
           ),
         }}
       />
 
+      {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: theme.homeSurface, paddingTop: insets.top }]}>
+        <View style={styles.iosHeaderRow}>
+          <Pressable
+            accessibilityLabel="Back to conversations"
+            accessibilityRole="button"
+            onPress={() => {
+              hapticLight();
+              if (router.canGoBack()) router.back();
+              else router.replace(pid ? projectChannelsHref(pid, channelContext) as never : '/conversations' as never);
+            }}
+            style={({ pressed }) => [styles.headerCircle, { backgroundColor: 'transparent', borderColor: 'transparent', opacity: pressed ? 0.76 : 1 }]}
+          >
+            {hasLiquidGlass ? <GlassView
+              colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'}
+              glassEffectStyle="regular"
+              isInteractive={false}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
+              tintColor={theme.navigationGlass}
+            /> : <BlurView
+              intensity={52}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
+              tint={theme.background === '#1b1917' ? 'dark' : 'light'}
+            />}
+            <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
+          </Pressable>
+          <View style={styles.iosHeaderTitle}>
+            <Pressable
+              accessibilityHint="Opens the Channel picker"
+              accessibilityLabel={`Choose Channel. Current Channel: ${activeGroup?.name ?? 'Conversation'}`}
+              accessibilityRole="button"
+              hitSlop={4}
+              onPress={() => { hapticLight(); setGroupSwitchOpen(true); }}
+              style={({ pressed }) => [styles.channelHeaderButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
+            >
+              <PlatformIcon color={theme.textSecondary} name="channel" size={17} />
+              <ThemedText numberOfLines={2} style={styles.channelTitle} type="title">{activeGroup?.name ?? 'Conversation'}</ThemedText>
+              <PlatformIcon color={theme.textSecondary} name="chevron-down" size={15} />
+            </Pressable>
+          </View>
+          {!readOnly ? <IconButton
+            accessibilityLabel="Channel options"
+            appearance="plain"
+            icon="dots-horizontal"
+            onPress={() => { hapticLight(); setToolsOpen(true); }}
+          /> : <View style={styles.iosHeaderActionSpacer} />}
+        </View>
+      </View> : null}
+
       <ConnectivityBanner message="You’re offline. Cached messages stay available; sending will retry when you reconnect." style={styles.connection} />
       <View style={styles.flex}>
+      <View style={[styles.contextRow, { borderBottomColor: theme.homeBorder }]}>
+        <View accessibilityLabel={`${currentCompany?.displayName ?? 'Personal workspace'}, Project ${currentProject?.name ?? 'Project'}`} accessible style={styles.contextIdentity}>
+          {currentCompany ? <EntityMark
+            id={String(currentCompany._id)}
+            imageUrl={currentCompany.logoUrl}
+            kind="company"
+            name={currentCompany.displayName}
+            size={22}
+          /> : null}
+          <ThemedText numberOfLines={1} style={styles.contextCompany} themeColor="textSecondary" type="captionBold">
+            {currentCompany?.displayName ?? 'Personal workspace'}
+          </ThemedText>
+          <PlatformIcon color={theme.textTertiary} name="chevron-right" size={14} />
+          {currentProject ? <EntityMark
+            colorKey={currentProject.markColorKey}
+            iconKey={currentProject.markIconKey}
+            id={String(currentProject._id)}
+            kind="project"
+            name={currentProject.name}
+            size={22}
+          /> : <PlatformIcon color={theme.accentStrong} name="project" size={18} />}
+          <ThemedText numberOfLines={1} style={styles.contextProject} type="captionBold">
+            {currentProject?.name ?? 'Project'}
+          </ThemedText>
+        </View>
+        <IconButton
+          accessibilityLabel={channelSearchOpen ? 'Close Channel search' : 'Search this Channel'}
+          appearance="plain"
+          icon={channelSearchOpen ? 'close' : 'search'}
+          onPress={() => {
+            setChannelSearchOpen((open) => !open);
+            setChannelSearchText('');
+          }}
+          selected={channelSearchOpen}
+        />
+      </View>
+      {channelSearchOpen ? <View style={[styles.channelSearchPanel, { borderBottomColor: theme.homeBorder }]}>
+        <ThemedTextInput
+          accessibilityLabel="Search messages in this Channel"
+          autoFocus
+          onChangeText={setChannelSearchText}
+          placeholder="Search messages"
+          returnKeyType="search"
+          style={[styles.channelSearchInput, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder, color: theme.text }]}
+          value={channelSearchText}
+        />
+        {channelSearchQuery.length < 2 ? <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">Enter at least two characters to search this Channel.</ThemedText>
+          : channelSearch === undefined ? <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">Searching messages…</ThemedText>
+            : channelSearch.messages.length ? channelSearch.messages.map((hit) => <Pressable
+              accessibilityLabel={`Message from ${hit.title}. ${hit.preview}. Open message.`}
+              accessibilityRole="button"
+              key={String(hit.messageId)}
+              onPress={() => {
+                hapticLight();
+                setChannelSearchOpen(false);
+                if (!pid || !gid) return;
+                if (hit.threadId) router.push(threadConversationHref(pid, gid, hit.threadId, channelContext, hit.messageId) as never);
+                else router.replace(channelHref(pid, gid, channelContext, hit.messageId) as never);
+              }}
+              style={({ pressed }) => [styles.channelSearchResult, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface }]}
+            >
+              <ThemedText numberOfLines={1} type="captionBold">{hit.title}</ThemedText>
+              <ThemedText numberOfLines={2} themeColor="textSecondary" type="small">{hit.preview}</ThemedText>
+            </Pressable>)
+              : <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">No messages match in this Channel.</ThemedText>}
+      </View> : null}
       <TaskLinkBatchProvider
         assistantStreamIds={taskLinkAssistantStreamIds}
         enabled={releaseConfig.tasks}
@@ -874,7 +1149,7 @@ export default function ConversationScreen() {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
             updateJumpToLatest();
-            if (!targetMessageId && wasAtBottom) listRef.current?.scrollToEnd({ animated: true });
+            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) listRef.current?.scrollToEnd({ animated: true });
           }}
           removeClippedSubviews={false}
           renderItem={renderItem}
@@ -919,19 +1194,20 @@ export default function ConversationScreen() {
       </TaskLinkBatchProvider>
       {showJumpToLatest ? (
         <Pressable
-          accessibilityLabel="Jump to latest messages"
+          accessibilityLabel={`Jump to latest messages${newMessageCount ? `, ${newMessageCount} new messages` : ''}`}
           accessibilityRole="button"
           onPress={() => {
             hapticLight();
             scrollToLatest();
           }}
           style={[styles.jumpToLatest, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline, bottom: composerOverlayHeight + Spacing.four }]}>
-          <PlatformIcon color={theme.text} name="chevron-down" size={22} />
+          <PlatformIcon color={theme.text} name="chevron-down" size={20} />
+          {newMessageCount ? <ThemedText style={[styles.jumpToLatestCount, { color: theme.text }]} type="captionBold">{newMessageCount > 99 ? '99+' : newMessageCount}</ThemedText> : null}
         </Pressable>
       ) : null}
       </View>
 
-      {readOnly ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">Read-only archive</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">Messages and frozen memory stop at the Company exit cutoff.</ThemedText></View> : <View
+      {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <View
         onLayout={({ nativeEvent }) => {
           if (composerExpanded) return;
           const height = Math.ceil(nativeEvent.layout.height);
@@ -967,7 +1243,7 @@ export default function ConversationScreen() {
               onPress={() => {
                 setGroupSwitchOpen(false);
                 hapticLight();
-                router.replace(channelHref(pid!, item.group._id, cid && pmid ? { archived: readOnly, companyId: cid, membershipId: pmid } : null) as never);
+                router.replace(channelHref(pid!, item.group._id, channelContext) as never);
               }}
             />
           ))}
@@ -1013,31 +1289,28 @@ export default function ConversationScreen() {
         </SheetSection>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setReportTarget(null)} title="Report" visible={Boolean(reportTarget)}>
-        <SheetSection title="Reason">
-          <View style={styles.reasonGrid}>
-            {reportReasons.map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => setReportReason(r)}
-                style={[styles.reasonChip, { backgroundColor: reportReason === r ? theme.backgroundSelected : theme.backgroundElement }]}>
-                <ThemedText type="small">{reportReasonLabels[r]}</ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        </SheetSection>
-        <Pressable
-          disabled={busy === 'report'}
-          onPress={() => void submitReport()}
-          style={[styles.reportButton, { backgroundColor: busy === 'report' ? theme.hairline : theme.danger }]}>
-          <ThemedText style={{ color: theme.background }} type="smallBold">Submit report</ThemedText>
-        </Pressable>
-      </OptionsSheet>
+      <MessageReportSheet
+        busy={busy === 'report'}
+        error={reportError}
+        onClose={() => { if (busy !== 'report') setReportTarget(null); }}
+        onSubmit={(reason, note) => void submitReport(reason, note)}
+        visible={Boolean(reportTarget)}
+      />
 
       <MessageActions
         visible={actionSheetOpen}
         onClose={() => setActionSheetOpen(false)}
         actions={messageActions}
+      />
+      <MessageTaskReviewSheet
+        busy={creatingTaskKey === taskReviewDraft?.idempotencyKey}
+        error={taskReviewError}
+        onChangeTitle={(title) => setTaskReviewDraft((current) => current ? { ...current, title } : current)}
+        onClose={() => { if (!creatingTaskKey) setTaskReviewDraft(null); }}
+        onCreate={() => void createReviewedTask()}
+        source={taskReviewDraft?.sourceText ?? ''}
+        title={taskReviewDraft?.title ?? ''}
+        visible={Boolean(taskReviewDraft)}
       />
       <OptionsSheet onClose={() => setEditTarget(null)} title="Edit message" visible={Boolean(editTarget)}>
         <SheetInput autoFocus label="Message" maxLength={10_000} multiline onChangeText={setEditBody} value={editBody} />
@@ -1069,6 +1342,14 @@ const styles = StyleSheet.create({
   archiveBanner: { alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   archiveDescription: { maxWidth: 420, textAlign: 'center' },
   archiveTitle: { textAlign: 'center' },
+  contextCompany: { flexShrink: 1, maxWidth: 128, minWidth: 0 },
+  contextIdentity: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
+  contextProject: { flex: 1, minWidth: 0 },
+  contextRow: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
+  channelSearchHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  channelSearchInput: { borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, minHeight: TouchTarget, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  channelSearchPanel: { borderBottomWidth: StyleSheet.hairlineWidth, gap: Spacing.one, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two, paddingTop: Spacing.one },
+  channelSearchResult: { borderRadius: Radius.medium, gap: Spacing.one, minHeight: TouchTarget, justifyContent: 'center', paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
   editAction: { flex: 1 },
   editActions: { flexDirection: 'row', gap: Spacing.two },
   empty: { alignItems: 'center', padding: Spacing.six },
@@ -1081,24 +1362,26 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     boxShadow: '0 3px 10px rgba(0,0,0,0.14)',
+    flexDirection: 'row',
+    gap: Spacing.one,
     height: TouchTarget,
     justifyContent: 'center',
+    minWidth: TouchTarget,
+    paddingHorizontal: Spacing.two,
     position: 'absolute',
     right: Spacing.three,
-    width: TouchTarget,
   },
+  jumpToLatestCount: { textAlign: 'center' },
   loadMore: { alignItems: 'center', minHeight: TouchTarget, justifyContent: 'center', padding: Spacing.two },
-  headerCircle: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, justifyContent: 'center', width: TouchTarget },
+  headerCircle: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, justifyContent: 'center', overflow: 'hidden', width: TouchTarget },
+  headerGlassMaterial: { borderRadius: Radius.pill },
   channelHeaderButton: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: 280, minHeight: TouchTarget, overflow: 'hidden', paddingHorizontal: Spacing.three },
   channelTitle: { flexShrink: 1, minWidth: 0 },
   pendingBody: { alignItems: 'flex-start', alignSelf: 'flex-end', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '84%', minWidth: 0, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   pendingCopy: { flexShrink: 1, gap: 2, minWidth: 0 },
   pendingRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   pendingText: { flex: 1 },
-  reasonChip: { borderRadius: Radius.medium, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  reasonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, padding: Spacing.three },
   retry: { alignItems: 'center', borderRadius: Radius.medium, justifyContent: 'center', minHeight: TouchTarget, marginTop: Spacing.three, paddingHorizontal: Spacing.four },
-  reportButton: { alignItems: 'center', borderRadius: Radius.large, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.four },
   screen: { flex: 1 },
   thread: { paddingBottom: Spacing.two, paddingTop: Spacing.two },
 });

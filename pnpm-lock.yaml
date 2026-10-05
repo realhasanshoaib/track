@@ -178,6 +178,9 @@ importers:
       expo-blur:
         specifier: ~57.0.3
         version: 57.0.3(expo@57.0.25)(react-native@0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2))(react@19.2.7)
+      expo-clipboard:
+        specifier: ~57.0.2
+        version: 57.0.2(expo@57.0.25)(react-native@0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2))(react@19.2.7)
       expo-constants:
         specifier: ~57.0.19
         version: 57.0.19(expo@57.0.25)(react-native@0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2))(supports-color@10.2.2)
@@ -4464,6 +4467,13 @@ packages:
 
   expo-blur@57.0.3:
     resolution: {integrity: sha512-uyBeJwxIuXzWXXNrnRub5pcF8VzQsiOz0VBTWDpMG2UztmaFyfAz6pI/GCwRtWpHhiOpLoJj79WLdg1GMB+9cg==}
+    peerDependencies:
+      expo: '*'
+      react: 19.2.7
+      react-native: '*'
+
+  expo-clipboard@57.0.2:
+    resolution: {integrity: sha512-VB4Au8X/RbvJKUtJk+87vdtveWSNEa5RzY3ooeO6VNF7Rd49RbQXZOu3/TfEW9p7mU8TCfyTvjyCiAUwSoSJ4w==}
     peerDependencies:
       expo: '*'
       react: 19.2.7
@@ -11700,6 +11710,12 @@ snapshots:
       react-native: 0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2)
 
   expo-blur@57.0.3(expo@57.0.25)(react-native@0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2))(react@19.2.7):
+    dependencies:
+      expo: 57.0.25(eb2cba8357cf3e1005a1838e2ae0771e)
+      react: 19.2.7
+      react-native: 0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2)
+
+  expo-clipboard@57.0.2(expo@57.0.25)(react-native@0.86.3(patch_hash=0680090a01441a489c382cec978f3a1372d28d3d1c66b3c23d8c3544b0deb2bc)(@babel/core@7.29.7(supports-color@10.2.2))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react@19.2.7)(supports-color@10.2.2))(react@19.2.7):
     dependencies:
       expo: 57.0.25(eb2cba8357cf3e1005a1838e2ae0771e)
       react: 19.2.7

@@ -50,7 +50,6 @@ import { enqueueOfflineTask } from '@/lib/offline-task-queue';
 import { groupMobileTasksByState, taskDetailHref, taskListHref, type MobileTaskIdentity } from '@/lib/task-navigation';
 import { taskPriorityLabel } from '@/lib/task-presentation';
 import type { MyTask } from '@/lib/my-task-types';
-import { scopeMyTaskItems } from '@/lib/my-task-scope';
 import { resolveWorkflowStateId, taskMatchesWorkflowStateFilter, visibleBoardStateIds } from '@/lib/task-workflow';
 import { taskErrorMessage } from '@/lib/user-facing-error';
 
@@ -163,6 +162,11 @@ export default function TasksScreen() {
       .slice(0, 4);
   }, [selectedBoard?.states, tasks]);
   const activeCompanies = useMemo(() => (companies ?? []).filter(({ company }) => company?.status === 'active'), [companies]);
+  const companyOptions = useMemo(() => activeCompanies.flatMap(({ company }) => company ? [{
+    id: company._id,
+    logoUrl: company.logoUrl,
+    name: company.displayName,
+  }] : []), [activeCompanies]);
   useEffect(() => {
     if (!actingCompanyId && activeCompanies[0]?.company?._id) setActingCompanyId(activeCompanies[0].company._id);
   }, [actingCompanyId, activeCompanies, setActingCompanyId]);
@@ -173,10 +177,6 @@ export default function TasksScreen() {
   const projectDirectory = useMemo(() => (projectDirectoryPages.results as Array<FunctionReturnType<typeof api.mobile.listTaskProjects>['page'][number]>)
     .filter((item): item is NonNullable<typeof item> => Boolean(item && item.membership.status === 'active')),
   [projectDirectoryPages.results]);
-  const [selectedMyTaskProjectId, setSelectedMyTaskProjectId] = useState<string | null>(null);
-  useEffect(() => {
-    setSelectedMyTaskProjectId(null);
-  }, [actingCompanyId]);
   const globalBoards = useQuery(api.taskBoards.listMine, release.tasks && !projectId ? {
     actingCompanyId: actingCompanyId ?? undefined,
   } : 'skip') as GlobalBoardView[] | undefined;
@@ -190,10 +190,9 @@ export default function TasksScreen() {
   const assignedTaskRows = useMemo(() => assignedTaskPages.results.filter((item): item is MyTask =>
     Boolean(item && (!actingCompanyId || String(item.companyId ?? '') === String(actingCompanyId))),
   ), [actingCompanyId, assignedTaskPages.results]);
-  const companyBoards = useMemo(() => scopeMyTaskItems(
+  const companyBoards = useMemo(() =>
     globalBoards?.filter((item) => String(item.companyId ?? '') === String(actingCompanyId ?? '')) ?? [],
-    selectedMyTaskProjectId,
-  ), [actingCompanyId, globalBoards, selectedMyTaskProjectId]);
+  [actingCompanyId, globalBoards]);
   const suggestions = useQuery(api.taskSuggestions.list, release.tasks && projectId && !readOnly ? {
     projectId: project,
     ...queryIdentity,
@@ -500,19 +499,6 @@ export default function TasksScreen() {
     });
   }
 
-  function toggleAssignedTaskCompletion(item: MyTask) {
-    const board = globalBoards?.find((candidate) => candidate.board._id === item.task.boardId);
-    const state = item.state?.category === 'completed'
-      ? board?.states.find((candidate) => candidate.category === 'unstarted')
-        ?? board?.states.find((candidate) => candidate.category !== 'completed' && candidate.category !== 'canceled')
-      : board?.states.find((candidate) => candidate.category === 'completed');
-    if (!state) {
-      setError('A matching task status is unavailable right now.');
-      return;
-    }
-    moveAssignedTaskToState(item, String(state._id));
-  }
-
   function assigneeName(item: MobileTaskView) {
     if (!item.task.assigneeProjectMemberId) return undefined;
     return assignees?.find((candidate) => candidate.member._id === item.task.assigneeProjectMemberId)?.user.displayName
@@ -714,6 +700,9 @@ export default function TasksScreen() {
         boards={companyBoards}
         boardsLoading={globalBoards === undefined}
         companyName={actingCompany?.company?.displayName ?? 'All Companies'}
+        companyId={actingCompanyId}
+        companyLogoUrl={actingCompany?.company?.logoUrl ?? null}
+        companyOptions={companyOptions}
         createTaskSheet={createTaskSheet}
         error={error}
         hasMoreProjects={hasMoreProjects}
@@ -734,7 +723,6 @@ export default function TasksScreen() {
           router.push(taskDetailHref(item.project._id, item.task.publicKey, taskIdentity));
         }}
         onSetTaskStatus={moveAssignedTaskToState}
-        onToggleTaskComplete={toggleAssignedTaskCompletion}
         onCancelTaskStatusConfirmation={() => setAssignedTaskConfirmation(null)}
         onConfirmTaskStatus={() => {
           if (!assignedTaskConfirmation) return;
@@ -742,11 +730,7 @@ export default function TasksScreen() {
           setAssignedTaskConfirmation(null);
           moveAssignedTaskToState(pending.task, pending.stateId, true);
         }}
-        profileName={currentUser?.displayName ?? 'My Tasks'}
-        projectDirectory={projectDirectory}
-        projectDirectoryLoading={projectDirectoryPages.status === 'LoadingFirstPage'}
-        selectedProjectId={selectedMyTaskProjectId}
-        onSelectProject={setSelectedMyTaskProjectId}
+        onSelectCompany={setActingCompanyId}
       />
     );
   }

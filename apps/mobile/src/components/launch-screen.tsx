@@ -16,17 +16,17 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 
-/** Keep the brand sequence brief so startup hands off as soon as the app is ready. */
-export const LAUNCH_ARTWORK_DURATION_MS = 900;
+/** Keep the brand transition shorter than the handoff to the first app screen. */
+export const LAUNCH_ARTWORK_DURATION_MS = 820;
 export const LAUNCH_DISPLAY_DURATION_MS = 980;
 const LAUNCH_EXIT_DURATION_MS = 160;
 
-const STAGE_HEIGHT = 128;
-const BRAND_TILE_SIZE = 108;
-const SOURCE_TILE_SIZE = 52;
-const TASK_TILE_WIDTH = 66;
-const TASK_TILE_HEIGHT = 56;
-const SIGNAL_SIZE = 8;
+const ACTION_NODE_SIZE = 68;
+const ACTION_ICON_SIZE = 34;
+const ACTION_ROUTE_GAP = 64;
+const ACTION_STAGE_WIDTH = ACTION_NODE_SIZE * 2 + ACTION_ROUTE_GAP;
+const ROUTE_DOT_SIZE = 8;
+const BRAND_MARK_SIZE = 76;
 
 export function LaunchScreen({ animationActive = false, exiting = false, onExitComplete, onReady, theme = 'light' }: {
   animationActive?: boolean;
@@ -40,7 +40,6 @@ export function LaunchScreen({ animationActive = false, exiting = false, onExitC
   const didReportReady = useRef(false);
   const opacity = useRef(new Animated.Value(1)).current;
   const [artReady, setArtReady] = useState(false);
-  const [stageWidth, setStageWidth] = useState(0);
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
   const colors = Colors[theme];
@@ -67,72 +66,51 @@ export function LaunchScreen({ animationActive = false, exiting = false, onExitC
   }, [onReady]);
 
   useEffect(() => {
-    if (!artReady || !animationActive || exiting || stageWidth === 0) return;
+    if (!artReady || !animationActive || exiting) return;
     if (reducedMotion) {
       progress.value = 1;
       return;
     }
-    progress.value = withTiming(1, { duration: LAUNCH_ARTWORK_DURATION_MS, easing: Easing.linear });
+    progress.value = withTiming(1, {
+      duration: LAUNCH_ARTWORK_DURATION_MS,
+      easing: Easing.linear,
+    });
     return () => cancelAnimation(progress);
-  }, [animationActive, artReady, exiting, progress, reducedMotion, stageWidth]);
+  }, [animationActive, artReady, exiting, progress, reducedMotion]);
 
-  const logoStyle = useAnimatedStyle(() => {
-    const intro = interpolate(progress.value, [0, 0.12, 0.27], [0, 0.72, 1], 'clamp');
-    const arrival = interpolate(progress.value, [0.33, 0.43, 0.53, 0.63], [1, 1.035, 1.035, 1], 'clamp');
-    const introScale = interpolate(progress.value, [0, 0.27], [0.94, 1], 'clamp');
-    return {
-      opacity: intro,
-      transform: [
-        { translateY: interpolate(progress.value, [0, 0.27], [7, 0], 'clamp') },
-        { scale: introScale * arrival },
-      ],
-    };
-  });
-  const sourceStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.04, 0.16, 0.29], [0, 0.82, 1], 'clamp'),
-    transform: [{ translateX: interpolate(progress.value, [0.04, 0.25], [-10, 0], 'clamp') }],
-  }));
-  const leftRouteStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.1, 0.22, 0.38], [0, 0.62, 1], 'clamp'),
-    transform: [{ scaleX: interpolate(progress.value, [0.12, 0.39], [0.04, 1], 'clamp') }],
-  }));
-  const rightRouteStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.46, 0.58, 0.77], [0, 0.62, 1], 'clamp'),
-    transform: [{ scaleX: interpolate(progress.value, [0.48, 0.78], [0.04, 1], 'clamp') }],
-  }));
-  const signalStyle = useAnimatedStyle(() => {
-    const center = stageWidth / 2;
-    const firstArrival = center - BRAND_TILE_SIZE / 2 - SIGNAL_SIZE;
-    const secondStart = center + BRAND_TILE_SIZE / 2 + 6;
-    const destination = Math.max(SOURCE_TILE_SIZE, stageWidth - TASK_TILE_WIDTH - SIGNAL_SIZE);
-    return {
-      opacity: interpolate(progress.value, [0.1, 0.16, 0.33, 0.4, 0.49, 0.56, 0.75, 0.82], [0, 1, 1, 0, 0, 1, 1, 0], 'clamp'),
-      transform: [{ translateX: interpolate(progress.value, [0.12, 0.39, 0.5, 0.78], [SOURCE_TILE_SIZE, firstArrival, secondStart, destination], 'clamp') }],
-    };
-  });
-  const taskStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.4, 0.58, 0.72], [0, 0.78, 1], 'clamp'),
+  const conversationStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.14, 0.2], [0, 1, 1], 'clamp'),
     transform: [
-      { translateX: interpolate(progress.value, [0.4, 0.7], [9, 0], 'clamp') },
-      { scale: interpolate(progress.value, [0.4, 0.7], [0.96, 1], 'clamp') },
+      { translateY: interpolate(progress.value, [0, 0.18], [6, 0], 'clamp') },
+      { scale: interpolate(progress.value, [0, 0.18], [0.9, 1], 'clamp') },
     ],
   }));
-  const checkStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.66, 0.81], [0, 1], 'clamp'),
-    transform: [{ scale: interpolate(progress.value, [0.66, 0.84], [0.7, 1], 'clamp') }],
+  const actionStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.4, 0.58], [0, 1], 'clamp'),
+    transform: [
+      { translateX: interpolate(progress.value, [0.4, 0.58], [6, 0], 'clamp') },
+      { scale: interpolate(progress.value, [0.4, 0.58], [0.9, 1], 'clamp') },
+    ],
+  }));
+  const routeDotStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.12, 0.2, 0.54, 0.64], [0, 1, 1, 0], 'clamp'),
+    transform: [{ translateX: interpolate(progress.value, [0.18, 0.58], [0, ACTION_ROUTE_GAP], 'clamp') }],
+  }));
+  const brandMarkStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0.48, 0.68], [0, 1], 'clamp'),
+    transform: [
+      { translateY: interpolate(progress.value, [0.48, 0.68], [8, 0], 'clamp') },
+      { scale: interpolate(progress.value, [0.48, 0.68], [0.9, 1], 'clamp') },
+    ],
   }));
   const wordmarkStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.05, 0.24], [0, 1], 'clamp'),
-    transform: [{ translateY: interpolate(progress.value, [0.05, 0.24], [5, 0], 'clamp') }],
+    opacity: interpolate(progress.value, [0.6, 0.77], [0, 1], 'clamp'),
+    transform: [{ translateY: interpolate(progress.value, [0.6, 0.77], [6, 0], 'clamp') }],
   }));
   const captionStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.5, 0.73], [0, 1], 'clamp'),
+    opacity: interpolate(progress.value, [0.72, 0.9], [0, 1], 'clamp'),
+    transform: [{ translateY: interpolate(progress.value, [0.72, 0.9], [4, 0], 'clamp') }],
   }));
-
-  const centerRouteLeft = stageWidth / 2 - BRAND_TILE_SIZE / 2;
-  const centerRouteRight = stageWidth / 2 + BRAND_TILE_SIZE / 2;
-  const leftRouteWidth = Math.max(0, centerRouteLeft - SOURCE_TILE_SIZE);
-  const rightRouteWidth = Math.max(0, stageWidth - TASK_TILE_WIDTH - centerRouteRight);
 
   return (
     <View
@@ -151,56 +129,42 @@ export function LaunchScreen({ animationActive = false, exiting = false, onExitC
             accessibilityElementsHidden
             accessible={false}
             importantForAccessibility="no-hide-descendants"
-            onLayout={({ nativeEvent }) => setStageWidth(nativeEvent.layout.width)}
             pointerEvents="none"
-            style={styles.stage}
+            style={styles.actionStage}
           >
-            <View style={[styles.routeBase, { backgroundColor: colors.homeBorder, left: SOURCE_TILE_SIZE, top: STAGE_HEIGHT / 2, width: leftRouteWidth }]} />
-            <View style={[styles.routeBase, { backgroundColor: colors.homeBorder, left: centerRouteRight, top: STAGE_HEIGHT / 2, width: rightRouteWidth }]} />
-            <Reanimated.View style={[styles.routeActive, { backgroundColor: colors.accent, left: SOURCE_TILE_SIZE, top: STAGE_HEIGHT / 2, width: leftRouteWidth }, leftRouteStyle]} />
-            <Reanimated.View style={[styles.routeActive, { backgroundColor: colors.accent, left: centerRouteRight, top: STAGE_HEIGHT / 2, width: rightRouteWidth }, rightRouteStyle]} />
-            <Reanimated.View style={[styles.signal, { backgroundColor: colors.accent, top: STAGE_HEIGHT / 2 - SIGNAL_SIZE / 2 }, signalStyle]} />
-
-            <Reanimated.View style={[styles.sourceTile, { backgroundColor: colors.homeSurface, borderColor: colors.homeBorder }, sourceStyle]}>
-              <PlatformIcon color={colors.textSecondary} name="message" size={20} />
+            <View style={[styles.routeTrack, { backgroundColor: colors.homeBorder }]} />
+            <Reanimated.View style={[styles.routeDot, { backgroundColor: colors.accent }, routeDotStyle]} />
+            <Reanimated.View style={[styles.actionNode, styles.sourceNode, { backgroundColor: colors.homeSurface, borderColor: colors.homeBorder }, conversationStyle]}>
+              <PlatformIcon color={colors.textSecondary} name="message" size={ACTION_ICON_SIZE} />
             </Reanimated.View>
-
-            <Reanimated.View style={[styles.brandTile, { backgroundColor: colors.homeSurface, borderColor: colors.homeBorder }, logoStyle]}>
-              <Image
-                accessible={false}
-                accessibilityIgnoresInvertColors
-                fadeDuration={0}
-                onLoadEnd={() => {
-                  didLoadMark.current = true;
-                  reportReady();
-                }}
-                resizeMode="contain"
-                source={markSource}
-                style={styles.brandMark}
-              />
-            </Reanimated.View>
-
-            <Reanimated.View style={[styles.taskTile, { backgroundColor: colors.homeSurface, borderColor: colors.homeBorder }, taskStyle]}>
-              <View style={styles.taskTopRow}>
-                <View style={[styles.taskCheckbox, { backgroundColor: colors.accentSoft, borderColor: colors.homeBorder }]}>
-                  <Reanimated.View style={checkStyle}>
-                    <PlatformIcon color={colors.accentStrong} name="check" size={12} />
-                  </Reanimated.View>
-                </View>
-                <View style={styles.taskCopy}>
-                  <View style={[styles.taskLinePrimary, { backgroundColor: colors.textSecondary }]} />
-                  <View style={[styles.taskLineShort, { backgroundColor: colors.homeBorder }]} />
-                </View>
-              </View>
-              <View style={[styles.taskLineFooter, { backgroundColor: colors.homeBorder }]} />
+            <Reanimated.View style={[styles.actionNode, styles.destinationNode, { backgroundColor: colors.homeSurface, borderColor: colors.homeBorder }, actionStyle]}>
+              <PlatformIcon color={colors.accentStrong} name="task" size={ACTION_ICON_SIZE} variant="filled" />
             </Reanimated.View>
           </View>
 
-          <Reanimated.View style={[styles.wordmarkWrap, wordmarkStyle]}>
-            <ThemedText style={[styles.wordmark, { color: colors.text }]} type="titleLarge">Track</ThemedText>
+          <Reanimated.View style={[styles.brandMarkWrap, brandMarkStyle]}>
+            <Image
+              accessible={false}
+              accessibilityIgnoresInvertColors
+              fadeDuration={0}
+              onLoadEnd={() => {
+                didLoadMark.current = true;
+                reportReady();
+              }}
+              resizeMode="contain"
+              source={markSource}
+              style={styles.brandMark}
+            />
           </Reanimated.View>
+
+          <Reanimated.View style={[styles.wordmarkWrap, wordmarkStyle]}>
+            <ThemedText style={[styles.wordmark, { color: colors.text }]} type="display">Track</ThemedText>
+          </Reanimated.View>
+
           <Reanimated.View style={[styles.captionWrap, captionStyle]}>
-            <ThemedText style={[styles.caption, { color: colors.textSecondary }]} type="small">From conversation to action</ThemedText>
+            <ThemedText style={[styles.caption, { color: colors.textSecondary }]} type="small">
+              From conversation to action
+            </ThemedText>
           </Reanimated.View>
         </View>
       </Animated.View>
@@ -211,23 +175,17 @@ export function LaunchScreen({ animationActive = false, exiting = false, onExitC
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   canvas: { alignItems: 'center', flex: 1, justifyContent: 'center' },
-  hero: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.four, transform: [{ translateY: 36 }], width: '100%' },
-  stage: { alignItems: 'center', height: STAGE_HEIGHT, justifyContent: 'center', maxWidth: 340, position: 'relative', width: '100%' },
-  routeBase: { height: 1.5, position: 'absolute' },
-  routeActive: { height: 2, position: 'absolute', transformOrigin: 'left center' },
-  signal: { borderRadius: Radius.pill, height: SIGNAL_SIZE, left: 0, position: 'absolute', width: SIGNAL_SIZE, zIndex: 1 },
-  sourceTile: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, height: SOURCE_TILE_SIZE, justifyContent: 'center', left: 0, position: 'absolute', top: (STAGE_HEIGHT - SOURCE_TILE_SIZE) / 2, width: SOURCE_TILE_SIZE },
-  brandTile: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.xlarge, borderWidth: StyleSheet.hairlineWidth, height: BRAND_TILE_SIZE, justifyContent: 'center', left: '50%', marginLeft: -BRAND_TILE_SIZE / 2, position: 'absolute', top: (STAGE_HEIGHT - BRAND_TILE_SIZE) / 2, width: BRAND_TILE_SIZE, zIndex: 2 },
-  brandMark: { height: BRAND_TILE_SIZE - Spacing.two, width: BRAND_TILE_SIZE - Spacing.two },
-  taskTile: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, height: TASK_TILE_HEIGHT, justifyContent: 'center', paddingHorizontal: Spacing.two, position: 'absolute', right: 0, top: (STAGE_HEIGHT - TASK_TILE_HEIGHT) / 2, width: TASK_TILE_WIDTH },
-  taskTopRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
-  taskCheckbox: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.small, borderWidth: StyleSheet.hairlineWidth, height: 16, justifyContent: 'center', width: 16 },
-  taskCopy: { flex: 1, gap: 4 },
-  taskLinePrimary: { borderRadius: Radius.pill, height: 4, width: '100%' },
-  taskLineShort: { borderRadius: Radius.pill, height: 3, width: '62%' },
-  taskLineFooter: { borderRadius: Radius.pill, height: 3, marginLeft: 24, marginTop: 7, width: 22 },
-  wordmarkWrap: { marginTop: Spacing.two },
-  wordmark: { fontWeight: '700', letterSpacing: -0.6, lineHeight: 34 },
-  captionWrap: { marginTop: Spacing.three },
-  caption: { textAlign: 'center' },
+  hero: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.four, transform: [{ translateY: 8 }], width: '100%' },
+  actionStage: { alignItems: 'center', height: ACTION_NODE_SIZE, justifyContent: 'center', position: 'relative', width: ACTION_STAGE_WIDTH },
+  routeTrack: { height: 2, left: ACTION_NODE_SIZE, position: 'absolute', top: ACTION_NODE_SIZE / 2 - 1, width: ACTION_ROUTE_GAP },
+  routeDot: { borderRadius: Radius.pill, height: ROUTE_DOT_SIZE, left: ACTION_NODE_SIZE - ROUTE_DOT_SIZE / 2, position: 'absolute', top: ACTION_NODE_SIZE / 2 - ROUTE_DOT_SIZE / 2, width: ROUTE_DOT_SIZE, zIndex: 1 },
+  actionNode: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: ACTION_NODE_SIZE, justifyContent: 'center', position: 'absolute', width: ACTION_NODE_SIZE, zIndex: 2 },
+  sourceNode: { left: 0 },
+  destinationNode: { right: 0 },
+  brandMarkWrap: { alignItems: 'center', height: BRAND_MARK_SIZE, justifyContent: 'center', marginTop: Spacing.five, width: BRAND_MARK_SIZE },
+  brandMark: { height: BRAND_MARK_SIZE, width: BRAND_MARK_SIZE },
+  wordmarkWrap: { marginTop: Spacing.one },
+  wordmark: { fontWeight: '700', letterSpacing: -1.2, lineHeight: 44, fontSize: 36, textAlign: 'center' },
+  captionWrap: { marginTop: Spacing.two },
+  caption: { fontSize: 16, lineHeight: 22, textAlign: 'center' },
 });

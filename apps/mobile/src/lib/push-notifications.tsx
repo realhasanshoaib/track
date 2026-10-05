@@ -170,6 +170,23 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
     }
   }, [convexAuthLoading, convexAuthenticated, installationId, isSigningOut, registerInstallation, reportPermission, trackUserId]);
 
+  const openPushData = useCallback(async (data: Record<string, unknown> | null | undefined) => {
+    const href = resolvePushHref(data);
+    const userId = trackUserId;
+    if (!href || !userId || activeUserRef.current !== userId) return;
+    const id = installationId ?? await getPushInstallationId();
+    if (activeUserRef.current !== userId) return;
+    const intentId = data?.intentId;
+    if (typeof intentId === 'string') {
+      await recordOpen({
+        userId,
+        installationId: id,
+        intentId: intentId as Id<'pushDeliveryIntents'>,
+      }).catch(() => undefined);
+    }
+    if (activeUserRef.current === userId) router.push(href as Href);
+  }, [installationId, recordOpen, router, trackUserId]);
+
   useEffect(() => {
     const push = getNotificationsApi();
     if (!trackUserId || isSigningOut || convexAuthLoading || !convexAuthenticated || Platform.OS === 'web' || !push) return;
@@ -208,24 +225,12 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
       if (!response) return;
       const responseId = response.notification.request.identifier;
       if (!await consumePushResponseId(responseId)) return;
-      const data = response.notification.request.content.data;
-      const href = resolvePushHref(data);
-      if (!href) return;
-      const id = installationId ?? await getPushInstallationId();
-      if (activeUserRef.current !== trackUserId) return;
-      const intentId = data?.intentId;
-      if (typeof intentId === 'string') {
-        await recordOpen({
-          userId: trackUserId!, installationId: id,
-          intentId: intentId as Id<'pushDeliveryIntents'>,
-        }).catch(() => undefined);
-      }
-      router.push(href as Href);
+      await openPushData(response.notification.request.content.data);
     }
     const subscription = push.addNotificationResponseReceivedListener((response) => { void open(response); });
     void push.getLastNotificationResponseAsync().then(open);
     return () => subscription.remove();
-  }, [convexAuthLoading, convexAuthenticated, installationId, isSigningOut, recordOpen, router, trackUserId]);
+  }, [convexAuthLoading, convexAuthenticated, isSigningOut, openPushData, trackUserId]);
 
   useEffect(() => {
     const push = getNotificationsApi();
@@ -240,12 +245,13 @@ export function PushNotificationBridge({ children }: { children: React.ReactNode
       showToast({
         icon: pushIcon(data?.eventKind),
         message,
+        onPress: resolvePushHref(data) ? () => { void openPushData(data); } : undefined,
         title: title || 'Track activity',
         tone: 'info',
       });
     });
     return () => subscription.remove();
-  }, [showToast]);
+  }, [openPushData, showToast]);
 
   const value = useMemo<PushContextValue>(() => ({
     availability,

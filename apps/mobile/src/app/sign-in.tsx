@@ -18,8 +18,9 @@ import { useRouter } from 'expo-router';
 import { ActionButton } from '@/components/action-button';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { authClient } from '@/lib/auth-client';
+import { authStoragePrefix } from '@/lib/auth-storage';
 import { useDevAuthBypass } from '@/lib/dev-auth-bypass';
-import { requiresTwoFactor, validateEmailSignIn, validateEmailSignUp } from '@/lib/email-auth';
+import { MIN_PASSWORD_LENGTH, requiresTwoFactor, validateEmailAddress, validateEmailSignIn, validateEmailSignUp } from '@/lib/email-auth';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { IconButton } from '@/components/icon-button';
 import { SignInHero } from '@/components/sign-in-hero';
@@ -37,14 +38,17 @@ export default function SignInScreen() {
   const router = useRouter();
   const devAuthBypass = useDevAuthBypass();
   const session = authClient.useSession();
-  const [busyAction, setBusyAction] = useState<'apple' | 'dev' | 'email' | 'google' | null>(null);
+  const [busyAction, setBusyAction] = useState<'apple' | 'dev' | 'email' | 'google' | 'reset' | null>(null);
   const [emailIntent, setEmailIntent] = useState<'signIn' | 'signUp'>('signIn');
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [retryAction, setRetryAction] = useState<'apple' | 'dev' | 'email' | 'google' | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [retryAction, setRetryAction] = useState<'apple' | 'dev' | 'email' | 'google' | 'reset' | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const signedIn = Boolean(session.data);
@@ -165,7 +169,41 @@ export default function SignInScreen() {
     }
   }
 
+  async function requestPasswordReset() {
+    const input = validateEmailAddress(email);
+    if (!input.ok) {
+      setError(input.error);
+      setNotice(null);
+      setRetryAction(null);
+      return;
+    }
+
+    setBusyAction('reset');
+    setError(null);
+    setNotice(null);
+    setRetryAction(null);
+    try {
+      const result = await authClient.requestPasswordReset({
+        email: input.email,
+        redirectTo: `${authStoragePrefix}://reset-password`,
+      });
+      if (result.error) throw new Error(result.error.message ?? 'Password reset could not be requested.');
+      setResetSent(true);
+      setNotice('If an account uses this email, Track will send a password reset link.');
+    } catch (failure) {
+      const message = accountErrorMessage(failure, 'Track could not send a reset link. Check your connection and try again.');
+      setError(message);
+      if (message.includes('connect')) setRetryAction('reset');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   function submitEmail() {
+    if (forgotPassword) {
+      void requestPasswordReset();
+      return;
+    }
     void (emailIntent === 'signUp' ? signUpWithEmail() : signInWithEmail());
   }
 
@@ -210,19 +248,24 @@ export default function SignInScreen() {
                   {retryAction ? (
                     <ActionButton
                       label="Try again"
-                      onPress={() => retryAction === 'email'
-                        ? submitEmail()
-                        : retryAction === 'dev'
-                          ? void signInWithDevBypass()
-                          : void signIn(retryAction)}
+                      onPress={() => retryAction === 'reset'
+                        ? void requestPasswordReset()
+                        : retryAction === 'email'
+                          ? submitEmail()
+                          : retryAction === 'dev'
+                            ? void signInWithDevBypass()
+                            : void signIn(retryAction)}
                       variant="secondary"
                     />
                   ) : null}
                 </View>
               ) : null}
+              {notice ? <View accessibilityRole="alert" style={[styles.noticeBox, { backgroundColor: theme.successSoft, borderColor: theme.success }]}>
+                <ThemedText themeColor="success" type="small">{notice}</ThemedText>
+              </View> : null}
 
               <View style={styles.emailFields}>
-                  {emailIntent === 'signUp' ? (
+                  {!forgotPassword && emailIntent === 'signUp' ? (
                     <View style={styles.field}>
                       <ThemedText themeColor="textSecondary" type="captionBold">Full name</ThemedText>
                       <ThemedTextInput
@@ -263,7 +306,7 @@ export default function SignInScreen() {
                       value={email}
                     />
                   </View>
-                  <View style={styles.field}>
+                  {!forgotPassword ? <View style={styles.field}>
                     <ThemedText themeColor="textSecondary" type="captionBold">Password</ThemedText>
                     <View style={[styles.passwordField, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
                       <ThemedTextInput
@@ -272,7 +315,7 @@ export default function SignInScreen() {
                         autoComplete={emailIntent === 'signUp' ? 'new-password' : 'current-password'}
                         editable={!busy}
                         keyboardAppearance={theme.background === '#1b1917' ? 'dark' : 'light'}
-                        maxLength={128}
+                        maxLength={256}
                         maxFontSizeMultiplier={MaxFontScale}
                         onChangeText={setPassword}
                         onSubmitEditing={submitEmail}
@@ -293,14 +336,17 @@ export default function SignInScreen() {
                       />
                     </View>
                     <ThemedText themeColor="textTertiary" type="caption">
-                      {emailIntent === 'signUp' ? 'Use at least 8 characters.' : 'Your password is encrypted in transit.'}
+                      {emailIntent === 'signUp' ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : 'Your password is encrypted in transit.'}
                     </ThemedText>
-                  </View>
+                  </View> : null}
+                  {forgotPassword ? <ThemedText themeColor="textSecondary" type="small">
+                    Enter the email address for your account. We’ll send a secure reset link if it matches an account.
+                  </ThemedText> : null}
                   <ActionButton
                     icon="email-outline"
-                    label={emailIntent === 'signUp' ? 'Create account' : 'Continue with email'}
-                    loading={busyAction === 'email'}
-                    disabled={busy && busyAction !== 'email'}
+                    label={forgotPassword ? resetSent ? 'Send another reset link' : 'Send reset link' : emailIntent === 'signUp' ? 'Create account' : 'Continue with email'}
+                    loading={busyAction === 'email' || busyAction === 'reset'}
+                    disabled={busy && busyAction !== 'email' && busyAction !== 'reset'}
                     onPress={submitEmail}
                   />
                   <Pressable
@@ -310,26 +356,49 @@ export default function SignInScreen() {
                     hitSlop={8}
                     onPress={() => {
                       hapticLight();
+                      setNotice(null);
+                      setResetSent(false);
                       setError(null);
-                      setEmailIntent(emailIntent === 'signUp' ? 'signIn' : 'signUp');
+                      if (forgotPassword) {
+                        setForgotPassword(false);
+                        setEmailIntent('signIn');
+                      } else {
+                        setEmailIntent(emailIntent === 'signUp' ? 'signIn' : 'signUp');
+                      }
                     }}
                     style={({ pressed }) => [styles.emailLink, { opacity: pressed ? 0.62 : 1 }]}
                   >
                     <ThemedText style={{ color: theme.textSecondary }} type="small">
-                      {emailIntent === 'signUp'
+                      {forgotPassword ? 'Back to sign in' : emailIntent === 'signUp'
                         ? 'Already have an account? Sign in'
                         : 'New to Track? Create an account'}
                     </ThemedText>
                   </Pressable>
+                  {!forgotPassword && emailIntent === 'signIn' ? <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy }}
+                    disabled={busy}
+                    hitSlop={8}
+                    onPress={() => {
+                      hapticLight();
+                      setError(null);
+                      setNotice(null);
+                      setResetSent(false);
+                      setForgotPassword(true);
+                    }}
+                    style={({ pressed }) => [styles.emailLink, { opacity: pressed ? 0.62 : 1 }]}
+                  >
+                    <ThemedText style={{ color: theme.accentStrong }} type="smallBold">Forgot password?</ThemedText>
+                  </Pressable> : null}
               </View>
 
-              <View accessibilityRole="text" style={styles.divider}>
+              {!forgotPassword ? <View accessibilityRole="text" style={styles.divider}>
                 <View style={[styles.dividerLine, { backgroundColor: theme.hairline }]} />
                 <ThemedText themeColor="textTertiary" type="caption">or</ThemedText>
                 <View style={[styles.dividerLine, { backgroundColor: theme.hairline }]} />
-              </View>
+              </View> : null}
 
-              <Pressable
+              {!forgotPassword ? <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ disabled: busy }}
                 disabled={busy}
@@ -337,9 +406,9 @@ export default function SignInScreen() {
                 style={({ pressed }) => [styles.socialButton, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline, opacity: busy && busyAction !== 'google' ? 0.5 : pressed ? 0.82 : 1 }]}>
                 {busyAction === 'google' ? <ActivityIndicator color={theme.textSecondary} size="small" /> : <Image accessibilityIgnoresInvertColors source={googleMarkImage} style={styles.authIcon} />}
                 <ThemedText type="smallBold">{busyAction === 'google' ? 'Connecting…' : 'Continue with Google'}</ThemedText>
-              </Pressable>
+              </Pressable> : null}
 
-              {showApple ? (
+              {!forgotPassword && showApple ? (
                 <ActionButton
                   disabled={busy && busyAction !== 'apple'}
                   icon="apple"
@@ -351,7 +420,7 @@ export default function SignInScreen() {
               ) : null}
 
               {/* Dev bypass */}
-              {devAuthBypass.allowed ? (
+              {!forgotPassword && devAuthBypass.allowed ? (
                 <ActionButton
                   disabled={busy && busyAction !== 'dev'}
                   label="Development sign-in"
@@ -471,6 +540,12 @@ const styles = StyleSheet.create({
   },
   emailFields: {
     gap: Spacing.three,
+  },
+  noticeBox: {
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   field: { gap: Spacing.one },
   emailLink: {

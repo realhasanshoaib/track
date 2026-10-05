@@ -78,7 +78,11 @@ export type HomeFeedUpdate = {
 };
 
 export function attentionSection(item: MobileAttentionItem): AttentionSectionKey {
-  if (item.eventType === 'company_invitation' || item.eventType === 'overdue' || item.eventType === 'mention' || item.eventType === 'direct_reply') return 'priority';
+  if (
+    item.eventType === 'company_invitation' || item.eventType === 'overdue' ||
+    item.eventType === 'urgent_update' || item.eventType === 'mention' ||
+    item.eventType === 'direct_reply'
+  ) return 'priority';
   if (item.kind === 'task') return 'work';
   if (item.kind === 'message') return 'following';
   return 'other';

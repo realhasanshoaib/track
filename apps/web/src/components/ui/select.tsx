@@ -5,7 +5,8 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "#/lib/utils"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { UnfoldMoreIcon, Tick02Icon, ArrowUp01Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import { Tick02Icon, ArrowUp01Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import { ChevronDown } from "lucide-react"
 
 const Select = SelectPrimitive.Root
 
@@ -40,19 +41,16 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
+      data-control-kind="value"
       data-size={size}
       className={cn(
-        "task-filter-select track-dropdown-input flex min-w-36 w-fit min-h-9 items-center justify-between gap-1.5 rounded-md border border-input bg-input/20 px-2.5 py-1 text-xs/relaxed whitespace-nowrap transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "task-filter-select track-dropdown-input flex min-w-36 w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-input/20 px-2.5 py-1 text-xs/relaxed whitespace-nowrap transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:min-h-[var(--control-md,2.5rem)] data-[size=default]:h-[var(--control-md,2.5rem)] data-[size=sm]:min-h-[var(--control-sm,2.25rem)] data-[size=sm]:h-[var(--control-sm,2.25rem)] *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className
       )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon
-        render={
-          <HugeiconsIcon icon={UnfoldMoreIcon} strokeWidth={2} className="pointer-events-none size-3.5 text-muted-foreground" />
-        }
-      />
+      <ChevronDown aria-hidden="true" className="pointer-events-none size-3.5 shrink-0 text-muted-foreground" />
     </SelectPrimitive.Trigger>
   )
 }

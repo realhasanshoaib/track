@@ -658,9 +658,39 @@ export const resolveNavigation = query({
           readStateImmutable: false,
           membership: null,
           project: null,
+          company: null,
+          channel: null,
+          archiveDetails: null,
         }
       }
       const readStateImmutable = access.companyAccess?.projectMember.status === 'archived'
+      const company = access.companyAccess?.company ?? null
+      const entitlement = access.companyAccess?.entitlement
+      const archivedChannel = group && entitlement?.snapshotOperationId
+        ? await getArchivedChannelSnapshot(ctx, entitlement.snapshotOperationId, group._id)
+        : group && entitlement?.channelSnapshots
+          .map((value: unknown) => decodeLegacyArchivedChannel(ctx, value))
+          .find((snapshot) => snapshot._id === group._id)
+      const channel = group ? archivedChannel ?? group : null
+      const archiveDetails = readStateImmutable
+        ? {
+            kind: 'company_exit' as const,
+            cutoffAt: access.companyAccess?.entitlement?.exitAt ?? access.projectMember.endedAt ?? null,
+            reason: null,
+          }
+        : access.project.status === 'archived'
+          ? {
+              kind: 'project' as const,
+              cutoffAt: access.project.archivedAt ?? null,
+              reason: access.project.archiveReason ?? null,
+            }
+          : group?.status && group.status !== 'active'
+            ? {
+                kind: 'channel' as const,
+                cutoffAt: group.archivedAt ?? null,
+                reason: null,
+              }
+            : null
       return {
         available: true,
         archived:
@@ -670,15 +700,30 @@ export const resolveNavigation = query({
         readStateImmutable,
         membership: access.projectMember,
         project: access.project,
+        channel: channel ? {
+          _id: channel._id,
+          name: channel.name,
+          kind: channel.kind,
+          status: channel.status,
+        } : null,
+        archiveDetails,
+        company: company ? {
+          _id: company._id,
+          displayName: company.displayName,
+          logoUrl: company.logoStorageId ? await ctx.storage.getUrl(company.logoStorageId) : null,
+        } : null,
       }
     } catch {
       return {
         available: false,
         archived: false,
-        readStateImmutable: false,
-        membership: null,
-        project: null,
-      }
+          readStateImmutable: false,
+          membership: null,
+          project: null,
+          company: null,
+          channel: null,
+          archiveDetails: null,
+        }
     }
   },
 })

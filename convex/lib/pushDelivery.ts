@@ -49,7 +49,10 @@ export function taskPushCopy(input: {
   previewMode: 'full' | 'context' | 'hidden'
 }) {
   const event = input.eventKind.replaceAll('_', ' ')
-  if (input.previewMode === 'hidden') return { title: 'Track', body: `New task ${event}` }
+  if (input.previewMode === 'hidden') return {
+    title: 'Track',
+    body: input.eventKind === 'urgent_update' ? 'An urgent task needs attention' : `New task ${event}`,
+  }
   const project = safePushLabel(input.projectName, 'a Project')
   const publicKey = safePushLabel(input.publicKey, 'task')
   const verb = input.eventKind === 'assignment'
@@ -58,11 +61,13 @@ export function taskPushCopy(input: {
       ? 'Assignment changed for'
       : input.eventKind === 'mention'
         ? 'You were mentioned on'
-        : input.eventKind === 'due_soon'
-          ? 'Due soon'
-          : input.eventKind === 'overdue'
-            ? 'Overdue'
-          : 'Task updated'
+        : input.eventKind === 'urgent_update'
+          ? 'Urgent update for'
+          : input.eventKind === 'due_soon'
+            ? 'Due soon'
+            : input.eventKind === 'overdue'
+              ? 'Overdue'
+              : 'Task updated'
   if (input.previewMode === 'full') {
     return {
       title: safePushLabel(`${publicKey} · ${project}`, 'Track task'),

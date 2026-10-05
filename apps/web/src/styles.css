@@ -282,7 +282,10 @@
 .task-detection-settings { border-top: 1px solid var(--border); font-size: .68rem; padding-top: 6px; }
 .task-detection-settings summary { cursor: pointer; font-weight: 650; }
 .task-detection-settings p { color: var(--muted-foreground); margin: 6px 0; }
-.task-history-controls { display: grid; gap: 5px; grid-template-columns: 1fr 1fr auto; margin-top: 6px; }
+.task-history-controls { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; margin-top: 6px; }
+.task-history-date-field { display: grid; gap: 4px; min-width: 0; }
+.task-history-date-field > span { color: var(--muted-foreground); font-size: 11px; line-height: 1.2; }
+.task-history-range-error { color: var(--destructive); font-size: 12px; grid-column: 1 / -1; margin: 3px 0 0; }
 .task-notification-feed { display: grid; gap: 9px; width: min(390px, calc(100vw - 24px)); }
 .task-notification-header { align-items: flex-start; display: flex; justify-content: space-between; gap: 12px; }
 .task-notification-header > div { display: grid; gap: 2px; }
@@ -1310,11 +1313,11 @@ button {
 
 .track-auth-input-action {
   position: absolute;
-  right: 7px;
-  bottom: 5px;
+  right: 0;
+  bottom: 0;
   display: inline-flex;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -11133,6 +11136,11 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
+.track-date-picker-trigger[aria-invalid="true"] {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--destructive) 28%, transparent);
+}
+
 .track-date-picker-trigger span {
   flex: 1;
 }
@@ -11267,6 +11275,16 @@ body {
 }
 
 @media (pointer: coarse) {
+  .track-date-picker-trigger {
+    min-height: 44px;
+  }
+
+  .track-date-picker-header button,
+  .track-date-picker-footer button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .track-date-picker-popover {
     width: min(320px, calc(100vw - 24px));
   }

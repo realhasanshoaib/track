@@ -392,6 +392,11 @@ export const inviteMember = mutation({
       action: 'company_invitation.created',
       after: { normalizedEmail, role: args.role },
     })
+    if (recipient) {
+      await ctx.scheduler.runAfter(0, internal.pushNotifications.deliverCompanyInvitation, {
+        invitationId,
+      })
+    }
     return { invitationId, token }
   },
 })

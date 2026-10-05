@@ -43,19 +43,29 @@ export default function ProjectsScreen() {
   const [clientLabel, setClientLabel] = useState('');
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createCompanyId, setCreateCompanyId] = useState<Id<'companies'> | null>(null);
   const [expandedMembershipId, setExpandedMembershipId] = useState<Id<'projectMembers'> | null>(null);
 
   useFocusEffect(useCallback(() => {
     setCreateContext(null);
     return () => setCreateContext(null);
   }, [setCreateContext]));
-  const createProject = useMutation(api.projects.create);
+  const createLegacyProject = useMutation(api.projects.create);
+  const createCompanyProject = useMutation(api.sharedProjects.createInternal);
+  const projectCompanies = useMemo(() => (companies ?? []).filter(({ company, membership }) =>
+    company?.status === 'active' && (membership.role === 'owner' || membership.role === 'admin'),
+  ), [companies]);
 
   useEffect(() => {
     if (params.create) {
+      setCreateError('');
+      if (companyModelEnabled) {
+        const currentCanCreate = projectCompanies.some(({ company }) => company?._id === actingCompanyId);
+        setCreateCompanyId(currentCanCreate ? actingCompanyId : projectCompanies[0]?.company?._id ?? null);
+      }
       setCreateOpen(true);
     }
-  }, [params.create]);
+  }, [actingCompanyId, companyModelEnabled, params.create, projectCompanies]);
 
   const projects = usePaginatedQuery(
     api.mobile.listProjects,
@@ -113,18 +123,45 @@ export default function ProjectsScreen() {
 
   async function submitProject() {
     if (!trackUserId || !projectName.trim()) return;
+    if (companyModelEnabled && !createCompanyId) {
+      setCreateError('Choose a Company you administer to create this Project.');
+      return;
+    }
     setCreating(true);
     setCreateError('');
     try {
-      await createProject({ userId: trackUserId, name: projectName.trim(), clientLabel: clientLabel.trim() || undefined });
+      if (companyModelEnabled && createCompanyId) {
+        await createCompanyProject({
+          actingCompanyId: createCompanyId,
+          initialMembers: [{ userId: trackUserId, role: 'manager' }],
+          name: projectName.trim(),
+          description: clientLabel.trim() || undefined,
+        });
+      } else {
+        await createLegacyProject({ userId: trackUserId, name: projectName.trim(), clientLabel: clientLabel.trim() || undefined });
+      }
       setProjectName('');
       setClientLabel('');
-      setCreateOpen(false);
+      closeCreateSheet();
     } catch (failure) {
-      setCreateError(failure instanceof Error ? failure.message : 'Project creation failed. Try again.');
+      const message = failure instanceof Error ? failure.message : '';
+      setCreateError(/not_allowed|company_admin_required|forbidden/i.test(message)
+        ? 'Only a Company owner or admin can create a Project in that Company.'
+        : 'Track couldn’t create the Project. Check your connection and try again.');
     } finally {
       setCreating(false);
     }
+  }
+
+  function openCreateSheet() {
+    setCreateError('');
+    setProjectName('');
+    setClientLabel('');
+    if (companyModelEnabled) {
+      const currentCanCreate = projectCompanies.some(({ company }) => company?._id === actingCompanyId);
+      setCreateCompanyId(currentCanCreate ? actingCompanyId : projectCompanies[0]?.company?._id ?? null);
+    }
+    setCreateOpen(true);
   }
 
   function closeCreateSheet() {
@@ -178,6 +215,15 @@ export default function ProjectsScreen() {
                 <PlatformIcon color={theme.accentStrong} name="project" size={17} />
                 <ThemedText style={styles.directoryTitleText} type="title">Projects & Channels</ThemedText>
               </View>
+              {(!companyModelEnabled || projectCompanies.length > 0) ? <Pressable
+                accessibilityHint="Opens the New Project form"
+                accessibilityRole="button"
+                onPress={() => { hapticLight(); openCreateSheet(); }}
+                style={({ pressed }) => [styles.newProjectButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, borderColor: theme.homeBorder }]}
+              >
+                <PlatformIcon color={theme.accentStrong} name="plus" size={17} />
+                <ThemedText themeColor="accentStrong" type="captionBold">New Project</ThemedText>
+              </Pressable> : null}
             </View>
           </View>}
           ListEmptyComponent={<EmptyState
@@ -211,12 +257,22 @@ export default function ProjectsScreen() {
 
       <OptionsSheet onClose={closeCreateSheet} title="New Project" visible={createOpen}>
         <SheetNote>Create a Project to keep its Channels, tasks, and evidence together.</SheetNote>
+        {companyModelEnabled ? <SheetSection title="Company">
+          {projectCompanies.length ? projectCompanies.map(({ company }) => company ? <SheetRow
+            detail={`@${company.normalizedHandle}`}
+            icon="office-building"
+            key={company._id}
+            label={company.displayName}
+            onPress={() => setCreateCompanyId(company._id)}
+            selected={company._id === createCompanyId}
+          /> : null) : <SheetNote>You need Company owner or admin access to create a Project.</SheetNote>}
+        </SheetSection> : null}
         <SheetInput label="Project name" maxLength={120} onChangeText={setProjectName} placeholder="e.g. Website launch" value={projectName} />
-        <SheetInput label="Client label" maxLength={120} onChangeText={setClientLabel} placeholder="Optional" value={clientLabel} />
+        <SheetInput label={companyModelEnabled ? 'Description (optional)' : 'Client label (optional)'} maxLength={120} onChangeText={setClientLabel} placeholder="Optional" value={clientLabel} />
         {createError ? <SheetNote>{createError}</SheetNote> : null}
         <Pressable
           accessibilityRole="button"
-          disabled={creating || !projectName.trim()}
+          disabled={creating || !projectName.trim() || (companyModelEnabled && (!createCompanyId || projectCompanies.length === 0))}
           onPress={() => void submitProject()}
           style={[styles.createProjectButton, { backgroundColor: theme.accent, opacity: creating || !projectName.trim() ? 0.45 : 1 }]}
         >
@@ -245,13 +301,14 @@ function isLastContext(item: DirectoryProject, context: { projectId?: Id<'projec
 const styles = StyleSheet.create({
   connection: { marginHorizontal: Spacing.four, marginTop: Spacing.two },
   createProjectButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: 12, justifyContent: 'center', minHeight: 48, paddingHorizontal: Spacing.four },
-  directoryHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.five },
+  directoryHeading: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'space-between', marginTop: Spacing.five },
   directoryTitle: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   directoryTitleText: { fontSize: 16, lineHeight: 22 },
   headerActions: { alignItems: 'center', flexDirection: 'row' },
   companyButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, justifyContent: 'center', overflow: 'hidden', width: TouchTarget },
   list: { padding: Spacing.four, paddingTop: Spacing.two },
   listHeader: { marginBottom: Spacing.three },
+  newProjectButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, minHeight: TouchTarget - 4, paddingHorizontal: Spacing.three },
   screen: { flex: 1 },
   screenContent: { flex: 1 },
   separator: { height: Spacing.three },

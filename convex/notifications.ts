@@ -110,6 +110,81 @@ export const getWebPushPublicKey = query({
   handler: () => process.env.VAPID_PUBLIC_KEY ?? null,
 })
 
+export const collectCompanyInvitationPushTargets = internalQuery({
+  args: { invitationId: v.id('companyInvitations') },
+  handler: async (ctx, args) => {
+    const invitation = await ctx.db.get(args.invitationId)
+    if (
+      !invitation || invitation.status !== 'pending' || !invitation.recipientUserId ||
+      invitation.expiresAt <= Date.now()
+    ) return null
+    const [company, installations, settings] = await Promise.all([
+      ctx.db.get(invitation.companyId),
+      ctx.db.query('pushInstallations')
+        .withIndex('by_user', (q) => q.eq('userId', invitation.recipientUserId!))
+        .collect(),
+      ctx.db.query('notificationSettings')
+        .withIndex('by_user', (q) => q.eq('userId', invitation.recipientUserId!))
+        .unique(),
+    ])
+    if (!company || company.status !== 'active') return null
+    return {
+      companyName: company.displayName,
+      recipientUserId: invitation.recipientUserId,
+      role: invitation.role,
+      targets: installations
+        .filter((installation) => installation.enabled &&
+          installation.environment === serverPushEnvironment() &&
+          Boolean(installation.nativePushToken) &&
+          (installation.permissionState === 'granted' || installation.permissionState === 'provisional'))
+        .map((installation) => ({
+          installationId: installation._id,
+          recipientUserId: invitation.recipientUserId!,
+          previewMode: settings?.previewMode ?? 'full',
+          soundEnabled: settings?.soundEnabled ?? true,
+        })),
+    }
+  },
+})
+
+export const collectProjectInvitationPushTargets = internalQuery({
+  args: { invitationId: v.id('invitations') },
+  handler: async (ctx, args) => {
+    const invitation = await ctx.db.get(args.invitationId)
+    if (!invitation || invitation.status !== 'pending' || invitation.expiresAt <= Date.now()) return null
+    const [recipient, project] = await Promise.all([
+      ctx.db.query('users')
+        .withIndex('by_normalized_email', (q) => q.eq('normalizedEmail', invitation.email))
+        .unique(),
+      ctx.db.get(invitation.projectId),
+    ])
+    if (!recipient || !project || project.status === 'archived' || project.status === 'archive_pending') return null
+    const [installations, settings, membership] = await Promise.all([
+      ctx.db.query('pushInstallations').withIndex('by_user', (q) => q.eq('userId', recipient._id)).collect(),
+      ctx.db.query('notificationSettings').withIndex('by_user', (q) => q.eq('userId', recipient._id)).unique(),
+      ctx.db.query('projectMembers').withIndex('by_project_user', (q) =>
+        q.eq('projectId', project._id).eq('userId', recipient._id),
+      ).unique(),
+    ])
+    if (membership?.status === 'active') return null
+    return {
+      projectName: project.name,
+      recipientUserId: recipient._id,
+      targets: installations
+        .filter((installation) => installation.enabled &&
+          installation.environment === serverPushEnvironment() &&
+          Boolean(installation.nativePushToken) &&
+          (installation.permissionState === 'granted' || installation.permissionState === 'provisional'))
+        .map((installation) => ({
+          installationId: installation._id,
+          recipientUserId: recipient._id,
+          previewMode: settings?.previewMode ?? 'full',
+          soundEnabled: settings?.soundEnabled ?? true,
+        })),
+    }
+  },
+})
+
 export const setGlobalMode = mutation({
   args: {
     userId: v.id('users'),

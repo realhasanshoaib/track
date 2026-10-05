@@ -139,6 +139,7 @@ export const collectPushTargets = internalQuery({
       'due_soon',
       'overdue',
       'assignment_lost',
+      'urgent_update',
     ].includes(notification.eventType)
     if (mode === 'muted' || (mode === 'important' && !important)) return null
     const [subscriptions, installations] = await Promise.all([

@@ -128,7 +128,7 @@ export function TaskCreateDialog({
           <label>Title<Input autoComplete="off" maxLength={180} name="title" onChange={(event) => { setTitle(event.target.value); if (error && event.target.value.trim()) setError('') }} placeholder="For example, review the launch checklist…" required value={title} /></label>
           <label>Description<Textarea autoComplete="off" maxLength={20_000} name="description" onChange={(event) => setDescription(event.target.value)} placeholder="Add the outcome, context, or acceptance criteria…" value={description} /></label>
           <div className="task-form-grid">
-            <label>Board<NativeSelect autoComplete="off" disabled={!projectBoards.length} name="boardId" onChange={(event) => {
+            <label>Board<NativeSelect aria-label="Board" autoComplete="off" disabled={!projectBoards.length} name="boardId" onChange={(event) => {
               const nextBoard = projectBoards.find((item) => item.board._id === event.target.value)
               setBoardId(event.target.value)
               setWorkflowStateId(nextBoard?.states.find((item) => item.isDefault)?._id ?? nextBoard?.states[0]?._id ?? '')
@@ -139,10 +139,10 @@ export function TaskCreateDialog({
             <label>Status<NativeSelect aria-label="Task status" autoComplete="off" disabled={!board?.states.length} name="workflowStateId" onChange={(event) => setWorkflowStateId(event.target.value)} value={workflowStateId}>
               {board?.states.length ? board.states.map((item) => <NativeSelectOption key={item._id} value={item._id}>{item.name}</NativeSelectOption>) : <NativeSelectOption value="">No workflow status available</NativeSelectOption>}
             </NativeSelect></label>
-            <label>Priority<NativeSelect autoComplete="off" name="priority" onChange={(event) => setPriority(event.target.value as typeof priority)} value={priority}>
+            <label>Priority<NativeSelect aria-label="Priority" autoComplete="off" name="priority" onChange={(event) => setPriority(event.target.value as typeof priority)} value={priority}>
               {['none', 'urgent', 'high', 'medium', 'low'].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}
             </NativeSelect></label>
-            <label>Assignee<NativeSelect autoComplete="off" name="assigneeProjectMemberId" onChange={(event) => setAssignee(event.target.value)} value={assignee}>
+            <label>Assignee<NativeSelect aria-label="Assignee" autoComplete="off" name="assigneeProjectMemberId" onChange={(event) => setAssignee(event.target.value)} searchable={Boolean(assignees?.length && assignees.length >= 8)} value={assignee}>
               <NativeSelectOption value="">Unassigned</NativeSelectOption>
               {assignees?.map((item) => <NativeSelectOption key={item.member._id} value={item.member._id}>{item.user.displayName}{item.company ? ` · ${item.company.displayName}` : ''}</NativeSelectOption>)}
             </NativeSelect></label>

@@ -81,6 +81,7 @@ function notificationEventLabel(eventType: string) {
     due_soon: 'Due date approaching',
     mention: 'Mentioned in task',
     overdue: 'Task overdue',
+    urgent_update: 'Urgent task update',
     task_changed: 'Task updated',
     task_suggestion: 'Task suggestion',
     thread_activity: 'Thread activity',
@@ -89,14 +90,14 @@ function notificationEventLabel(eventType: string) {
 }
 
 function notificationEventTone(eventType: string) {
-  if (eventType === 'overdue' || eventType === 'assignment_lost') return 'alert'
+  if (eventType === 'overdue' || eventType === 'assignment_lost' || eventType === 'urgent_update') return 'alert'
   if (eventType === 'due_soon') return 'warning'
   if (eventType === 'comment' || eventType === 'mention' || eventType === 'thread_activity') return 'message'
   return 'success'
 }
 
 function NotificationEventIcon({ eventType }: { eventType: string }) {
-  if (eventType === 'overdue' || eventType === 'assignment_lost') return <CircleAlert aria-hidden="true" size={14} />
+  if (eventType === 'overdue' || eventType === 'assignment_lost' || eventType === 'urgent_update') return <CircleAlert aria-hidden="true" size={14} />
   if (eventType === 'due_soon') return <CalendarClock aria-hidden="true" size={14} />
   if (eventType === 'comment' || eventType === 'mention' || eventType === 'thread_activity') return <MessageCircle aria-hidden="true" size={14} />
   return <CheckCircle2 aria-hidden="true" size={14} />

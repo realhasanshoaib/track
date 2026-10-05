@@ -3,6 +3,8 @@ import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { parseMentions } from '@track/shared';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
@@ -14,6 +16,8 @@ import { EmptyState } from '@/components/empty-state';
 import { ForwardMessageSheet } from '@/components/forward-message-sheet';
 import { IconButton } from '@/components/icon-button';
 import { MessageActions } from '@/components/message-actions';
+import { MessageReportSheet, type ReportReason } from '@/components/message-report-sheet';
+import { MessageTaskReviewSheet } from '@/components/message-task-review-sheet';
 import { OptionsSheet, SheetInput, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
 import { TaskInlineCards } from '@/components/task-inline-cards';
@@ -26,17 +30,19 @@ import { useAppToast } from '@/components/app-toast';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
-import { hapticDestructive, hapticLight } from '@/lib/haptics';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfig } from '@/lib/release-config';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
-import { messageTaskDraft } from '@/lib/message-task-draft';
+import { assistantTaskDraft, messageTaskDraft, type ReviewableMessageTaskDraft } from '@/lib/message-task-draft';
 import { threadConversationHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
+import { shouldShowJumpToLatest } from '@/lib/thread-list';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
+import { archivePresentation } from '@/lib/archive-presentation';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
 
@@ -76,10 +82,11 @@ export default function ThreadScreen() {
     if (pid && gid && tid) setActivePushContext({ projectId: pid, groupId: gid, threadId: tid });
     return () => setActivePushContext(null);
   }, [gid, pid, tid]));
-  const context = cid && pmid ? { companyId: cid, membershipId: pmid, archived: archive === '1' } : null;
   const navigation = useQuery(api.mobile.resolveNavigation, releaseConfig.threads && trackUserId && pid && gid
     ? { userId: trackUserId, projectId: pid, groupId: gid, actingCompanyId: cid, projectMemberId: pmid }
     : 'skip');
+  const archiveContext = archive === '1' || navigation?.readStateImmutable === true || navigation?.project?.status === 'archived';
+  const context = cid && pmid ? { companyId: cid, membershipId: pmid, archived: archiveContext } : null;
   const groups = useQuery(api.mobile.listGroups, releaseConfig.threads && trackUserId && pid && navigation?.available
     ? { userId: trackUserId, projectId: pid, actingCompanyId: cid, projectMemberId: pmid }
     : 'skip');
@@ -124,7 +131,19 @@ export default function ThreadScreen() {
   const editMessage = useMutation(api.messages.edit);
   const sendSignatureRef = useRef<string | null>(null);
   const [replySelection, setReplySelection] = useState<{ scopeKey: string; message: DetailedMessage } | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
+  const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
+  const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
+  const atBottomRef = useRef(true);
+  const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
+  const knownMessageIdsRef = useRef<Set<Id<'messages'>> | null>(null);
+  const knownAssistantStreamsRef = useRef<Map<Id<'assistantStreams'>, string> | null>(null);
+  const newestFeedTimeRef = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
+  const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [newReplyCount, setNewReplyCount] = useState(0);
   const [creatingTaskKey, setCreatingTaskKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,6 +151,11 @@ export default function ThreadScreen() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
+  const [reportTarget, setReportTarget] = useState<GroupedThreadItem | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
+  const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
@@ -165,7 +189,23 @@ export default function ThreadScreen() {
   const acknowledgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
   const mentionCandidates = useMemo(() => buildMentionCandidates(memberItems), [memberItems]);
-  const readOnly = archive === '1' || navigation?.archived === true || thread?.thread.status === 'archived';
+  const readOnly = archiveContext || navigation?.archived === true || thread?.thread.status === 'archived';
+  const threadArchiveDetails = navigation?.archiveDetails ?? (thread?.thread.status === 'archived'
+    ? { kind: 'thread' as const, cutoffAt: thread.thread.archivedAt ?? null, reason: null }
+    : null);
+  const archiveBanner = readOnly ? archivePresentation(threadArchiveDetails) : null;
+  const scrollToLatest = useCallback(() => {
+    atBottomRef.current = true;
+    setNewReplyCount(0);
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+  const updateJumpToLatest = useCallback(() => {
+    const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
+    const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
+    atBottomRef.current = distanceFromBottom < 80;
+    if (atBottomRef.current) setNewReplyCount(0);
+    setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
+  }, []);
   const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
     archived: readOnly,
     companyId: cid,
@@ -188,20 +228,20 @@ export default function ThreadScreen() {
   }, []));
 
   const acknowledgeViewedMessage = useCallback((sequence: number) => {
-    if (!queryArgs || !screenActiveRef.current || navigation?.readStateImmutable) return;
+    if (!queryArgs || readOnly || !screenActiveRef.current) return;
     if (!Number.isInteger(sequence) || sequence <= lastAcknowledgedSequenceRef.current) return;
     lastViewedSequenceRef.current = Math.max(lastViewedSequenceRef.current, sequence);
     if (acknowledgeTimeoutRef.current) return;
     acknowledgeTimeoutRef.current = setTimeout(() => {
       acknowledgeTimeoutRef.current = null;
       const nextSequence = lastViewedSequenceRef.current;
-      if (!nextSequence || !screenActiveRef.current || nextSequence <= lastAcknowledgedSequenceRef.current) return;
+      if (!nextSequence || readOnly || !screenActiveRef.current || nextSequence <= lastAcknowledgedSequenceRef.current) return;
       lastAcknowledgedSequenceRef.current = nextSequence;
       void markRead({ ...queryArgs, viewedChannelSequence: nextSequence }).catch(() => {
         lastAcknowledgedSequenceRef.current = Math.min(lastAcknowledgedSequenceRef.current, nextSequence - 1);
       });
     }, 150);
-  }, [markRead, navigation?.readStateImmutable, queryArgs]);
+  }, [markRead, queryArgs, readOnly]);
 
   const onViewableItemsChanged = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onViewableItemsChanged']>>(({ viewableItems }) => {
     const visibleMessages = viewableItems
@@ -257,6 +297,45 @@ export default function ThreadScreen() {
     }
     return result;
   }, [assistantStreams, messages]);
+  useEffect(() => {
+    if (!messages || !assistantStreams) return;
+    const messageItems = messages as DetailedMessage[];
+    const streams = assistantStreams as Doc<'assistantStreams'>[];
+    const previousMessageIds = knownMessageIdsRef.current;
+    const previousStreams = knownAssistantStreamsRef.current;
+    const previousNewestTime = newestFeedTimeRef.current;
+    const currentMessageIds = new Set(messageItems.map(({ message }) => message._id));
+    const currentStreams = new Map(streams.map((stream) => [stream._id, stream.status]));
+    const newestTime = Math.max(
+      previousNewestTime,
+      ...messageItems.map(({ message }) => message.createdAt),
+      ...streams.map((stream) => stream.createdAt),
+    );
+    if (previousMessageIds && previousStreams) {
+      const newIncomingMessages = messageItems.filter(({ message }) =>
+        !previousMessageIds.has(message._id) && message.authorId !== trackUserId && message.createdAt >= previousNewestTime,
+      );
+      const newAssistantAnswers = streams.filter((stream) => {
+        const previous = previousStreams.get(stream._id);
+        return stream.status === 'completed' && Boolean(stream.answer.trim()) && (
+          previous === 'queued' || previous === 'running' || (!previous && stream.createdAt >= previousNewestTime)
+        );
+      });
+      if (screenActiveRef.current) {
+        if (newIncomingMessages.length) hapticLight();
+        if (newAssistantAnswers.length) hapticSuccess();
+      }
+      if (!atBottomRef.current && (newIncomingMessages.length || newAssistantAnswers.length)) {
+        setNewReplyCount((count) => count + newIncomingMessages.length + newAssistantAnswers.length);
+      }
+      knownMessageIdsRef.current = new Set([...previousMessageIds, ...currentMessageIds]);
+      knownAssistantStreamsRef.current = new Map([...previousStreams, ...currentStreams]);
+    } else {
+      knownMessageIdsRef.current = currentMessageIds;
+      knownAssistantStreamsRef.current = currentStreams;
+    }
+    newestFeedTimeRef.current = newestTime;
+  }, [assistantStreams, messages, trackUserId]);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -287,18 +366,47 @@ export default function ThreadScreen() {
       : null);
   }, [composerDraft]);
   useEffect(() => {
-    if (!targetMessageId) return;
+    if (!targetMessageId) {
+      handledTargetMessageIdRef.current = null;
+      positionedTargetMessageIdRef.current = null;
+      return;
+    }
+    if (targetMessageId !== handledTargetMessageIdRef.current) {
+      handledTargetMessageIdRef.current = null;
+      positionedTargetMessageIdRef.current = null;
+    }
+    if (targetMessageId === handledTargetMessageIdRef.current) return;
     const index = threadItems.findIndex((item) => item.kind === 'message' && item.item.message._id === targetMessageId);
     if (index < 0) return;
-    requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 }));
+    handledTargetMessageIdRef.current = targetMessageId;
+    setHighlightedMessageId(targetMessageId);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      positionedTargetMessageIdRef.current = targetMessageId;
+    });
   }, [targetMessageId, threadItems]);
+  useEffect(() => {
+    if (!highlightedMessageId) return;
+    const timer = setTimeout(() => setHighlightedMessageId((current) => current === highlightedMessageId ? null : current), 1800);
+    return () => clearTimeout(timer);
+  }, [highlightedMessageId]);
+
+  const scrollToMessage = useCallback((messageId: Id<'messages'>) => {
+    const index = threadItems.findIndex((item) => item.kind === 'message' && item.item.message._id === messageId);
+    if (index >= 0) {
+      setHighlightedMessageId(messageId);
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+      return;
+    }
+    if (pid && gid && tid) router.replace(threadConversationHref(pid, gid, tid, context, messageId) as never);
+  }, [context, gid, pid, router, threadItems, tid]);
 
   async function handleSendMessage(payload: ComposerSubmission): Promise<ComposerSubmissionResult> {
     if (!trackUserId || !pid || !gid || !tid || readOnly) {
-      return { failedIds: payload.attachments.map((a) => a.id), messageId: null };
+      throw new Error('thread_unavailable');
     }
     const body = payload.body.trim();
-    const replyToMessageId = replyTo?.message._id;
+    const replyToMessageId = payload.replyToMessageId;
     const sendSignature = JSON.stringify({
       attachmentIds: payload.attachments.map((attachment) => attachment.id),
       body,
@@ -358,35 +466,18 @@ export default function ThreadScreen() {
         },
       });
 
-      const { parseMentions } = await import('@track/shared');
       if (result.messageId) {
         scrollToLatestAfterSendRef.current = true;
         requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
       }
       if (result.messageId && parseMentions(body).includes('track')) {
-        try {
-          await askTrack({
-            projectId: pid, groupId: gid, channelThreadId: tid, requesterId: trackUserId,
-            actingCompanyId: cid, projectMemberId: pmid,
-            promptMessageId: result.messageId, question: body,
-          });
-        } catch {
-          showToast({
-            title: 'Message sent',
-            message: 'Track Assistant could not respond. Retry the Assistant request.',
-            tone: 'error',
-          });
-        }
+        requestTrackResponse(result.messageId, body);
       }
-      // Only retire the idempotency key once every attachment landed; a retry reuses the same message.
       if (result.failedIds.length === 0) {
         sendKey.current = null;
         sendSignatureRef.current = null;
       }
       return result;
-    } catch (caught) {
-      setError(communicationErrorMessage(caught, 'send this message'));
-      return { failedIds: payload.attachments.map((a) => a.id), messageId: null };
     } finally {
       setBusy(false);
     }
@@ -432,62 +523,93 @@ export default function ThreadScreen() {
     }
   }
 
-  const submitSwipeReport = useCallback(async (target: Exclude<GroupedThreadItem, { kind: 'date-sep' }>) => {
-    if (!trackUserId || !pid) return;
-    hapticDestructive();
+  const submitSwipeReport = useCallback((target: Exclude<GroupedThreadItem, { kind: 'date-sep' }>) => {
+    setReportError(null);
+    setReportTarget(target);
+    hapticLight();
+  }, []);
+
+  const copyMessageText = useCallback(async (text: string) => {
     try {
-      await createReport({
-        projectId: pid,
-        reporterId: trackUserId,
-        actingCompanyId: cid,
-        projectMemberId: pmid,
-        targetType: target.kind === 'assistant' ? 'assistant_answer' : 'message',
-        targetMessageId: target.kind === 'message' ? target.item.message._id : undefined,
-        targetAssistantStreamId: target.kind === 'assistant' ? target.stream._id : undefined,
-        reason: 'other',
-      });
-      showToast({ icon: 'flag', message: 'Thanks. The report was submitted for review.', title: 'Message reported', tone: 'success' });
-    } catch (caught) {
-      setError(communicationErrorMessage(caught, 'submit this report'));
+      await Clipboard.setStringAsync(text);
+      showToast({ title: 'Copied', message: 'Message text copied to your clipboard.', tone: 'success' });
+    } catch {
+      showToast({ title: 'Could not copy', message: 'Try selecting the message text and copying it again.', tone: 'error' });
     }
-  }, [cid, createReport, pid, pmid, showToast, trackUserId]);
+  }, [showToast]);
+
+  const requestTrackResponse = useCallback((promptMessageId: Id<'messages'>, question: string) => {
+    if (readOnly || !trackUserId || !pid || !gid || !tid) return;
+    if (pendingTrackPromptIdsRef.current.has(promptMessageId)) return;
+    pendingTrackPromptIdsRef.current.add(promptMessageId);
+    setPendingTrackPrompts((current) => new Set(current).add(promptMessageId));
+    void askTrack({
+      actingCompanyId: cid,
+      channelThreadId: tid,
+      groupId: gid,
+      projectId: pid,
+      projectMemberId: pmid,
+      promptMessageId,
+      question,
+      requesterId: trackUserId,
+    }).catch(() => {
+      showToast({ title: 'Track could not start', message: 'Your message is still in the thread. Use its message actions to retry Track; it was not sent again.', tone: 'error' });
+    }).finally(() => {
+      pendingTrackPromptIdsRef.current.delete(promptMessageId);
+      setPendingTrackPrompts((current) => {
+        const next = new Set(current);
+        next.delete(promptMessageId);
+        return next;
+      });
+    });
+  }, [askTrack, cid, gid, pid, pmid, readOnly, showToast, tid, trackUserId]);
+
+  const retryAssistantAnswer = useCallback((stream: Doc<'assistantStreams'>) => {
+    const prompt = threadItems.find((entry) => entry.kind === 'message' && entry.item.message._id === stream.promptMessageId);
+    if (!prompt || prompt.kind !== 'message') {
+      showToast({ title: 'Question unavailable', message: 'The original question is not loaded in this thread.', tone: 'error' });
+      return;
+    }
+    requestTrackResponse(prompt.item.message._id, prompt.item.message.body);
+  }, [requestTrackResponse, showToast, threadItems]);
 
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
+    const copyText = actionTarget.kind === 'message'
+      ? actionTarget.item.message.body.trim()
+      : actionTarget.stream.status === 'failed' ? '' : actionTarget.stream.answer.trim();
     return [
+      ...(copyText ? [{ label: 'Copy message', icon: 'content-copy' as const, onPress: () => { void copyMessageText(copyText); } }] : []),
+      ...(actionTarget.kind === 'message' &&
+        !readOnly &&
+        parseMentions(actionTarget.item.message.body).includes('track') &&
+        !actionTarget.item.message.trackInvocationId &&
+        !pendingTrackPrompts.has(actionTarget.item.message._id) ? [{
+        label: 'Retry Track response',
+        icon: 'refresh' as const,
+        onPress: () => requestTrackResponse(actionTarget.item.message._id, actionTarget.item.message.body),
+      }] : []),
+      ...(!readOnly && actionTarget.kind === 'message' ? [{
+        label: 'Forward',
+        icon: 'forward' as const,
+        onPress: () => { setForwardError(null); setForwardTarget(actionTarget.item); },
+      }] : []),
+      ...(!readOnly && actionTarget.kind === 'assistant' && actionTarget.stream.status === 'failed' && actionTarget.stream.promptMessageId && !pendingTrackPrompts.has(actionTarget.stream.promptMessageId) ? [{
+        label: 'Retry Track response',
+        icon: 'refresh' as const,
+        onPress: () => retryAssistantAnswer(actionTarget.stream),
+      }] : []),
       ...(!readOnly && actionTarget.kind === 'message' ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
-      ...(actionTarget.kind === 'message' ? [{ label: 'Forward', icon: 'forward' as const, onPress: () => { setForwardError(null); setForwardTarget(actionTarget.item); } }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
         label: 'Create task',
         icon: 'plus' as const,
-        onPress: async () => {
+        onPress: () => {
           if (!pid || !gid) return;
           const draft = actionTarget.kind === 'message'
             ? messageTaskDraft(actionTarget.item.message.body, actionTarget.item.message._id, actionTarget.key)
-            : {
-              idempotencyKey: `message-task:${actionTarget.key}`,
-              references: [{ type: 'assistant_answer' as const, assistantStreamId: actionTarget.stream._id, isPrimary: true }],
-              title: actionTarget.stream.answer.trim().slice(0, 180) || 'Follow up',
-            };
-          if (creatingTaskKey === draft.idempotencyKey) return;
-          setCreatingTaskKey(draft.idempotencyKey);
-          try {
-            const task = await createTask({
-              projectId: pid,
-              groupId: gid,
-              title: draft.title,
-              priority: 'none',
-              references: draft.references,
-              idempotencyKey: draft.idempotencyKey,
-              actingCompanyId: cid,
-              projectMemberId: pmid,
-            });
-            showToast({ title: 'Task created', message: `Task ${task.publicKey} is ready to review.`, tone: 'success' });
-          } catch (failure) {
-            showToast({ title: 'Task not created', message: taskErrorMessage(failure, 'The task could not be created. Check your connection and try again.'), tone: 'error' });
-          } finally {
-            setCreatingTaskKey(null);
-          }
+            : assistantTaskDraft(actionTarget.stream.answer, actionTarget.stream._id, actionTarget.key);
+          setTaskReviewDraft(draft);
+          setTaskReviewError(null);
         },
       }] : []),
       ...(!readOnly &&
@@ -539,25 +661,60 @@ export default function ThreadScreen() {
           );
         },
       }] : []),
-      { label: 'Report', icon: 'flag' as const, destructive: true, onPress: () => {
-        if (!trackUserId || !pid) return;
-        void createReport({
-          projectId: pid,
-          reporterId: trackUserId,
-          actingCompanyId: cid,
-          projectMemberId: pmid,
-          targetType: actionTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
-          targetMessageId: actionTarget.kind === 'message' ? actionTarget.item.message._id : undefined,
-          targetAssistantStreamId: actionTarget.kind === 'assistant' ? actionTarget.stream._id : undefined,
-          reason: 'other',
-        }).then(() => {
-          showToast({ icon: 'flag', message: 'Thanks. The report was submitted for review.', title: 'Message reported', tone: 'success' });
-        }).catch((caught) => {
-          setError(communicationErrorMessage(caught, 'submit this report'));
-        });
-      } },
+      { label: 'Report', icon: 'flag' as const, onPress: () => { setReportError(null); setReportTarget(actionTarget); } },
     ];
-  }, [actionTarget, cid, createReport, createTask, creatingTaskKey, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, setReplyTo, showToast, trackUserId]);
+  }, [actionTarget, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
+
+  async function submitReport(reason: ReportReason, note: string) {
+    const target = reportTarget;
+    if (!target || target.kind === 'date-sep' || !trackUserId || !pid || reportBusy) return;
+    setReportBusy(true);
+    setReportError(null);
+    try {
+      await createReport({
+        projectId: pid,
+        reporterId: trackUserId,
+        actingCompanyId: cid,
+        projectMemberId: pmid,
+        targetType: target.kind === 'assistant' ? 'assistant_answer' : 'message',
+        targetMessageId: target.kind === 'message' ? target.item.message._id : undefined,
+        targetAssistantStreamId: target.kind === 'assistant' ? target.stream._id : undefined,
+        reason,
+        note,
+      });
+      setReportTarget(null);
+      showToast({ icon: 'flag', message: 'Thanks. The report was submitted for review.', title: 'Message reported', tone: 'success' });
+    } catch (failure) {
+      setReportError(communicationErrorMessage(failure, 'submit this report'));
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  async function createReviewedTask() {
+    const draft = taskReviewDraft;
+    if (!draft || !trackUserId || !pid || !gid || creatingTaskKey === draft.idempotencyKey) return;
+    setCreatingTaskKey(draft.idempotencyKey);
+    setTaskReviewError(null);
+    try {
+      const task = await createTask({
+        projectId: pid,
+        groupId: gid,
+        title: draft.title.trim(),
+        priority: 'none',
+        references: draft.references,
+        idempotencyKey: draft.idempotencyKey,
+        actingCompanyId: cid,
+        projectMemberId: pmid,
+      });
+      setTaskReviewDraft(null);
+      showToast({ title: 'Task created', message: `Task ${task.publicKey} is ready to review.`, tone: 'success' });
+    } catch (failure) {
+      setTaskReviewError(taskErrorMessage(failure, 'The task could not be created. Check your connection and try again.'));
+    } finally {
+      setCreatingTaskKey(null);
+    }
+  }
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -584,13 +741,18 @@ export default function ThreadScreen() {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
     return <>
       <ThreadRow
+        highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
         isFirstInGroup={item.isFirstInGroup}
         isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
         item={item}
         onLongPress={() => { hapticLight(); setActionTarget(item); setActionsOpen(true); }}
         onSwipeReply={readOnly || item.kind !== 'message' ? undefined : () => setReplyTo(item.item)}
-        onSwipeForward={item.kind === 'message' ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
+        onSwipeForward={!readOnly && item.kind === 'message' ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
         onSwipeReport={() => { void submitSwipeReport(item); }}
+        onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
+          const quotedId = item.item.replyTo?.messageId;
+          if (quotedId) scrollToMessage(quotedId);
+        } : undefined}
         variant="thread"
       />
       {releaseConfig.tasks && pid ? <TaskInlineCards
@@ -601,7 +763,7 @@ export default function ThreadScreen() {
         readOnly={readOnly}
       /> : null}
     </>;
-  }, [pid, readOnly, releaseConfig.tasks, setReplyTo, submitSwipeReport, taskIdentity, trackUserId]);
+  }, [highlightedMessageId, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -662,7 +824,7 @@ export default function ThreadScreen() {
   const source = thread.source
   const sourceDate = source && !('unavailable' in source) ? source.createdAt : null;
   const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
-  const channelName = groups?.find((item) => item.group._id === gid)?.group.name ?? 'Channel';
+  const channelName = groups?.find((item) => item.group._id === gid)?.group.name ?? navigation?.channel?.name ?? 'Channel';
   const sourceContextCard = source ? <Pressable
     accessibilityHint="Opens the source message in its Channel"
     accessibilityLabel={`Source message in ${channelName}`}
@@ -714,7 +876,7 @@ export default function ThreadScreen() {
         headerTitle: () => <View style={[styles.headerIdentity, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
           <View style={[styles.headerMark, { backgroundColor: Platform.OS === 'ios' ? 'transparent' : theme.accentSoft }]}><PlatformIcon color={theme.accentStrong} name="thread" size={18} /></View>
           <View style={styles.headerTitle}>
-            <ThemedText numberOfLines={1} type="title">{thread.thread.name}</ThemedText>
+            <ThemedText numberOfLines={2} type="title">{thread.thread.name}</ThemedText>
             <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">#{channelName}</ThemedText>
           </View>
         </View>,
@@ -734,7 +896,7 @@ export default function ThreadScreen() {
       <ConnectivityBanner message="You’re offline. Cached replies stay available; sending will retry when you reconnect." style={styles.connection} />
       {notice ? <ThemedText accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.success }]} type="small">{notice}</ThemedText> : null}
       {error ? <ThemedText accessibilityLiveRegion="assertive" style={[styles.error, { color: theme.danger }]} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
-      {readOnly ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Archived thread</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">This conversation is read-only.</ThemedText></View> : null}
+      {archiveBanner ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">{archiveBanner.description}</ThemedText></View> : null}
       <TaskLinkBatchProvider
         assistantStreamIds={taskLinkAssistantStreamIds}
         enabled={releaseConfig.tasks}
@@ -742,7 +904,7 @@ export default function ThreadScreen() {
         messageIds={taskLinkMessageIds}
       >
       <FlatList
-          contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + Spacing.two }]}
+          contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + TouchTarget + Spacing.four }]}
           contentInsetAdjustmentBehavior="automatic"
           style={styles.flex}
           data={threadItems}
@@ -766,11 +928,34 @@ export default function ThreadScreen() {
             </Pressable> : null}
           </>}
           onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 }))}
+          onLayout={({ nativeEvent }) => {
+            scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
+            updateJumpToLatest();
+          }}
+          onScroll={({ nativeEvent }) => {
+            scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
+            scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
+            scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
+            updateJumpToLatest();
+          }}
+          onMomentumScrollEnd={({ nativeEvent }) => {
+            scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
+            scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
+            scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
+            updateJumpToLatest();
+          }}
+          scrollEventThrottle={16}
           onViewableItemsChanged={onViewableItemsChanged}
-          onContentSizeChange={() => {
-            if (!scrollToLatestAfterSendRef.current) return;
-            scrollToLatestAfterSendRef.current = false;
-            requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+          onContentSizeChange={(_width, height) => {
+            const wasAtBottom = atBottomRef.current;
+            scrollMetricsRef.current.contentHeight = height;
+            updateJumpToLatest();
+            if (scrollToLatestAfterSendRef.current) {
+              scrollToLatestAfterSendRef.current = false;
+              requestAnimationFrame(scrollToLatest);
+            } else if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
+              listRef.current?.scrollToEnd({ animated: true });
+            }
           }}
           ref={listRef}
           // Matches conversation.tsx: Android cell clipping leaves stale colors after a theme change.
@@ -779,6 +964,15 @@ export default function ThreadScreen() {
           viewabilityConfig={viewabilityConfig}
         />
       </TaskLinkBatchProvider>
+      {showJumpToLatest ? <Pressable
+        accessibilityLabel={`Jump to latest replies${newReplyCount ? `, ${newReplyCount} new replies` : ''}`}
+        accessibilityRole="button"
+        onPress={() => { hapticLight(); scrollToLatest(); }}
+        style={[styles.jumpToLatest, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline, bottom: composerOverlayHeight + Spacing.two }]}
+      >
+        <PlatformIcon color={theme.text} name="chevron-down" size={20} />
+        {newReplyCount ? <ThemedText style={[styles.jumpToLatestCount, { color: theme.text }]} type="captionBold">{newReplyCount > 99 ? '99+' : newReplyCount}</ThemedText> : null}
+      </Pressable> : null}
       {!readOnly ? <View
         onLayout={({ nativeEvent }) => {
           const height = Math.ceil(nativeEvent.layout.height);
@@ -793,7 +987,7 @@ export default function ThreadScreen() {
           mentionCandidates={mentionCandidates}
           onCancelReply={() => setReplyTo(null)}
           onChangeText={setComposer}
-          onFocus={() => requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }))}
+          onFocus={scrollToLatest}
           onLoadMoreMentionCandidates={() => {
             if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
           }}
@@ -830,6 +1024,23 @@ export default function ThreadScreen() {
         </SheetSection>
       </OptionsSheet>
       <MessageActions actions={messageActions} onClose={() => setActionsOpen(false)} visible={actionsOpen} />
+      <MessageReportSheet
+        busy={reportBusy}
+        error={reportError}
+        onClose={() => { if (!reportBusy) setReportTarget(null); }}
+        onSubmit={(reason, note) => void submitReport(reason, note)}
+        visible={Boolean(reportTarget)}
+      />
+      <MessageTaskReviewSheet
+        busy={creatingTaskKey === taskReviewDraft?.idempotencyKey}
+        error={taskReviewError}
+        onChangeTitle={(title) => setTaskReviewDraft((current) => current ? { ...current, title } : current)}
+        onClose={() => { if (!creatingTaskKey) setTaskReviewDraft(null); }}
+        onCreate={() => void createReviewedTask()}
+        source={taskReviewDraft?.sourceText ?? ''}
+        title={taskReviewDraft?.title ?? ''}
+        visible={Boolean(taskReviewDraft)}
+      />
       <OptionsSheet onClose={() => setEditTarget(null)} title="Edit message" visible={Boolean(editTarget)}>
         <SheetInput autoFocus label="Message" maxLength={10_000} multiline onChangeText={setEditBody} value={editBody} />
         <View style={styles.editActions}>
@@ -857,6 +1068,8 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  jumpToLatest: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0 3px 10px rgba(0,0,0,0.14)', flexDirection: 'row', gap: Spacing.one, height: TouchTarget, justifyContent: 'center', minWidth: TouchTarget, paddingHorizontal: Spacing.two, position: 'absolute', right: Spacing.three },
+  jumpToLatestCount: { textAlign: 'center' },
   headerIdentity: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, maxWidth: 230, minHeight: TouchTarget, paddingHorizontal: Spacing.two },
   headerMark: { alignItems: 'center', borderRadius: Radius.pill, height: 34, justifyContent: 'center', width: 34 },
   archive: { gap: 2, padding: Spacing.three },

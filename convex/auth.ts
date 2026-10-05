@@ -6,9 +6,10 @@ import { betterAuth } from 'better-auth/minimal'
 import { twoFactor } from 'better-auth/plugins'
 import type { GenericDatabaseReader, GenericDatabaseWriter } from 'convex/server'
 
-import { components } from './_generated/api'
+import { components, internal } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
 import { mutation, query } from './_generated/server'
+import { requireActionCtx } from '@convex-dev/better-auth/utils'
 import authConfig from './auth.config'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { devAuthBypassUser, isDevAuthBypassEnabled } from './lib/devAuth'
@@ -40,8 +41,8 @@ export const authComponent = createClient<DataModel>(components.betterAuth)
 type ReadCtx = GenericCtx<DataModel> & { db: GenericDatabaseReader<DataModel> }
 type WriteCtx = GenericCtx<DataModel> & { db: GenericDatabaseWriter<DataModel> }
 
-export const createAuth = (ctx: GenericCtx<DataModel>) =>
-  betterAuth({
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  return betterAuth({
     appName: 'Track',
     baseURL: siteUrl,
     trustedOrigins,
@@ -51,6 +52,13 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       minPasswordLength: 10,
       maxPasswordLength: 256,
       requireEmailVerification: false,
+      sendResetPassword: async ({ user, url }) => {
+        const actionCtx = requireActionCtx(ctx)
+        await actionCtx.scheduler.runAfter(0, internal.authEmails.sendPasswordReset, {
+          email: user.email,
+          url,
+        })
+      },
     },
     user: {
       deleteUser: {
@@ -85,6 +93,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       }),
     ],
   })
+}
 
 export const getAuthUser = query({
   args: {},

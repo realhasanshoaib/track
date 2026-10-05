@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AttachmentList } from '@/components/chat/attachment-list';
+import { MessageActionShortcut } from '@/components/chat/message-action-shortcut';
 import { MessageText } from '@/components/chat/message-text';
 import type { DetailedMessage } from '@/components/chat/types';
 import { ColoredAvatar } from '@/components/colored-avatar';
@@ -15,9 +16,9 @@ import { displayText } from '@/lib/display-text';
 const AVATAR_SIZE = 32;
 /** Media sits nearly edge-to-edge; text sections add the rest of the inset. */
 const MEDIA_PAD = 3;
-const MESSAGE_ACCESSIBILITY_ACTIONS = [{ name: 'openMessageActions', label: 'Open message actions' }] as const;
 
 type Props = {
+  highlighted?: boolean;
   isFirstInGroup: boolean;
   isOwnMessage: boolean;
   message: DetailedMessage;
@@ -30,6 +31,7 @@ type Props = {
 };
 
 export function MessageBubble({
+  highlighted = false,
   isFirstInGroup,
   isOwnMessage,
   message,
@@ -58,10 +60,6 @@ export function MessageBubble({
     message.attachments.every(
       ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
     );
-  const onAccessibilityAction = (event: AccessibilityActionEvent) => {
-    if (event.nativeEvent.actionName === 'openMessageActions') onLongPress();
-  };
-
   return (
     <View pointerEvents="box-none" style={[styles.row, isFirstInGroup && styles.rowFirst, isOwnMessage ? styles.rowOwn : styles.rowOther]}>
       {isOwnMessage ? null : isFirstInGroup ? (
@@ -78,7 +76,8 @@ export function MessageBubble({
           hasMedia ? styles.bubbleMedia : styles.bubbleText,
           {
             backgroundColor: isOwnMessage ? theme.bubbleOwn : theme.homeSurface,
-            borderColor: isOwnMessage ? 'transparent' : theme.homeBorder,
+            borderColor: highlighted ? theme.accentStrong : isOwnMessage ? 'transparent' : theme.homeBorder,
+            borderWidth: highlighted ? 2 : StyleSheet.hairlineWidth,
           },
           isFirstInGroup && (isOwnMessage ? styles.tailOwn : styles.tailOther),
         ]}>
@@ -90,21 +89,15 @@ export function MessageBubble({
             hasMedia && styles.insetTop,
           ]}>
             {showHeader ? (
-              <ThemedText numberOfLines={1} style={styles.authorName} type="smallBold">
+              <ThemedText numberOfLines={2} style={styles.authorName} type="smallBold">
                 {name}
               </ThemedText>
             ) : null}
             {isThreadReply ? (
-              <ThemedText
-                accessibilityActions={MESSAGE_ACCESSIBILITY_ACTIONS}
-                accessibilityHint="Use accessibility actions to open actions for this message."
-                accessibilityLabel={`Sent at ${timeLabel}`}
-                onAccessibilityAction={onAccessibilityAction}
-                style={styles.threadTime}
-                themeColor="textTertiary"
-                type="caption">
-                {timeLabel}
-              </ThemedText>
+              <View style={styles.timeMeta}>
+                <ThemedText style={styles.threadTime} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
+                <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -154,16 +147,10 @@ export function MessageBubble({
             <View>
               <MessageText body={body} />
               {isThreadReply ? null : (
-                <ThemedText
-                  accessibilityActions={MESSAGE_ACCESSIBILITY_ACTIONS}
-                  accessibilityHint="Use accessibility actions to open actions for this message."
-                  accessibilityLabel={`Sent at ${timeLabel}`}
-                  onAccessibilityAction={onAccessibilityAction}
-                  style={styles.timeFooter}
-                  themeColor="textTertiary"
-                  type="caption">
-                  {timeLabel}
-                </ThemedText>
+              <View style={styles.timeMeta}>
+                <ThemedText style={styles.timeFooter} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
+                <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
+              </View>
               )}
             </View>
           </View>
@@ -209,27 +196,14 @@ export function MessageBubble({
 
         {body || isThreadReply ? null : mediaClosesBubble ? (
           <View style={[styles.timeOverlay, { backgroundColor: theme.overlay }]}>
-            <ThemedText
-              accessibilityActions={MESSAGE_ACCESSIBILITY_ACTIONS}
-              accessibilityHint="Use accessibility actions to open actions for this message."
-              accessibilityLabel={`Sent at ${timeLabel}`}
-              onAccessibilityAction={onAccessibilityAction}
-              style={styles.timeOverlayText}
-              type="caption">
-              {timeLabel}
-            </ThemedText>
+            <ThemedText style={styles.timeOverlayText} type="caption">{timeLabel}</ThemedText>
+            <MessageActionShortcut authorName={name} onPress={onLongPress} overlay timeLabel={timeLabel} />
           </View>
         ) : (
-          <ThemedText
-            accessibilityActions={MESSAGE_ACCESSIBILITY_ACTIONS}
-            accessibilityHint="Use accessibility actions to open actions for this message."
-            accessibilityLabel={`Sent at ${timeLabel}`}
-            onAccessibilityAction={onAccessibilityAction}
-            style={[styles.timeFooter, hasMedia && styles.inset]}
-            themeColor="textTertiary"
-            type="caption">
-            {timeLabel}
-          </ThemedText>
+          <View style={[styles.timeMeta, hasMedia && styles.inset]}>
+            <ThemedText style={styles.timeFooter} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
+            <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
+          </View>
         )}
       </Pressable>
     </View>
@@ -398,11 +372,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   timeFooter: {
+    alignSelf: 'center',
+  },
+  timeMeta: {
+    alignItems: 'center',
     alignSelf: 'flex-end',
+    flexDirection: 'row',
+    gap: 1,
   },
   timeOverlay: {
+    alignItems: 'center',
     borderRadius: Radius.pill,
     bottom: MEDIA_PAD + 6,
+    flexDirection: 'row',
+    gap: 1,
     paddingHorizontal: 7,
     paddingVertical: 2,
     position: 'absolute',

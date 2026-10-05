@@ -103,6 +103,7 @@ function eventCopy(eventType: string) {
     case 'mention': return 'You were mentioned on this task';
     case 'due_soon': return 'This task is due soon';
     case 'overdue': return 'This task is overdue';
+    case 'urgent_update': return 'Urgent task update';
     case 'task_suggestion': return 'Review grounded task suggestion';
     case 'company_invitation': return 'Company invitation';
     default: return 'This task needs your attention';
@@ -376,11 +377,11 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
         </View>
         <View style={styles.activityCopy}>
           <View style={styles.activityTitleLine}>
-            <ThemedText numberOfLines={2} style={styles.activityTitle} type={direct ? 'smallBold' : 'small'}>{title}</ThemedText>
+            <ThemedText style={styles.activityTitle} type={direct ? 'smallBold' : 'small'}>{title}</ThemedText>
             <ThemedText themeColor="textTertiary" type="caption">{relativeTime(item.createdAt)}</ThemedText>
           </View>
-          <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{context}</ThemedText>
-          <ThemedText numberOfLines={1} themeColor="textTertiary" type="caption">{state}{sourceLabel ? ` · ${sourceLabel}` : ''}</ThemedText>
+          <ThemedText themeColor="textSecondary" type="caption">{context}</ThemedText>
+          <ThemedText themeColor="textTertiary" type="caption">{state}{sourceLabel ? ` · ${sourceLabel}` : ''}</ThemedText>
         </View>
       </Pressable>
     );
@@ -398,7 +399,7 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
         </View>
         <View style={styles.body}>
           <View style={styles.metaRow}>
-            <ThemedText numberOfLines={1} themeColor="textSecondary" type="captionBold" style={styles.project}>
+            <ThemedText themeColor="textSecondary" type="captionBold" style={styles.project}>
               {[item.companyName, item.projectName, 'Invitation'].filter((part, index, parts) => Boolean(part) && parts.indexOf(part) === index).join(' · ')}
             </ThemedText>
             <ThemedText themeColor="textTertiary" type="caption">{relativeTime(item.createdAt)}</ThemedText>

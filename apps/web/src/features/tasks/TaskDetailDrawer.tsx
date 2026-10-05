@@ -593,6 +593,7 @@ export function TaskDetailDrawer({
                     />
                     <span className="sr-only">Status</span>
                     <NativeSelect
+                      aria-label="Status"
                       disabled={!detail.capabilities.canEdit}
                       onChange={(event) => {
                         const stateId = board?.states.find(
@@ -613,6 +614,7 @@ export function TaskDetailDrawer({
                     <PriorityGlyph priority={draft.priority} />
                     <span className="sr-only">Priority</span>
                     <NativeSelect
+                      aria-label="Priority"
                       disabled={!detail.capabilities.canEdit}
                       onChange={(event) =>
                         setDraft({
@@ -635,6 +637,7 @@ export function TaskDetailDrawer({
                     <TaskAvatar member={selectedAssignee} />
                     <span className="sr-only">Assignee</span>
                     <NativeSelect
+                      aria-label="Assignee"
                       disabled={!detail.capabilities.canEdit}
                       onChange={(event) =>
                         setDraft({
@@ -645,6 +648,7 @@ export function TaskDetailDrawer({
                             )?.member._id ?? '',
                         })
                       }
+                      searchable={Boolean(assignees?.length && assignees.length >= 8)}
                       value={draft.assigneeId}
                     >
                       <NativeSelectOption value="">

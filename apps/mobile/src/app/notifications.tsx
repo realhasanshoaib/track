@@ -140,7 +140,7 @@ export default function NotificationSettingsScreen() {
           <SheetSection title="Assignments and task updates">
             {(['important', 'all', 'muted'] as const).map((mode) => (
               <SheetRow
-                detail={mode === 'important' ? 'Assignments, mentions, and due changes' : mode === 'all' ? 'Every update on followed tasks' : 'No task alerts'}
+                detail={mode === 'important' ? 'Assignments, mentions, urgent changes, and due reminders' : mode === 'all' ? 'Every update on followed tasks' : 'No task alerts'}
                 disabled={savingPreferences}
                 icon={mode === 'muted' ? 'bell-off-outline' : 'task'}
                 key={mode}
@@ -153,7 +153,7 @@ export default function NotificationSettingsScreen() {
 
           <SheetSection title="Inbox coverage">
             <SheetRow detail="Thread activity follows the conversation setting above." icon="thread" label="Thread activity" />
-            <SheetRow detail="Company invitations remain visible in Inbox. Project invitations are managed from Companies." icon="account-group" label="Invitations" />
+            <SheetRow detail="Company and Project invitations can send a push alert when they arrive." icon="account-group" label="Invitations" />
           </SheetSection>
 
           <SheetSection title="Privacy">

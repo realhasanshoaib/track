@@ -3,15 +3,15 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { BoardEntry, MyTask, ProjectEntry } from '@/lib/my-task-types';
+import type { Id } from '../../../../convex/_generated/dataModel';
+import type { BoardEntry, MyTask } from '@/lib/my-task-types';
 import { CompactPillButton } from '@/components/compact-pill-button';
-import { ConversationProjectTabs } from '@/components/conversation-project-tabs';
 import { EmptyState } from '@/components/empty-state';
 import { EntityMark } from '@/components/entity-mark';
 import { OptionsSheet, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
 import { SkeletonList } from '@/components/skeleton-row';
-import { TaskCard, TaskStateBanner } from '@/components/task-ui';
+import { TaskDueChip, TaskStateBanner, TaskStatusPill } from '@/components/task-ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
@@ -32,7 +32,7 @@ import {
 import { weekDateKeys } from '@/lib/task-week';
 
 const taskViews: Array<{ key: MyTaskViewKey; label: string }> = [
-  { key: 'this-week', label: 'Due this week' },
+  { key: 'this-week', label: 'Needs attention' },
   { key: 'all', label: 'All' },
   { key: 'done', label: 'Done' },
 ];
@@ -69,6 +69,9 @@ type Props = {
   confirmationTask: MyTask | null;
   boards: BoardEntry[];
   companyName: string;
+  companyId: Id<'companies'> | null;
+  companyLogoUrl: string | null;
+  companyOptions: Array<{ id: Id<'companies'>; logoUrl: string | null; name: string }>;
   createTaskSheet: ReactNode;
   error?: string;
   hasMoreProjects: boolean;
@@ -83,12 +86,7 @@ type Props = {
   onOpenBoard: (board: BoardEntry) => void;
   onOpenTask: (task: MyTask) => void;
   onSetTaskStatus: (task: MyTask, workflowStateId: string) => void;
-  onToggleTaskComplete: (task: MyTask) => void;
-  profileName: string;
-  projectDirectory: ProjectEntry[];
-  projectDirectoryLoading: boolean;
-  selectedProjectId: string | null;
-  onSelectProject: (projectId: string | null) => void;
+  onSelectCompany: (companyId: Id<'companies'>) => void;
 };
 
 function countLabel(count: number, partial: boolean) {
@@ -118,6 +116,9 @@ export function MyTaskWorkspace({
   confirmationTask,
   boards,
   companyName,
+  companyId,
+  companyLogoUrl,
+  companyOptions,
   createTaskSheet,
   error,
   hasMoreProjects,
@@ -132,12 +133,7 @@ export function MyTaskWorkspace({
   onOpenBoard,
   onOpenTask,
   onSetTaskStatus,
-  onToggleTaskComplete,
-  profileName,
-  projectDirectory,
-  projectDirectoryLoading,
-  selectedProjectId,
-  onSelectProject,
+  onSelectCompany,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -153,16 +149,16 @@ export function MyTaskWorkspace({
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [canceledExpanded, setCanceledExpanded] = useState(false);
   const [statusTask, setStatusTask] = useState<MyTask | null>(null);
+  const [companySheetOpen, setCompanySheetOpen] = useState(false);
 
   const allTasks = useMemo(() => uniqueMyTasks(assignedTasks), [assignedTasks]);
   const boardById = useMemo(() => new Map(boards.map((board) => [String(board.board._id), board])), [boards]);
   const contextualTasks = useMemo(() => allTasks.filter((item) => {
-    const projectMatches = !selectedProjectId || String(item.project._id) === selectedProjectId;
     const boardName = boardById.get(String(item.task.boardId))?.board.name ?? '';
     const scopeRowMatches = matchesMyTaskSearch(item, search, boardName);
     const filterMatches = matchesMyTaskFilters(item, filters, today, dates);
-    return projectMatches && scopeRowMatches && filterMatches;
-  }), [allTasks, boardById, dates, filters, search, selectedProjectId, today]);
+    return scopeRowMatches && filterMatches;
+  }), [allTasks, boardById, dates, filters, search, today]);
   const visibleTasks = useMemo(() => sortMyTasks(contextualTasks.filter((item) =>
     matchesMyTaskTimeView(item, view, today, null, dates),
   )), [contextualTasks, dates, today, view]);
@@ -173,8 +169,7 @@ export function MyTaskWorkspace({
   const doneCount = contextualTasks.filter((item) => matchesMyTaskTimeView(item, 'done', today, null)).length;
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'any').length;
   const matchingBoards = boards.filter(({ board, project }) =>
-    (!selectedProjectId || String(project._id) === selectedProjectId)
-    && (board.name + ' ' + project.name).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+    (board.name + ' ' + project.name).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
   const scopedBoard = statusTask ? boardById.get(String(statusTask.task.boardId)) : undefined;
   const confirmationBoard = confirmationTask ? boardById.get(String(confirmationTask.task.boardId)) : undefined;
@@ -210,25 +205,28 @@ export function MyTaskWorkspace({
   }
 
   function renderTask(task: MyTask) {
-    const board = boardById.get(String(task.task.boardId));
-    return <TaskCard
-      alwaysShowPriority
-      category={task.state?.category}
-      isCompleted={task.state?.category === 'completed'}
-      onCompletionPress={() => onToggleTaskComplete(task)}
-      onPress={() => onOpenTask(task)}
-      onStatusPress={() => setStatusTask(task)}
-      priority={task.task.priority}
-      publicKey={task.task.publicKey}
-      groupName={task.group?.name ?? undefined}
-      projectName={task.project.name}
-      quiet
-      showKey={false}
-      stateName={task.state?.name ?? 'Unknown status'}
-      title={task.task.title}
-      key={String(task.task._id)}
-      contextLabel={board?.board.name}
-    />;
+    return <View key={String(task.task._id)} style={[styles.compactTaskRow, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+      <Pressable
+        accessibilityHint="Opens the task"
+        accessibilityLabel={`${task.task.title}. ${task.project.name}. ${task.state?.name ?? 'Unknown status'}. ${task.task.dueDate ? taskGroupLabel(task.task.dueDate, today, dates) : 'No due date'}`}
+        accessibilityRole="button"
+        onPress={() => onOpenTask(task)}
+        style={({ pressed }) => [styles.compactTaskTitleRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
+      >
+        <ThemedText numberOfLines={1} style={styles.compactTaskTitle} type="smallBold">{task.task.title}</ThemedText>
+        <View style={[styles.compactTaskArrow, { backgroundColor: theme.backgroundElevated, borderColor: theme.homeBorder }]}>
+          <PlatformIcon color={theme.textSecondary} name="chevron-right" size={14} />
+        </View>
+      </Pressable>
+      <View style={styles.compactTaskMeta}>
+        <TaskStatusPill category={task.state?.category} label={task.state?.name ?? 'Unknown status'} onPress={() => setStatusTask(task)} />
+        <View style={[styles.compactProjectPill, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
+          <EntityMark colorKey={task.project.markColorKey} iconKey={task.project.markIconKey} id={String(task.project._id)} kind="project" name={task.project.name} size={16} />
+          <ThemedText numberOfLines={1} style={styles.compactProjectName} themeColor="textSecondary" type="captionBold">{task.project.name}</ThemedText>
+        </View>
+        <View style={styles.compactTaskDue}><TaskDueChip category={task.state?.category} dueDate={task.task.dueDate} showNoDate /></View>
+      </View>
+    </View>;
   }
 
   function renderGroup(label: string, tasks: MyTask[]) {
@@ -243,7 +241,7 @@ export function MyTaskWorkspace({
   }
 
   function renderRows() {
-    if (view === 'this-week') return renderGroup('Due this week', visibleTasks);
+    if (view === 'this-week') return renderGroup('Needs attention', visibleTasks);
     if (view === 'done') return renderGroup('Completed', visibleTasks);
     const openTasks = visibleTasks.filter((item) => item.state?.category !== 'completed' && item.state?.category !== 'canceled');
     const completedTasks = visibleTasks.filter((item) => item.state?.category === 'completed');
@@ -274,14 +272,14 @@ export function MyTaskWorkspace({
     : activeFilterCount
     ? 'No tasks match these filters'
       : view === 'this-week'
-        ? 'Nothing due this week'
+        ? 'Nothing needs attention'
           : view === 'done'
             ? 'No completed tasks'
             : 'No assigned tasks';
   const noTasksBody = activeFilterCount || search.trim()
     ? 'Change the search or filters to see more of your assigned work.'
     : view === 'this-week'
-      ? 'Open tasks due between today and the end of this week will appear here.'
+      ? 'Open tasks due this week will appear here.'
       : 'Tasks assigned to you will appear here.';
 
   return <ThemedView style={styles.screen}>
@@ -308,27 +306,20 @@ export function MyTaskWorkspace({
 
       <View style={styles.globalHeading}>
         <ThemedText accessibilityRole="header" numberOfLines={1} style={styles.pageTitle} type="display">My Tasks</ThemedText>
-        <View accessibilityLabel={'Company scope: ' + companyName} style={[styles.companyPill, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
-          <PlatformIcon color={theme.textSecondary} name="office-building" size={14} />
+        <Pressable
+          accessibilityHint="Opens the Company selector"
+          accessibilityLabel={`Switch Company. Current Company: ${companyName}`}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: companyOptions.length < 2 }}
+          disabled={companyOptions.length < 2}
+          onPress={() => setCompanySheetOpen(true)}
+          style={({ pressed }) => [styles.companyPill, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, borderColor: theme.homeBorder }]}
+        >
+          <EntityMark id={String(companyId ?? 'company')} imageUrl={companyLogoUrl ?? undefined} kind="company" name={companyName} size={24} />
           <ThemedText numberOfLines={1} style={styles.companyPillText} themeColor="textSecondary" type="captionBold">{companyName}</ThemedText>
-        </View>
+          {companyOptions.length > 1 ? <PlatformIcon color={theme.textSecondary} name="chevron-down" size={14} /> : null}
+        </Pressable>
       </View>
-
-      {projectDirectoryLoading
-        ? <SkeletonList count={1} label="Loading Projects" />
-        : <ConversationProjectTabs
-          onSelect={onSelectProject}
-          projects={projectDirectory.map(({ project, assignedTaskCount, assignedTaskCountPartial }) => ({
-            id: String(project._id),
-            name: project.name,
-            colorKey: project.markColorKey,
-            iconKey: project.markIconKey,
-            assignedCount: assignedTaskCount,
-            countPartial: assignedTaskCountPartial,
-          }))}
-          selectedId={selectedProjectId}
-          showAssignedCountOnMark
-        />}
 
       <View style={styles.searchFilterRow}>
         <View style={[styles.searchField, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
@@ -378,13 +369,11 @@ export function MyTaskWorkspace({
       </Pressable> : null}
 
       <View style={styles.boardDirectory}>
-        <ThemedText accessibilityRole="header" numberOfLines={1} style={styles.profileName} type="subtitle">{profileName}</ThemedText>
-        <View style={[styles.directoryDivider, { backgroundColor: theme.hairline }]} />
-        <View style={styles.boardDirectoryHeading}><ThemedText themeColor="textSecondary" type="captionBold">Boards</ThemedText></View>
+        <ThemedText accessibilityRole="header" style={styles.boardDirectoryHeading} type="subtitle">Boards</ThemedText>
         {boardsLoading
           ? <SkeletonList count={3} label="Loading Boards" />
           : matchingBoards.length === 0
-            ? <EmptyState icon="view-board" title={search ? 'No matching Boards' : 'No Boards yet'} body={search ? 'Try a Project or Board name.' : selectedProjectId ? 'Boards in this Project will appear here.' : 'Boards in your Projects will appear here.'} />
+            ? <EmptyState icon="view-board" title={search ? 'No matching Boards' : 'No Boards yet'} body={search ? 'Try a Project or Board name.' : 'Boards in your Projects will appear here.'} />
           : matchingBoards.map((item) => {
             const unreadCount = item.unreadCount;
             const unreadLabel = unreadCount ? `, ${unreadCount} unread notifications` : '';
@@ -399,6 +388,19 @@ export function MyTaskWorkspace({
           })}
       </View>
     </ScrollView>
+
+    <OptionsSheet onClose={() => setCompanySheetOpen(false)} title="Switch Company" visible={companySheetOpen}>
+      <SheetSection title="Company workspace">
+        {companyOptions.map((company) => <SheetRow
+          detail={company.id === companyId ? 'Current workspace' : undefined}
+          icon="office-building"
+          key={company.id}
+          label={company.name}
+          onPress={() => { onSelectCompany(company.id); setCompanySheetOpen(false); }}
+          selected={company.id === companyId}
+        />)}
+      </SheetSection>
+    </OptionsSheet>
 
     <OptionsSheet onClose={cancelFilters} title="Filter tasks" visible={filterOpen}>
       <SheetNote>Choose values for the three filters, then apply them to your task list.</SheetNote>
@@ -467,13 +469,19 @@ const styles = StyleSheet.create({
   taskFeed: { gap: Spacing.three },
   taskGroup: { gap: Spacing.one },
   taskGroupHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 32 },
+  compactTaskRow: { borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.two, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
+  compactTaskTitleRow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.small, flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minHeight: 30 },
+  compactTaskArrow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 28, justifyContent: 'center', width: 28 },
+  compactTaskTitle: { flex: 1, minWidth: 0 },
+  compactTaskMeta: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  compactProjectPill: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, maxWidth: 150, minHeight: 26, paddingHorizontal: Spacing.two },
+  compactProjectName: { flexShrink: 1 },
+  compactTaskDue: { flexShrink: 1, minWidth: 0 },
   collapsibleGroup: { gap: Spacing.one },
   collapseButton: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minHeight: TouchTarget },
   loadMore: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, justifyContent: 'center', minHeight: TouchTarget },
   boardDirectory: { gap: Spacing.one, paddingTop: Spacing.four },
-  profileName: { paddingBottom: Spacing.one },
-  directoryDivider: { height: StyleSheet.hairlineWidth, marginBottom: Spacing.one, width: '100%' },
-  boardDirectoryHeading: { minHeight: 30, justifyContent: 'center' },
+  boardDirectoryHeading: { paddingBottom: Spacing.one },
   boardRow: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, minHeight: 64, paddingHorizontal: Spacing.one, paddingVertical: Spacing.two },
   boardMarkWrap: { height: 38, position: 'relative', width: 38 },
   boardCopy: { flex: 1, gap: 2, minWidth: 0 },

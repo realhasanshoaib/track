@@ -16,7 +16,7 @@ describe('NativeSelect compatibility adapter', () => {
     )
     const trigger = screen.getByRole('combobox', { name: 'Assignee' })
     expect(trigger.className).toContain('task-filter-select')
-    expect(trigger.className).toContain('data-[size=default]:h-9')
+    expect(trigger.className).toContain('data-[size=default]:h-[var(--control-md,2.5rem)]')
     expect(trigger.textContent).toContain('Unassigned')
 
     fireEvent.click(trigger)
@@ -28,5 +28,20 @@ describe('NativeSelect compatibility adapter', () => {
     const formInput = container.querySelector<HTMLInputElement>('input[name="assignee"]')
     expect(formInput?.value).toBe('')
     expect(formInput?.required).toBe(true)
+  })
+
+  it('associates a searchable value with a form outside the control subtree', () => {
+    const { container } = render(
+      <>
+        <form id="external-task-form" />
+        <NativeSelect aria-label="Project" form="external-task-form" name="projectId" searchable value="project-1">
+          <NativeSelectOption value="project-1">Launch plan</NativeSelectOption>
+        </NativeSelect>
+      </>,
+    )
+    const form = container.querySelector<HTMLFormElement>('#external-task-form')
+    if (!form) throw new Error('Expected the external task form to be rendered.')
+
+    expect(new FormData(form).get('projectId')).toBe('project-1')
   })
 })

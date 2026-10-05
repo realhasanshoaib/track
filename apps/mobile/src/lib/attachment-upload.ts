@@ -64,6 +64,7 @@ export type ComposerSubmission = {
   idempotencyKey?: string;
   /** Set when retrying: reuses the message created by the first attempt. */
   messageId?: Id<'messages'> | null;
+  replyToMessageId?: Id<'messages'>;
   reportProgress: (attachmentId: string, progress: number) => void;
 };
 

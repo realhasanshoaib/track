@@ -61,6 +61,17 @@ import { taskPriority, taskStateCategory } from './schema/taskValidators'
 import { getOrCreateDefaultBoard } from './taskBoards'
 import { rescheduleTaskReminders } from './taskReminders'
 
+function localTaskDate(timestamp: number, timeZone: string | undefined) {
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(timestamp).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+    return `${parts.year}-${parts.month}-${parts.day}`
+  } catch {
+    return new Date(timestamp).toISOString().slice(0, 10)
+  }
+}
+
 const identityArgs = {
   actingCompanyId: v.optional(v.id('companies')),
   projectMemberId: v.optional(v.id('projectMembers')),
@@ -1350,10 +1361,26 @@ export const update = mutation({
       eventType: 'assignment', payload: { publicKey: updated.publicKey },
       idempotencyKey: `assignment:${updated._id}:${assignedMember._id}:${updated.revision}`,
     })
+    const dueDateChanged = changes.some((change) => change.action === 'due_date_changed')
+    let dueDateBecameCritical = false
+    if (dueDateChanged && updated.dueDate) {
+      const currentAssignee = updated.assigneeProjectMemberId
+        ? await ctx.db.get(updated.assigneeProjectMemberId)
+        : null
+      const assigneeUser = currentAssignee ? await ctx.db.get(currentAssignee.userId) : null
+      const localToday = localTaskDate(now, assigneeUser?.timezone)
+      dueDateBecameCritical = updated.dueDate <= localToday &&
+        (!access.task.dueDate || access.task.dueDate > localToday)
+    }
+    const priorityBecameUrgent = access.task.priority !== 'urgent' && updated.priority === 'urgent'
+    const urgencyEscalated = dueDateBecameCritical || priorityBecameUrgent
+    const updatedState = urgencyEscalated ? await ctx.db.get(updated.workflowStateId) : null
+    const urgentUpdate = Boolean(urgencyEscalated && updatedState && !isTerminalTaskState(updatedState.category))
     await notifyTaskFollowers(ctx, {
       task: updated, actorProjectMemberId: access.projectMember._id,
-      eventType: 'task_changed', payload: { publicKey: updated.publicKey },
-      idempotencyKey: `changed:${updated._id}:${updated.revision}`,
+      eventType: urgentUpdate ? 'urgent_update' : 'task_changed',
+      payload: { publicKey: updated.publicKey },
+      idempotencyKey: `${urgentUpdate ? 'urgent' : 'changed'}:${updated._id}:${updated.revision}`,
     })
     await rescheduleTaskReminders(ctx, updated)
     return updated.revision

@@ -204,6 +204,7 @@ export function ProjectOwnershipPanel({
                 if (selectedCompany) setProposedOwnerId(selectedCompany._id);
               }}
               required
+              searchable={candidates.length >= 8}
               value={proposedOwnerId ?? ""}
             >
               {candidates.flatMap((participant) =>

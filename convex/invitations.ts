@@ -2,6 +2,7 @@ import { assertProjectSnapshotWritable } from './lib/projectSnapshotLock'
 import { v } from 'convex/values'
 
 import { mutation, query } from './_generated/server'
+import { internal } from './_generated/api'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import {
@@ -39,6 +40,36 @@ export const listForProject = query({
       .withIndex('by_project_status', (q) => q.eq('projectId', args.projectId))
       .order('desc')
       .take(50)
+  },
+})
+
+export const listPendingForCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    const pending = await ctx.db
+      .query('invitations')
+      .withIndex('by_email_status', (q) =>
+        q.eq('email', normalizeEmail(actor.user.email)).eq('status', 'pending'),
+      )
+      .order('desc')
+      .take(50)
+    const rows = await Promise.all(pending.map(async (invitation) => {
+      if (invitation.expiresAt <= Date.now()) return null
+      const [project, group] = await Promise.all([
+        ctx.db.get(invitation.projectId),
+        invitation.groupId ? ctx.db.get(invitation.groupId) : null,
+      ])
+      if (!project || project.status === 'archived' || project.status === 'archive_pending') return null
+      return {
+        id: invitation._id,
+        projectId: project._id,
+        projectName: project.name,
+        groupName: group?.name,
+        createdAt: invitation.createdAt,
+      }
+    }))
+    return rows.filter((row): row is NonNullable<typeof row> => row !== null)
   },
 })
 
@@ -85,6 +116,16 @@ export const create = mutation({
         groupId: args.groupId,
       },
     })
+
+    const recipient = await ctx.db
+      .query('users')
+      .withIndex('by_normalized_email', (q) => q.eq('normalizedEmail', email))
+      .unique()
+    if (recipient) {
+      await ctx.scheduler.runAfter(0, internal.pushNotifications.deliverProjectInvitation, {
+        invitationId: inviteId,
+      })
+    }
 
     return inviteId
   },

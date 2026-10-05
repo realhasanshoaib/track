@@ -21,5 +21,6 @@ describe('app toast queue', () => {
     expect(toastDuration({ durationMs: 500, title: 'Short' })).toBe(2_000);
     expect(toastDuration({ durationMs: 20_000, title: 'Long' })).toBe(8_000);
     expect(toastDuration({ message: 'A'.repeat(73), title: 'Detailed' })).toBe(4_800);
+    expect(toastDuration({ onPress: () => undefined, title: 'Open notification' })).toBe(8_000);
   });
 });

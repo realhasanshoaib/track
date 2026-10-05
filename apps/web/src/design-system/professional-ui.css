@@ -44,6 +44,7 @@
   --space-12: 48px;
   --space-16: 64px;
 
+  --control-xs: 32px;
   --control-sm: 36px;
   --control-md: 40px;
   --control-lg: 44px;
@@ -356,17 +357,44 @@
   }
 }
 
-.track-ui-v2 :where(.track-button, [data-slot="button"], .company-overview-new-project) {
-  min-height: var(--control-lg);
+.track-ui-v2 :where(.track-button, .company-overview-new-project) {
+  min-height: var(--control-md);
   border-radius: var(--radius-control);
   font-size: 13px;
   font-weight: 620;
   letter-spacing: -0.005em;
 }
 
+.track-ui-v2 [data-slot="button"][data-size="xs"] {
+  min-height: var(--control-xs);
+}
+
+.track-ui-v2 [data-slot="button"][data-size="sm"] {
+  min-height: var(--control-sm);
+}
+
+.track-ui-v2 [data-slot="button"][data-size="default"] {
+  min-height: var(--control-md);
+}
+
+.track-ui-v2 [data-slot="button"][data-size="lg"] {
+  min-height: var(--control-lg);
+}
+
 .track-ui-v2 :where(.icon-button, [data-slot="button"][aria-label]:not(:has(span))) {
   min-width: var(--control-lg);
   min-height: var(--control-lg);
+}
+
+@media (pointer: coarse) {
+  .track-ui-v2 :where(.track-button, [data-slot="button"], .company-overview-new-project) {
+    min-height: var(--control-lg);
+  }
+
+  .track-ui-v2 :where(.icon-button, [data-slot="button"][data-size^="icon"]) {
+    min-width: var(--control-lg);
+    min-height: var(--control-lg);
+  }
 }
 
 .track-ui-v2 :where(input, textarea, select, [data-slot="input"], [data-slot="textarea"], [data-slot="native-select"]) {
@@ -376,6 +404,23 @@
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;
+}
+
+.track-ui-v2 [data-slot="searchable-select-group"] {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.track-ui-v2 [data-slot="searchable-select-input"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  box-shadow: none;
 }
 
 .track-ui-v2 :where(input, textarea, select):focus-visible,

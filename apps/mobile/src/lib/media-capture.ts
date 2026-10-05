@@ -31,14 +31,21 @@ function nextId() {
   return `attachment-${Date.now()}-${sequence}`;
 }
 
-function explainDenied(subject: string) {
+function explainDenied(subject: string, canAskAgain: boolean) {
   Alert.alert(
-    `Track cannot reach your ${subject}`,
-    `Allow ${subject} access in Settings to attach it to this conversation.`,
-    [
-      { style: 'cancel', text: 'Not now' },
-      { onPress: () => void Linking.openSettings(), text: 'Open settings' },
-    ],
+    `Track needs ${subject} access`,
+    canAskAgain
+      ? `Allow ${subject} access to attach it to this conversation. You can try again now.`
+      : `Allow ${subject} access in device settings to attach it to this conversation.`,
+    canAskAgain
+      ? [
+        { style: 'cancel', text: 'Not now' },
+        { onPress: () => void capturePhoto(), text: 'Try again' },
+      ]
+      : [
+        { style: 'cancel', text: 'Not now' },
+        { onPress: () => void Linking.openSettings(), text: 'Open settings' },
+      ],
   );
 }
 
@@ -58,7 +65,7 @@ function assetToFile(asset: ImagePicker.ImagePickerAsset): UploadableFile {
 export async function capturePhoto(): Promise<UploadableFile[]> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    explainDenied('camera');
+    explainDenied('camera', permission.canAskAgain);
     return [];
   }
   const result = await ImagePicker.launchCameraAsync({
@@ -70,11 +77,8 @@ export async function capturePhoto(): Promise<UploadableFile[]> {
 }
 
 export async function pickImages(): Promise<UploadableFile[]> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    explainDenied('photo library');
-    return [];
-  }
+  // The platform picker grants access only to the assets a person selects.
+  // Avoid asking for broad library access before opening it.
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsMultipleSelection: true,
     mediaTypes: ['images'],

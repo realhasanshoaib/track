@@ -635,6 +635,7 @@ export async function finalizeLegacyExit(
     await ctx.db.patch(project._id, {
       status: 'archived',
       archiveReason: 'no_active_participants',
+      archivedAt: now,
       revision: (project.revision ?? 0) + 1,
       updatedAt: now,
     });
@@ -906,6 +907,7 @@ export const finalize = mutation({
       await ctx.db.patch(project._id, {
         status: "archived",
         archiveReason: "no_active_participants",
+        archivedAt: now,
         revision: (project.revision ?? 0) + 1,
         updatedAt: now,
       });
@@ -1013,6 +1015,7 @@ export const finalizeBatch = internalMutation({
         await ctx.db.patch(project._id, {
           status: "archived",
           archiveReason: "no_active_participants",
+          archivedAt: now,
           revision: (project.revision ?? 0) + 1,
           updatedAt: now,
         });

@@ -20,7 +20,7 @@ export function MessageText({
   const parts = body.split(MENTION);
 
   return (
-    <ThemedText type={type}>
+    <ThemedText selectable type={type}>
       {parts.map((part, index) =>
         part.startsWith('@') ? (
           <ThemedText key={index} style={[styles.mention, { color: theme.accentStrong }]} type={type}>

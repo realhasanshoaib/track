@@ -17,37 +17,46 @@ export type PendingAttachment = UploadableFile & {
 
 type MenuProps = {
   onClose: () => void;
+  onError: (message: string) => void;
   onPicked: (files: UploadableFile[]) => void;
   visible: boolean;
 };
 
 /** Native pickers cannot be presented while the sheet modal is still on screen. */
-function afterSheetCloses(run: () => Promise<UploadableFile[]>, onPicked: (files: UploadableFile[]) => void) {
+function afterSheetCloses(
+  run: () => Promise<UploadableFile[]>,
+  onPicked: (files: UploadableFile[]) => void,
+  onError: (message: string) => void,
+  failureMessage: string,
+) {
   InteractionManager.runAfterInteractions(() => {
     void run().then((files) => {
       if (files.length) onPicked(files);
+    }).catch(() => {
+      onError(failureMessage);
     });
   });
 }
 
-export function ChatAttachMenu({ onClose, onPicked, visible }: MenuProps) {
-  const choose = (run: () => Promise<UploadableFile[]>) => {
+export function ChatAttachMenu({ onClose, onError, onPicked, visible }: MenuProps) {
+  const choose = (run: () => Promise<UploadableFile[]>, failureMessage: string) => {
     onClose();
-    afterSheetCloses(run, onPicked);
+    afterSheetCloses(run, onPicked, onError, failureMessage);
   };
 
   return (
     <OptionsSheet onClose={onClose} title="Add to message" visible={visible}>
       <SheetSection>
-        <SheetRow icon="camera" label="Camera" onPress={() => choose(capturePhoto)} />
-        <SheetRow icon="image-multiple" label="Photo library" onPress={() => choose(pickImages)} />
-        <SheetRow icon="file-document-outline" label="Document" onPress={() => choose(pickDocuments)} />
+        <SheetRow icon="camera" label="Camera" onPress={() => choose(capturePhoto, 'Could not open the camera. Try again or choose a photo.')} />
+        <SheetRow icon="image-multiple" label="Photo library" onPress={() => choose(pickImages, 'Could not open the photo library. Try again.')} />
+        <SheetRow icon="file-document-outline" label="Document" onPress={() => choose(pickDocuments, 'Could not open the document picker. Try again.')} />
       </SheetSection>
     </OptionsSheet>
   );
 }
 
 type StripProps = {
+  disabled?: boolean;
   items: PendingAttachment[];
   onRemove: (id: string) => void;
 };
@@ -60,7 +69,7 @@ function describe(item: PendingAttachment) {
   return item.size ? `${item.filename}, ${formatFileSize(item.size)}` : item.filename;
 }
 
-export function PendingAttachmentStrip({ items, onRemove }: StripProps) {
+export function PendingAttachmentStrip({ disabled = false, items, onRemove }: StripProps) {
   const theme = useTheme();
   if (items.length === 0) return null;
 
@@ -117,9 +126,11 @@ export function PendingAttachmentStrip({ items, onRemove }: StripProps) {
             <Pressable
               accessibilityLabel={`Remove ${item.filename}`}
               accessibilityRole="button"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
               hitSlop={12}
               onPress={() => onRemove(item.id)}
-              style={[styles.remove, { backgroundColor: theme.overlay }]}>
+              style={[styles.remove, { backgroundColor: theme.overlay, opacity: disabled ? 0.5 : 1 }]}>
               <PlatformIcon color={Colors.dark.text} name="close" size={13} />
             </Pressable>
           </View>

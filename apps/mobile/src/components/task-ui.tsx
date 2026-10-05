@@ -247,7 +247,7 @@ export function TaskCard({
 
   if (quiet && !board) {
     const due = taskDueDisplay(dueDate, undefined, category);
-    const taskContext = [projectName, companyName, groupName ? `Channel ${groupName.replace(/^#/, '')}` : null, taskPriorityLabel(priority)]
+    const taskContext = [projectName, contextLabel ? `Board ${contextLabel}` : null, companyName, groupName ? `Channel ${groupName.replace(/^#/, '')}` : null, taskPriorityLabel(priority)]
       .filter(Boolean)
       .join('. ');
     const dueLabel = due?.label ?? (alwaysShowPriority ? 'No due date' : undefined);
@@ -283,7 +283,7 @@ export function TaskCard({
               <ThemedText numberOfLines={1} style={styles.companyPillText} themeColor="textSecondary" type="captionBold">{companyName}</ThemedText>
             </View> : null}
           </View> : null}
-          <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{[groupName ? `#${groupName.replace(/^#/, '')}` : null, alwaysShowPriority || priority === 'urgent' || priority === 'high' ? taskPriorityLabel(priority) : null].filter(Boolean).join(' · ')}</ThemedText>
+          <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{[contextLabel ? `Board ${contextLabel}` : null, groupName ? `#${groupName.replace(/^#/, '')}` : null, alwaysShowPriority || priority === 'urgent' || priority === 'high' ? taskPriorityLabel(priority) : null].filter(Boolean).join(' · ')}</ThemedText>
           <TaskDueChip category={category} dueDate={dueDate} showNoDate={alwaysShowPriority} />
         </View>
       </Pressable>

@@ -90,6 +90,7 @@ export function CompanyTaskCreateFlow({
             <NativeSelect
               aria-label="Task project"
               onChange={(event) => setSelectedProjectId(event.target.value as Id<"projects">)}
+              searchable={availableProjects.length >= 8}
               value={selectedProjectId}
             >
               {availableProjects.map((item) => (

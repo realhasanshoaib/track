@@ -41,9 +41,9 @@ function ToolbarIcon({ active, icon, label, onPress }: { active: boolean; icon: 
 
 function ViewToggle({ count, icon, label, mode, onPress, selected }: { count?: number; icon: 'list' | 'view-board'; label: string; mode: TaskViewMode; onPress: (mode: TaskViewMode) => void; selected: boolean }) {
   const theme = useTheme();
-  return <CompactPillButton accessibilityLabel={count === undefined ? `${label} view` : `${label} view, ${count} ${count === 1 ? 'task' : 'tasks'}`} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onPress(mode)} pillStyle={{ alignSelf: 'center', backgroundColor: selected ? theme.accentSoft : 'transparent', borderColor: selected ? theme.accentStrong : 'transparent', flexGrow: 0, flexShrink: 0, minHeight: 36, maxWidth: '100%' }} pressedPillStyle={{ backgroundColor: theme.backgroundSelected, borderColor: theme.accentStrong }} targetStyle={styles.viewToggleTarget}>
-    <PlatformIcon color={selected ? theme.accentStrong : theme.textSecondary} name={icon} size={15} />
-    <ThemedText numberOfLines={1} style={styles.viewToggleLabel} themeColor={selected ? 'accentStrong' : 'textSecondary'} type="captionBold">{label}</ThemedText>
+  return <CompactPillButton accessibilityLabel={count === undefined ? `${label} view` : `${label} view, ${count} ${count === 1 ? 'task' : 'tasks'}`} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onPress(mode)} pillStyle={{ alignSelf: 'center', backgroundColor: selected ? theme.accent : 'transparent', borderColor: selected ? theme.accentStrong : 'transparent', flexGrow: 0, flexShrink: 0, minHeight: 36, maxWidth: '100%' }} pressedPillStyle={{ backgroundColor: theme.backgroundSelected, borderColor: theme.accentStrong }} targetStyle={styles.viewToggleTarget}>
+    <PlatformIcon color={selected ? theme.accentInk : theme.textSecondary} name={icon} size={15} />
+    <ThemedText numberOfLines={1} style={[styles.viewToggleLabel, { color: selected ? theme.accentInk : theme.textSecondary }]} type="captionBold">{label}</ThemedText>
     {count === undefined ? null : <>
       <View style={[styles.viewCountBadge, { backgroundColor: theme.accentSoft }]}>
         <ThemedText numberOfLines={1} themeColor="accentStrong" type="captionBold">{count > 99 ? '99+' : count}</ThemedText>
