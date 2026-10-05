@@ -1,7 +1,8 @@
-import type { ComponentProps } from 'react';
+import type { NavigationHelpers, ParamListBase, TabNavigationState } from 'expo-router/react-navigation';
+import type { MaterialTopTabNavigationEventMap } from 'expo-router/js-top-tabs';
 import { BlurView } from 'expo-blur';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -11,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
-import { usePrimaryTabSwipe } from '@/components/primary-tab-swipe';
 import { ThemedText } from '@/components/themed-text';
 import { AndroidBottomTabHeight, BottomTabInset, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
@@ -23,7 +23,10 @@ import { taskListHref } from '@/lib/task-navigation';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 type StandaloneTabKey = PrimaryDestination['key'];
-type RouterTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
+type RouterTabBarProps = {
+  navigation: NavigationHelpers<ParamListBase, MaterialTopTabNavigationEventMap>;
+  state: TabNavigationState<ParamListBase>;
+};
 type NavigationItem = { key: StandaloneTabKey; label: string; icon: IconName; href: string; disabled?: boolean };
 
 const standaloneTabs: NavigationItem[] = [
@@ -49,7 +52,6 @@ export function StandalonePrimaryNavigation({ active }: { active?: StandaloneTab
 /** Four peer destinations with platform-specific selection feedback. */
 export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
   const router = useRouter();
-  const tabSwipe = usePrimaryTabSwipe();
   const pathname = usePathname();
   const release = useReleaseConfig();
   const keyboardVisible = useKeyboardState((keyboard) => keyboard.isVisible);
@@ -87,14 +89,6 @@ export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
     else navigation.navigate(route.name, route.params);
     return true;
   }, [navigation, visibleRoutes]);
-
-  useEffect(() => tabSwipe.registerNavigation((direction) => {
-    const activeIndex = items.findIndex((candidate) => candidate.key === activeKey);
-    const item = items[activeIndex + direction];
-    return item ? selectItem(item) : false;
-  }), [activeKey, items, selectItem, tabSwipe]);
-
-  useEffect(() => tabSwipe.setActiveKey(activeKey), [activeKey, tabSwipe]);
 
   useEffect(() => setHidden(false), [pathname, setHidden]);
 
