@@ -19,7 +19,6 @@ export default function PrimaryTabsLayout() {
         <TopTabs.Screen name="(tasks)" options={{ title: 'My Tasks' }} />
         <TopTabs.Screen name="(inbox)" options={{ title: 'Inbox' }} />
         <TopTabs.Screen name="(profile)" options={{ title: 'Profile' }} />
-        <TopTabs.Screen name="(projects)" options={{ title: 'Projects' }} />
       </TopTabs>
     </PrimaryNavigationVisibilityProvider>
   );

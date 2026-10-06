@@ -56,8 +56,7 @@ export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
   const release = useReleaseConfig();
   const keyboardVisible = useKeyboardState((keyboard) => keyboard.isVisible);
   const { createAction, createContext, hidden, setHidden } = usePrimaryNavigationVisibility();
-  const visibleRoutes = state.routes
-    .filter((route) => route.name !== '(projects)')
+  const visibleRoutes = [...state.routes]
     .sort((a, b) => primaryRouteIndex(a.name) - primaryRouteIndex(b.name));
   const items = visibleRoutes.map((route) => ({
     ...primaryDestinationForRoute(route.name, !release.tasks),
