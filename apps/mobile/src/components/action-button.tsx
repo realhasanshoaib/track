@@ -1,9 +1,10 @@
-import { ActivityIndicator, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { hapticLight } from '@/lib/haptics';
 
 export type ActionButtonState = 'default' | 'success' | 'error' | 'offline';
@@ -34,6 +35,7 @@ export function ActionButton({
 }: Props) {
   const theme = useTheme();
   const unavailable = disabled || loading;
+  const pressFeedback = usePressFeedback({ disabled: unavailable, pressedScale: 0.985 });
   const destructive = variant === 'destructive' || state === 'error';
   const filled = variant === 'primary' || destructive || state === 'success';
   const backgroundColor = state === 'success'
@@ -48,25 +50,28 @@ export function ActionButton({
     : filled ? theme.background : theme.text;
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityHint={accessibilityHint}
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ busy: loading, disabled: unavailable }}
       android_ripple={{ color: filled ? theme.accentStrong : theme.backgroundSelected }}
       disabled={unavailable}
+      onPressIn={pressFeedback.onPressIn}
+      onPressOut={pressFeedback.onPressOut}
       onPress={() => {
         hapticLight();
         onPress();
       }}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         style,
         {
           backgroundColor,
           borderColor: variant === 'secondary' ? theme.hairline : backgroundColor,
-          opacity: unavailable ? 0.5 : pressed ? 0.82 : 1,
+          opacity: unavailable ? 0.5 : 1,
         },
+        pressFeedback.animatedStyle,
       ]}>
       <View style={styles.content}>
         {loading ? (
@@ -79,7 +84,7 @@ export function ActionButton({
         </ThemedText>
         {state === 'offline' ? <PlatformIcon color={foregroundColor} name="cloud-off" size={18} /> : null}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

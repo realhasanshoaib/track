@@ -1,6 +1,12 @@
 export type MessageSwipeIntent = 'actions' | 'reply' | 'close';
 export type MessageActionsSwipeDirection = 'left' | 'right';
 
+/** Keeps a translated message row inside the viewport as its action tray opens. */
+export function messageSwipeContentWidth(containerWidth: number, actionWidth: number) {
+  'worklet';
+  return Math.max(0, containerWidth - actionWidth);
+}
+
 /** Returns an interrupted gesture to its last settled tray state. */
 export function messageSwipeCancelIntent(trayAlreadyOpen: boolean): MessageSwipeIntent {
   'worklet';

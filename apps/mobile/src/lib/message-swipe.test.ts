@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { messageSwipeCancelIntent, messageSwipeIntent } from './message-swipe';
+import { messageSwipeCancelIntent, messageSwipeContentWidth, messageSwipeIntent } from './message-swipe';
 
 describe('message swipe actions', () => {
+  it('reserves space for the action tray so right-aligned messages stay in the viewport', () => {
+    expect(messageSwipeContentWidth(320, 0)).toBe(320);
+    expect(messageSwipeContentWidth(320, 72)).toBe(248);
+    expect(messageSwipeContentWidth(40, 72)).toBe(0);
+  });
+
   it('opens message actions after a left swipe on iOS', () => {
     expect(messageSwipeIntent(-72, true, true)).toBe('actions');
   });

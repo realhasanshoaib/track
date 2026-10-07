@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
+import type { ReactNode } from 'react';
 
 import { Colors, Typography } from '@/constants/theme';
 import { useThemeOverride } from '@/contexts/theme-override-context';
@@ -13,7 +14,7 @@ export function TrackHeaderBackground() {
   }]} />;
 }
 
-export function PrimaryStack({ initialRouteName }: { initialRouteName: string }) {
+export function PrimaryStack({ children, initialRouteName }: { children?: ReactNode; initialRouteName: string }) {
   const { theme } = useThemeOverride();
 
   return (
@@ -34,7 +35,7 @@ export function PrimaryStack({ initialRouteName }: { initialRouteName: string })
         headerTintColor: Colors[theme].text,
         contentStyle: { backgroundColor: Colors[theme].homeBackground },
       }}
-    />
+    >{children}</Stack>
   );
 }
 

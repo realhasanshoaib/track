@@ -1,0 +1,277 @@
+.track-workspace-home {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  padding: clamp(20px, 3vw, 36px);
+  color: var(--ink);
+}
+
+.track-workspace-home-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 20px;
+}
+
+.track-workspace-home-intro h2 {
+  margin: 0;
+  color: var(--ink);
+  font: 650 clamp(24px, 2.2vw, 30px)/1.15 var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+.track-workspace-home-intro p {
+  max-width: 62ch;
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font: 400 13px/1.5 var(--font-body);
+}
+
+.track-workspace-directory-link {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 7px;
+  background: var(--paper);
+  padding: 0 12px;
+  color: var(--ink-2);
+  font: 600 12px/1 var(--font-body);
+  text-decoration: none;
+}
+
+.track-workspace-directory-link:hover {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--ink);
+}
+
+.track-workspace-directory-link:focus-visible,
+.track-workspace-project-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.track-workspace-project-groups {
+  display: grid;
+  gap: 30px;
+  margin-top: 26px;
+}
+
+.track-workspace-project-section {
+  min-width: 0;
+}
+
+.track-workspace-project-section > .track-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 12px;
+}
+
+.track-workspace-project-section > .track-section-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 620 15px/1.3 var(--font-display);
+}
+
+.track-workspace-project-section > .track-section-heading p {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font: 400 12px/1.45 var(--font-body);
+}
+
+.track-workspace-project-section > .track-section-heading > span {
+  min-width: 26px;
+  padding-top: 2px;
+  color: var(--ink-3);
+  font: 550 11px/1.3 var(--font-meta);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.track-workspace-project-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.track-workspace-project-list li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.track-workspace-project-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  align-items: center;
+  gap: 24px;
+  padding: 16px 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 140ms ease;
+}
+
+.track-workspace-project-row:hover {
+  background: var(--paper-2);
+}
+
+.track-workspace-project-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.track-workspace-project-type {
+  overflow: hidden;
+  color: var(--ink-3);
+  font: 550 10px/1.3 var(--font-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-workspace-project-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font: 620 14px/1.35 var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-workspace-project-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink-3);
+  font: 400 12px/1.45 var(--font-body);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.track-workspace-project-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--ink-3);
+  font: 500 10.5px/1.35 var(--font-meta);
+}
+
+.track-workspace-project-meta > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.track-workspace-project-meta > span:not(.track-workspace-project-open) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-workspace-project-meta svg {
+  flex: 0 0 auto;
+}
+
+.track-workspace-project-meta .track-status-stamp {
+  border-radius: 999px;
+  background: var(--paper-3);
+  padding: 4px 7px;
+  color: var(--ink-2);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.track-workspace-project-meta .track-status-stamp i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.track-workspace-project-open {
+  color: var(--accent-strong);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.track-guided-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  border-block: 1px solid var(--hairline);
+  margin-top: 28px;
+  padding: 42px 20px;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.track-guided-empty > svg {
+  color: var(--ink-3);
+}
+
+.track-guided-empty h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 620 16px/1.3 var(--font-display);
+}
+
+.track-guided-empty p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--ink-3);
+  font: 400 12px/1.5 var(--font-body);
+}
+
+@media (max-width: 760px) {
+  .track-workspace-home {
+    padding: 20px 16px 28px;
+  }
+
+  .track-workspace-home-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .track-workspace-project-groups {
+    gap: 24px;
+    margin-top: 22px;
+  }
+
+  .track-workspace-project-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px 4px;
+  }
+
+  .track-workspace-project-meta {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .track-workspace-home {
+    padding-inline: 12px;
+  }
+
+  .track-workspace-project-meta {
+    gap: 8px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-workspace-project-row {
+    transition: none;
+  }
+}

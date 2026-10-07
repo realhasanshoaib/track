@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View, type ListRenderItem } from 'react-native';
 
 import { EmptyState } from '@/components/empty-state';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -21,8 +21,10 @@ export type { MobileBoardView, MobileSuggestionView, MobileTaskView };
 export function TaskCollection({
   activeBoardStateId,
   assigneeName,
+  bottomPadding,
   columns,
   focusedTaskId,
+  listHeader,
   loadMore,
   loadingMore,
   onActiveBoardStateChange,
@@ -38,8 +40,10 @@ export function TaskCollection({
 }: {
   activeBoardStateId?: string;
   assigneeName: (item: MobileTaskView) => string | undefined;
+  bottomPadding?: number;
   columns: BoardColumnView[];
   focusedTaskId?: string;
+  listHeader?: React.ReactElement | null;
   loadMore?: () => void;
   loadingMore?: boolean;
   onActiveBoardStateChange?: (stateId: string) => void;
@@ -65,17 +69,15 @@ export function TaskCollection({
       />
     );
   }
-  if (!tasks.length) {
+  if (!tasks.length && tab === 'board') {
     return (
       <>
         <TaskEmptyState
-          body={tab === 'my'
-            ? 'Tasks assigned to you will appear here.'
-            : 'Create a task or turn a conversation into action.'}
-          buttonLabel={tab === 'my' ? 'View all tasks' : readOnly ? undefined : 'Create task'}
+          body="Create a task or turn a conversation into action."
+          buttonLabel={readOnly ? undefined : 'Create task'}
           icon="check-box-outline"
-          onPress={tab === 'my' ? onViewAll : onCreate}
-          title={tab === 'my' ? 'Nothing assigned to you' : 'No tasks yet'}
+          onPress={onCreate}
+          title="No tasks yet"
         />
         <TaskLoadMore loadMore={loadMore} loading={loadingMore} />
       </>
@@ -102,28 +104,43 @@ export function TaskCollection({
   }
 
   const visibleTasks = uniqueTaskViews(tasks);
+  const renderTask: ListRenderItem<MobileTaskView> = ({ item }) => (
+    <TaskCard
+      assignee={assigneeName(item)}
+      category={item.state?.category}
+      dueDate={item.task.dueDate}
+      evidence={false}
+      onPress={() => onOpen(item)}
+      onStatusPress={readOnly ? undefined : () => onStatusPress(item)}
+      priority={item.task.priority}
+      publicKey={item.task.publicKey}
+      stateName={item.state?.name ?? 'Unknown'}
+      title={item.task.title}
+    />
+  );
 
   return (
-    <>
-      <View style={styles.list}>
-        {visibleTasks.map((item) => (
-        <TaskCard
-          assignee={assigneeName(item)}
-          category={item.state?.category}
-          dueDate={item.task.dueDate}
-          evidence={false}
-          key={item.task._id}
-          onPress={() => onOpen(item)}
-          onStatusPress={readOnly ? undefined : () => onStatusPress(item)}
-          priority={item.task.priority}
-          publicKey={item.task.publicKey}
-          stateName={item.state?.name ?? 'Unknown'}
-          title={item.task.title}
+    <FlatList
+      contentContainerStyle={[styles.list, bottomPadding !== undefined && { paddingBottom: bottomPadding }]}
+      data={visibleTasks}
+      keyExtractor={(item) => item.task._id}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      ListEmptyComponent={(
+        <TaskEmptyState
+          body={tab === 'my' ? 'Tasks assigned to you will appear here.' : 'Create a task or turn a conversation into action.'}
+          buttonLabel={tab === 'my' ? 'View all tasks' : readOnly ? undefined : 'Create task'}
+          icon="check-box-outline"
+          onPress={tab === 'my' ? onViewAll : onCreate}
+          title={tab === 'my' ? 'Nothing assigned to you' : 'No tasks yet'}
         />
-        ))}
-      </View>
-      <TaskLoadMore loadMore={loadMore} loading={loadingMore} />
-    </>
+      )}
+      ListFooterComponent={<TaskLoadMore loadMore={loadMore} loading={loadingMore} />}
+      ListHeaderComponent={listHeader}
+      renderItem={renderTask}
+      showsVerticalScrollIndicator={false}
+      windowSize={9}
+    />
   );
 }
 
@@ -277,7 +294,7 @@ const styles = StyleSheet.create({
   },
   empty: { alignSelf: 'center', gap: Spacing.three, maxWidth: 360, paddingTop: Spacing.six, width: '100%' },
   eyebrow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
-  list: { gap: Spacing.three },
+  list: { gap: Spacing.three, paddingBottom: Spacing.four },
   meter: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
   meterFill: { height: '100%' },
   meterTrack: { borderRadius: Radius.pill, height: 4, overflow: 'hidden', width: 44 },

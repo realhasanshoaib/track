@@ -15,6 +15,7 @@ import { CompanyProjectConversation } from "./CompanyProjectConversation";
 import { CompanyProjectEvidence } from "./CompanyProjectEvidence";
 import { CompanyProjectOverview } from "./CompanyProjectOverview";
 import { CompanyProjectNavigation } from "./CompanyProjectNavigation";
+import "./company-experience.css";
 import { formatCompanyError } from "./company-errors";
 import {
   getCompanyProjectScopeKey,

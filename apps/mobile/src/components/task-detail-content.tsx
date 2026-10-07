@@ -282,6 +282,8 @@ export function TaskOverview({
               />
               <Pressable
                 accessibilityLabel="Add checklist item"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !subtask.trim() || busy }}
                 disabled={!subtask.trim() || busy}
                 onPress={onAddSubtask}
                 style={[styles.addButton, {
@@ -498,6 +500,8 @@ export function TaskCommentComposer({
         />
         <Pressable
           accessibilityLabel="Send update"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSend }}
           disabled={!canSend}
           onPress={() => {
             hapticMedium();

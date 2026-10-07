@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from 'convex/react';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../../../../convex/_generated/api';
@@ -18,8 +19,15 @@ import { useThemeOverride } from '@/contexts/theme-override-context';
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { useTheme } from '@/hooks/use-theme';
+import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { deviceTimezone, findTimezone } from '@/lib/timezones';
 import { hapticLight } from '@/lib/haptics';
+
+const APPEARANCE_OPTIONS = [
+  ['system', 'System', 'theme-light-dark'],
+  ['light', 'Light', 'white-balance-sunny'],
+  ['dark', 'Dark', 'moon-waning-crescent'],
+] as const;
 
 function timezoneLabel(id: string) {
   const zone = findTimezone(id);
@@ -55,8 +63,24 @@ export default function ProfileScreen() {
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appearanceWidth, setAppearanceWidth] = useState(0);
+  const appearanceIndex = Math.max(0, APPEARANCE_OPTIONS.findIndex(([value]) => value === themeOverride));
+  const appearanceSegmentWidth = Math.max(0, (appearanceWidth - Spacing.one * 4) / APPEARANCE_OPTIONS.length);
+  const appearanceSelectionX = useSharedValue<number>(Spacing.one);
+  const reducedMotion = useReducedMotion();
+  const appearanceSelectionStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: appearanceSelectionX.value }],
+  }));
   const role = designation.trim() || 'Add your role';
   const rolePalette = roleColors(role, theme);
+
+  useEffect(() => {
+    if (!appearanceSegmentWidth) return;
+    const targetX = Spacing.one + appearanceIndex * (appearanceSegmentWidth + Spacing.one);
+    appearanceSelectionX.value = reducedMotion
+      ? withTiming(targetX, { duration: 0 })
+      : withSpring(targetX, { dampingRatio: 0.82, duration: 220 });
+  }, [appearanceIndex, appearanceSegmentWidth, appearanceSelectionX, reducedMotion]);
 
   useEffect(() => {
     if (!profile?.user) return;
@@ -109,31 +133,67 @@ export default function ProfileScreen() {
       </SheetSection></View>
       <View style={[styles.appearance, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
         <ThemedText type="subtitle">Appearance</ThemedText>
-        <View style={[styles.appearanceOptions, { backgroundColor: theme.backgroundElement }]}>
-          {([
-            ['system', 'System', 'theme-light-dark'],
-            ['light', 'Light', 'white-balance-sunny'],
-            ['dark', 'Dark', 'moon-waning-crescent'],
-          ] as const).map(([value, label, icon]) => <Pressable
-            accessibilityLabel={`${label} appearance`}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: themeOverride === value }}
+        <View onLayout={(event) => setAppearanceWidth(event.nativeEvent.layout.width)} style={[styles.appearanceOptions, { backgroundColor: theme.backgroundElement }]}>
+          <Animated.View pointerEvents="none" style={[styles.appearanceSelection, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder, width: appearanceSegmentWidth }, appearanceSelectionStyle]} />
+          {APPEARANCE_OPTIONS.map(([value, label, icon]) => <AppearanceOption
+            icon={icon}
             key={value}
-            onPress={() => { hapticLight(); setThemeOverride(value); }}
-            style={({ pressed }) => [styles.appearanceOption, { backgroundColor: themeOverride === value ? theme.homeSurface : 'transparent', borderColor: themeOverride === value ? theme.homeBorder : 'transparent', opacity: pressed ? 0.75 : 1 }]}
-          ><PlatformIcon color={themeOverride === value ? theme.text : theme.textSecondary} name={icon} size={16} /><ThemedText numberOfLines={1} themeColor={themeOverride === value ? 'text' : 'textSecondary'} type="captionBold">{label}</ThemedText></Pressable>)}
+            label={label}
+            onPress={() => {
+              if (themeOverride === value) return;
+              hapticLight();
+              setThemeOverride(value);
+            }}
+            selected={themeOverride === value}
+          />)}
         </View>
       </View>
-      <View style={[styles.signOut, { borderTopColor: theme.homeBorder }]}><ActionButton disabled={isSigningOut} label="Sign out" loading={isSigningOut} onPress={() => void signOut()} style={styles.signOutButton} variant="secondary" /></View>
+      <View style={[styles.signOut, { borderTopColor: theme.homeBorder }]}>
+        <ActionButton disabled={isSigningOut} label="Sign out" loading={isSigningOut} onPress={() => void signOut()} style={styles.signOutButton} variant="secondary" />
+      </View>
     </ScrollView>
     <TimezonePicker onClose={() => setTimezoneOpen(false)} onSelect={(value) => { setTimezone(value); setTimezoneOpen(false); }} value={timezone} visible={timezoneOpen} />
   </ThemedView>;
 }
 
+function AppearanceOption({ icon, label, onPress, selected }: { icon: (typeof APPEARANCE_OPTIONS)[number][2]; label: string; onPress: () => void; selected: boolean }) {
+  const theme = useTheme();
+  const { animatedStyle, onPressIn, onPressOut } = usePressFeedback();
+  const reducedMotion = useReducedMotion();
+  const iconProgress = useSharedValue<number>(selected ? 1 : 0);
+  const iconMotionStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${interpolate(iconProgress.value, [0, 1], [-12, 0])}deg` },
+      { scale: interpolate(iconProgress.value, [0, 1], [0.9, 1]) },
+    ],
+  }));
+
+  useEffect(() => {
+    iconProgress.value = reducedMotion
+      ? withTiming(selected ? 1 : 0, { duration: 0 })
+      : withSpring(selected ? 1 : 0, { dampingRatio: 0.7, duration: 190 });
+  }, [iconProgress, reducedMotion, selected]);
+
+  return <AnimatedPressable
+            accessibilityLabel={`${label} appearance`}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }}
+            onPress={onPress}
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            style={[styles.appearanceOption, animatedStyle]}>
+    <Animated.View style={iconMotionStyle}>
+      <PlatformIcon color={selected ? theme.text : theme.textSecondary} name={icon} size={16} />
+    </Animated.View>
+    <ThemedText numberOfLines={1} themeColor={selected ? 'text' : 'textSecondary'} type="captionBold">{label}</ThemedText>
+  </AnimatedPressable>;
+}
+
 const styles = StyleSheet.create({
   appearance: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.three, padding: Spacing.four },
-  appearanceOption: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flex: 1, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.one },
-  appearanceOptions: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.one, padding: Spacing.one },
+  appearanceOption: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flex: 1, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.one, zIndex: 1 },
+  appearanceOptions: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.one, overflow: 'hidden', padding: Spacing.one, position: 'relative' },
+  appearanceSelection: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, bottom: Spacing.one, left: 0, position: 'absolute', top: Spacing.one },
   content: { flexGrow: 1, gap: Spacing.four, padding: Spacing.four },
   identityCard: { alignItems: 'center', flexGrow: 1, gap: Spacing.two, justifyContent: 'center', minHeight: 220, paddingHorizontal: Spacing.four, paddingVertical: Spacing.five },
   identityCopy: { alignItems: 'center', gap: Spacing.one, maxWidth: '100%' },

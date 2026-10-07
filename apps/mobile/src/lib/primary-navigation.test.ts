@@ -8,6 +8,7 @@ import {
   primaryRouteOrder,
   primaryTabGeometry,
   primaryTabIndexAtX,
+  primaryTabSelectionOffset,
   primaryTabRubberBand,
   primaryTabResetTarget,
 } from './primary-navigation';
@@ -91,6 +92,11 @@ describe('primary tab route model', () => {
 
     expect(geometry).toEqual({ cellWidth: 88, indicatorLeft: 198, indicatorWidth: 44 });
     expect(pillCenter).toBe(220);
+  });
+
+  it('centers the white active marker in each tab cell, including compact rows', () => {
+    expect([0, 1, 2, 3].map((index) => primaryTabSelectionOffset(352, 4, index))).toEqual([24, 112, 200, 288]);
+    expect(primaryTabSelectionOffset(176, 4, 2)).toBe(90);
   });
 
   it('clamps drag release positions to a valid primary destination', () => {

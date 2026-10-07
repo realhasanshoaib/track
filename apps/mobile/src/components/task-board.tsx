@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  FlatList,
   ScrollView,
   StyleSheet,
   View,
@@ -367,29 +368,30 @@ function BoardColumn({
           {column.tasks.length}
         </ThemedText>
       </View>
-      <ScrollView
+      <FlatList
         contentContainerStyle={styles.columnBody}
-        showsVerticalScrollIndicator={false}
-        style={styles.columnScroller}>
-        {visibleTasks.map((item) => (
+        data={visibleTasks}
+        keyExtractor={(item) => item.task._id}
+        ListEmptyComponent={(
+          <View style={[styles.columnEmpty, { backgroundColor: palette.background, borderColor: palette.foreground }]}>
+            <PlatformIcon color={palette.foreground} name="view-column" size={20} />
+            <ThemedText style={{ color: palette.foreground }} type="caption">No tasks in this status</ThemedText>
+          </View>
+        )}
+        renderItem={({ item }) => (
           <BoardCard
             assigneeName={assigneeName}
             item={item}
-            key={item.task._id}
             onOpen={onOpen}
             onLongPress={() => onStatusPress(item)}
             onStatusPress={onStatusPress}
             readOnly={readOnly}
             focused={item.task._id === focusedTaskId}
           />
-        ))}
-        {!visibleTasks.length ? (
-          <View style={[styles.columnEmpty, { backgroundColor: palette.background, borderColor: palette.foreground }]}>
-            <PlatformIcon color={palette.foreground} name="view-column" size={20} />
-            <ThemedText style={{ color: palette.foreground }} type="caption">No tasks in this status</ThemedText>
-          </View>
-        ) : null}
-      </ScrollView>
+        )}
+        showsVerticalScrollIndicator={false}
+        style={styles.columnScroller}
+      />
     </View>
   );
 }

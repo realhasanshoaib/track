@@ -16,6 +16,7 @@ export type IconName =
   | 'analytics'
   | 'alert-circle'
   | 'apple'
+  | 'at-sign'
   | 'archive'
   | 'archive-restore'
   | 'arrow-down'
@@ -119,6 +120,7 @@ const SYMBOLS: Record<IconName, SymbolDefinition> = {
   analytics: { android: 'analytics', ios: 'chart.bar.xaxis', iosFilled: 'chart.bar.xaxis' },
   'alert-circle': { android: 'error', ios: 'exclamationmark.circle', iosFilled: 'exclamationmark.circle.fill' },
   apple: { android: 'phone_iphone', ios: 'apple.logo' },
+  'at-sign': { android: 'alternate_email', ios: 'at' },
   archive: { android: 'archive', ios: 'archivebox', iosFilled: 'archivebox.fill' },
   'archive-restore': { android: 'unarchive', ios: 'arrow.up.bin' },
   'arrow-down': { android: 'arrow_downward', ios: 'arrow.down' },

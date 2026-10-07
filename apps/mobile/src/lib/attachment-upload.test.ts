@@ -51,7 +51,7 @@ describe('sendComposerMessage recovery', () => {
 
   it('retries only failed attachments against the accepted message', async () => {
     let shouldFail = true;
-    const fetchFile = vi.fn().mockResolvedValue(new Response('file', { status: 200 }));
+    const fetchFile = vi.fn().mockImplementation(() => Promise.resolve(new Response('file', { status: 200 })));
     vi.stubGlobal('fetch', fetchFile);
     const target = makeTarget({
       generateUploadUrl: vi.fn(async ({ filename }) => {

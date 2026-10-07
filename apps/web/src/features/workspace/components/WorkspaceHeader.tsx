@@ -12,6 +12,8 @@ import { AvatarNameTooltip } from '#/features/workspace/avatar-tooltip'
 import { getAvatarTone, getInitials } from '#/features/workspace/identity'
 import type { ActiveChannelMemberItem } from '#/features/workspace/lib/channel-header-members'
 import { useReleaseConfig } from '#/lib/release-config'
+import { getWorkspaceHeaderLabels } from './workspace-header-labels'
+import './workspace-header.css'
 
 type ProjectItem = {
   project: Doc<'projects'>
@@ -35,7 +37,7 @@ type WorkspaceHeaderProps = {
   onMobileNavOpen: () => void
   onMobileRailOpen?: () => void
   onSearchToggle: () => void
-  view: 'home' | 'project' | 'channels' | 'group' | 'evidence' | 'settings'
+  view: Parameters<typeof getWorkspaceHeaderLabels>[0]['view']
 }
 
 export function WorkspaceHeader({
@@ -84,14 +86,15 @@ export function WorkspaceHeader({
     taskCountLabel = String(openChannelTaskCount)
     if (!channelTasks.isDone) taskCountLabel += '+'
   }
-  const scopeLabel = view === 'group' && activeGroup && activeProject
-    ? `${activeProject.membership.companyDisplayNameSnapshot ?? activeProject.project.clientLabel ?? 'Company'}, ${activeProject.project.name}, #${activeGroup.name}`
-    : activeProject
-      ? `${activeProject.membership.companyDisplayNameSnapshot ?? activeProject.project.clientLabel ?? 'Company'}, ${activeProject.project.name}`
-      : 'Workspace scope'
+  const headerLabels = getWorkspaceHeaderLabels({
+    companyName: activeProject?.membership.companyDisplayNameSnapshot ?? activeProject?.project.clientLabel,
+    groupName: activeGroup?.name,
+    projectName: activeProject?.project.name,
+    view,
+  })
 
   return (
-    <header aria-label={scopeLabel} className="track-thread-header">
+    <header aria-label={headerLabels.scopeLabel} className="track-thread-header">
       <Button
         aria-label="Open navigation"
         className="icon-button track-mobile-menu-button"
@@ -101,18 +104,10 @@ export function WorkspaceHeader({
         <Menu aria-hidden="true" size={16} />
       </Button>
       <div className="track-header-title">
-        <h1>
-          {view === 'group' && activeGroup
-            ? `#${activeGroup.name}`
-              : view === 'settings' && activeProject
-                ? `${activeProject.project.name} Settings`
-                : activeProject
-                  ? `${activeProject.project.name} Channels`
-                  : 'Select a Project'}
-        </h1>
-        {view === 'group' && activeProject ? (
-          <span className="track-header-topic">
-            {activeProject.membership.companyDisplayNameSnapshot ?? activeProject.project.clientLabel ?? 'Project'} · {activeProject.project.name}
+        <h1>{headerLabels.title}</h1>
+        {view !== 'home' && headerLabels.projectScopeLabel ? (
+          <span className="track-header-topic track-header-scope">
+            {headerLabels.projectScopeLabel}
           </span>
         ) : null}
       </div>

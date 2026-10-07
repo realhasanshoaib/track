@@ -16,6 +16,7 @@ import { useActingCompany } from '#/features/company/use-acting-company'
 import { resolveReleaseConfig, useReleaseConfigProjection } from '#/lib/release-config'
 
 import '#/features/company/company-settings.css'
+import '#/features/company/company-experience.css'
 
 export const Route = createFileRoute('/workspace/company/settings')({ component: CompanySettingsPage })
 

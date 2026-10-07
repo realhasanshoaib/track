@@ -68,6 +68,15 @@ the changed route or workflow and check the browser console for errors.
 Never remove, skip, or weaken a failing test to make the gate pass. Fix the
 failure or report the exact blocker.
 
+## Web UI/UX contract
+
+All user-facing work in `apps/web` MUST follow the [Track Web UI/UX Contract
+and Quality Gates](docs/ui-ux-professionalization.md). It applies to every
+route, shared component, overlay, async state, and responsive layout. Each
+changed route MUST pass every applicable gate with browser and interaction
+evidence; checking only the shared shell does not prove every route. The
+generated route tree is the source of truth for route coverage.
+
 ## Change boundaries
 
 - Preserve unrelated work in a dirty worktree.

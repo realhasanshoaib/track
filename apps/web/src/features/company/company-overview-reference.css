@@ -20,9 +20,14 @@
 
 .company-reference-shell > .company-hub {
   min-width: 0;
+  max-width: 1500px;
+  justify-self: center;
   overflow: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   padding: 0 clamp(24px, 3vw, 44px) 40px;
-  background: var(--paper);
+  background: transparent;
   color: var(--company-ref-text);
 }
 
@@ -2345,6 +2350,38 @@
 .company-overview-live .company-dashboard-stat > small,
 .company-overview-live .company-dashboard-stat-chart {
   display: none;
+}
+
+@media (max-width: 520px) {
+  .company-reference-shell .company-overview-live .company-dashboard-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .company-reference-shell .company-overview-live .company-dashboard-stat {
+    min-height: 72px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 8px 10px;
+    padding-inline: 10px;
+  }
+}
+
+.company-overview-live .company-dashboard-welcome .company-overview-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--company-ref-muted);
+  font: 650 10px/1.2 var(--font-meta);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.company-overview-live .company-dashboard-welcome h1 {
+  margin: 0;
+  color: var(--company-ref-text);
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2vw, 30px);
+  font-weight: 690;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
 }
 
 .company-overview-live .company-dashboard-grid {

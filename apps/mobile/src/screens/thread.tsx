@@ -3,6 +3,7 @@ import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import Animated, { FadeInUp, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import { parseMentions } from '@track/shared';
 
@@ -32,6 +33,7 @@ import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
+import { reconcilePendingMessages, type PendingMessage } from '@/lib/pending-messages';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfig } from '@/lib/release-config';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
@@ -45,6 +47,9 @@ import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-e
 import { archivePresentation } from '@/lib/archive-presentation';
 
 const FIVE_MINUTES = 5 * 60 * 1000;
+const PendingMessageEntering = FadeInUp.duration(170);
+const PendingMessageExiting = FadeOutUp.duration(120);
+const PendingMessageLayout = LinearTransition.duration(150);
 
 function dateSepLabel(timestamp: number) {
   const date = new Date(timestamp);
@@ -58,6 +63,7 @@ function dateSepLabel(timestamp: number) {
 
 export default function ThreadScreen() {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const { showToast } = useAppToast();
   const router = useRouter();
   const network = useNetworkState();
@@ -140,6 +146,7 @@ export default function ThreadScreen() {
   const knownAssistantStreamsRef = useRef<Map<Id<'assistantStreams'>, string> | null>(null);
   const newestFeedTimeRef = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
   const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -336,6 +343,11 @@ export default function ThreadScreen() {
     }
     newestFeedTimeRef.current = newestTime;
   }, [assistantStreams, messages, trackUserId]);
+  useEffect(() => {
+    if (!messages) return;
+    const receivedIds = new Set((messages as DetailedMessage[]).map(({ message }) => message._id));
+    setPendingMessages((pending) => reconcilePendingMessages(pending, receivedIds));
+  }, [messages]);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -416,6 +428,13 @@ export default function ThreadScreen() {
       sendKey.current = idempotencyKey();
       sendSignatureRef.current = sendSignature;
     }
+    const pendingId = body && payload.attachments.length === 0 ? `pending-${sendKey.current}` : null;
+    if (pendingId) {
+      setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
+        ? pending
+        : [...pending, { id: pendingId, body, at: Date.now() }]);
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    }
     setBusy(true);
     setError(null);
     try {
@@ -466,18 +485,31 @@ export default function ThreadScreen() {
         },
       });
 
-      if (result.messageId) {
+      const sentMessageId = result.messageId;
+      if (sentMessageId) {
+        if (pendingId) {
+          if (knownMessageIdsRef.current?.has(sentMessageId)) {
+            setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
+          } else {
+            setPendingMessages((pending) => pending.map((message) => message.id === pendingId
+              ? { ...message, messageId: sentMessageId }
+              : message));
+          }
+        }
         scrollToLatestAfterSendRef.current = true;
         requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
       }
-      if (result.messageId && parseMentions(body).includes('track')) {
-        requestTrackResponse(result.messageId, body);
+      if (sentMessageId && parseMentions(body).includes('track')) {
+        requestTrackResponse(sentMessageId, body);
       }
       if (result.failedIds.length === 0) {
         sendKey.current = null;
         sendSignatureRef.current = null;
       }
       return result;
+    } catch (sendError) {
+      if (pendingId) setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
+      throw sendError;
     } finally {
       setBusy(false);
     }
@@ -927,6 +959,31 @@ export default function ThreadScreen() {
               <ThemedText type="smallBold">Load older replies</ThemedText>
             </Pressable> : null}
           </>}
+          ListFooterComponent={pendingMessages.length ? (
+            <Animated.View
+              entering={reducedMotion ? undefined : FadeInUp.duration(170)}
+              exiting={reducedMotion ? undefined : FadeOutUp.duration(120)}
+              layout={reducedMotion ? undefined : PendingMessageLayout}
+            >
+              {pendingMessages.map((message) => (
+                <Animated.View
+                  entering={reducedMotion ? undefined : PendingMessageEntering}
+                  exiting={reducedMotion ? undefined : PendingMessageExiting}
+                  key={message.id}
+                  layout={reducedMotion ? undefined : PendingMessageLayout}
+                  style={styles.pendingRow}
+                >
+                  <View style={[styles.pendingBody, { backgroundColor: theme.accentSoft, borderColor: theme.accent }]}>
+                    <PlatformIcon color={theme.accentStrong} name="clock-outline" size={14} />
+                    <View style={styles.pendingCopy}>
+                      <ThemedText themeColor="accentStrong" type="captionBold">Sending</ThemedText>
+                      <ThemedText style={styles.pendingText} type="small">{message.body}</ThemedText>
+                    </View>
+                  </View>
+                </Animated.View>
+              ))}
+            </Animated.View>
+          ) : null}
           onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 }))}
           onLayout={({ nativeEvent }) => {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
@@ -1068,6 +1125,10 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  pendingBody: { alignItems: 'flex-start', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '86%', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  pendingCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
+  pendingRow: { alignItems: 'flex-end', paddingHorizontal: Spacing.four, paddingVertical: Spacing.one },
+  pendingText: { flexShrink: 1 },
   jumpToLatest: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0 3px 10px rgba(0,0,0,0.14)', flexDirection: 'row', gap: Spacing.one, height: TouchTarget, justifyContent: 'center', minWidth: TouchTarget, paddingHorizontal: Spacing.two, position: 'absolute', right: Spacing.three },
   jumpToLatestCount: { textAlign: 'center' },
   headerIdentity: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, maxWidth: 230, minHeight: TouchTarget, paddingHorizontal: Spacing.two },

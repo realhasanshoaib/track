@@ -23,6 +23,7 @@ import { DateField } from '@/components/date-field';
 import { ActionButton } from '@/components/action-button';
 import { CompactPillButton } from '@/components/compact-pill-button';
 import { ColoredAvatar } from '@/components/colored-avatar';
+import { EntityMark } from '@/components/entity-mark';
 import { EmptyState } from '@/components/empty-state';
 import { IconButton } from '@/components/icon-button';
 import { OptionsSheet, SheetInput, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
@@ -505,7 +506,7 @@ export default function TaskScreen() {
   return (
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{
-        title: shortTaskKey(detail.task.publicKey),
+        title: 'Task',
         headerRight: () => (
           <View style={styles.headerActions}>
             <IconButton
@@ -594,7 +595,7 @@ export default function TaskScreen() {
                 value={titleDraft}
               />
             )}
-            <View style={styles.primaryStatus}>
+            <View style={styles.identityRow}>
               <TaskStatusPill
                 category={detail.state?.category}
                 label={detail.state?.name ?? 'Unknown'}
@@ -610,50 +611,94 @@ export default function TaskScreen() {
                   Clipboard.setString(detail.task.publicKey);
                   setKeyCopied(true);
                   setTimeout(() => setKeyCopied(false), 1500);
-                }}>
-                <ThemedText themeColor="textTertiary" type="mono">
+                }}
+                style={({ pressed }) => [styles.taskKeyButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, borderColor: theme.homeBorder }]}
+              >
+                <PlatformIcon color={theme.textTertiary} name={keyCopied ? 'check' : 'content-copy'} size={13} />
+                <ThemedText themeColor="textSecondary" type="mono">
                   {keyCopied ? 'Copied' : shortTaskKey(detail.task.publicKey)}
                 </ThemedText>
               </Pressable>
             </View>
-            <View style={styles.projectContext}>
-              <PlatformIcon color={theme.textSecondary} name="project" size={15} />
-              <ThemedText numberOfLines={1} style={styles.contextName} themeColor="textSecondary" type="captionBold">
-                {projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project'}
-              </ThemedText>
-              {detail.board ? <>
-                <PlatformIcon color={theme.textTertiary} name="chevron-right" size={13} />
-                <ThemedText numberOfLines={1} style={styles.contextName} themeColor="textTertiary" type="caption">{detail.board.name}</ThemedText>
-              </> : null}
-            </View>
             <Pressable
-              accessibilityHint={readOnly ? undefined : 'Changes who owns this task'}
-              accessibilityLabel={`Assignee: ${assigneeName}`}
-              accessibilityRole={readOnly ? 'text' : 'button'}
-              disabled={readOnly}
-              onPress={() => setField('assignee')}
-              style={({ pressed }) => [styles.assigneeRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>
-              {detail.assignee
-                ? <ColoredAvatar label={assigneeName} seed={assigneeName} size={34} />
-                : <View style={[styles.unassignedAvatar, { backgroundColor: theme.backgroundElement }]}><PlatformIcon color={theme.textSecondary} name="person" size={17} /></View>}
-              <View style={styles.assigneeCopy}>
-                <ThemedText themeColor="textSecondary" type="caption">Assigned to</ThemedText>
-                <ThemedText numberOfLines={1} type="smallBold">{assigneeName}</ThemedText>
+              accessibilityHint="Opens this task on its Project Board"
+              accessibilityLabel={`Open ${projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project'}${detail.board ? `, ${detail.board.name} Board` : ''}`}
+              accessibilityRole="button"
+              onPress={() => {
+                hapticLight();
+                if (detail.board) {
+                  router.push(taskListHref(project, routeIdentity, undefined, undefined, {
+                    boardId: detail.task.boardId,
+                    taskId: detail.task._id,
+                  }));
+                } else {
+                  router.push(projectOverviewHref(project, routeIdentity ? {
+                    archived: Boolean(routeIdentity.archived),
+                    companyId: routeIdentity.companyId,
+                    membershipId: routeIdentity.membershipId,
+                  } : null));
+                }
+              }}
+              style={({ pressed }) => [styles.projectBoardCard, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
+            >
+              <EntityMark
+                colorKey={projectNavigation?.project?.markColorKey}
+                iconKey={projectNavigation?.project?.markIconKey}
+                id={String(project)}
+                kind="project"
+                name={projectNavigation?.project?.name ?? 'Project'}
+                size={40}
+              />
+              <View style={styles.projectBoardCopy}>
+                <ThemedText themeColor="textTertiary" type="captionBold">PROJECT</ThemedText>
+                <ThemedText numberOfLines={1} type="smallBold">{projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project'}</ThemedText>
+                <View style={styles.boardDestination}>
+                  <PlatformIcon color={theme.textSecondary} name="view-board" size={14} />
+                  <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{detail.board?.name ?? 'Project overview'}</ThemedText>
+                </View>
               </View>
-              {readOnly ? null : <PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} />}
+              <PlatformIcon color={theme.textSecondary} name="chevron-right" size={19} />
             </Pressable>
-            <View style={styles.statusControls}>
-              <TaskPriorityBadge
-                compact
-                onPress={readOnly ? undefined : () => setField('priority')}
-                priority={detail.task.priority}
-              />
-              <TaskDueChip
-                category={detail.state?.category}
-                dueDate={detail.task.dueDate}
-                onPress={readOnly ? undefined : () => setField('dueDate')}
-                showNoDate
-              />
+            <View style={[styles.propertiesCard, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+              <Pressable
+                accessibilityHint={readOnly ? undefined : 'Changes who owns this task'}
+                accessibilityLabel={`Assignee: ${assigneeName}`}
+                accessibilityRole={readOnly ? 'text' : 'button'}
+                disabled={readOnly}
+                onPress={() => setField('assignee')}
+                style={({ pressed }) => [styles.assigneeRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
+              >
+                {detail.assignee
+                  ? <ColoredAvatar label={assigneeName} seed={assigneeName} size={36} />
+                  : <View style={[styles.unassignedAvatar, { backgroundColor: theme.backgroundElement }]}><PlatformIcon color={theme.textSecondary} name="person" size={17} /></View>}
+                <View style={styles.assigneeCopy}>
+                  <ThemedText themeColor="textSecondary" type="caption">Assignee</ThemedText>
+                  <ThemedText numberOfLines={1} type="smallBold">{assigneeName}</ThemedText>
+                </View>
+                {readOnly ? null : <PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} />}
+              </Pressable>
+              <View style={[styles.propertyDivider, { backgroundColor: theme.homeBorder }]} />
+              <View style={styles.propertyGrid}>
+                <View style={styles.propertyField}>
+                  <ThemedText themeColor="textSecondary" type="caption">Priority</ThemedText>
+                  <TaskPriorityBadge
+                    compact
+                    onPress={readOnly ? undefined : () => setField('priority')}
+                    priority={detail.task.priority}
+                    showNone
+                  />
+                </View>
+                <View style={[styles.propertyDividerVertical, { backgroundColor: theme.homeBorder }]} />
+                <View style={styles.propertyField}>
+                  <ThemedText themeColor="textSecondary" type="caption">Due date</ThemedText>
+                  <TaskDueChip
+                    category={detail.state?.category}
+                    dueDate={detail.task.dueDate}
+                    onPress={readOnly ? undefined : () => setField('dueDate')}
+                    showNoDate
+                  />
+                </View>
+              </View>
             </View>
           </ScreenEntrance>
 
@@ -933,16 +978,22 @@ const styles = StyleSheet.create({
   assigneeCopy: { flex: 1, gap: 2, minWidth: 0 },
   assigneeRow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, paddingHorizontal: Spacing.two },
   bottomDock: { alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
-  contextName: { flexShrink: 1 },
   editTitleButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.three },
   expandedUpdateButton: { flex: 1 },
-  projectContext: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
-  primaryStatus: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
-  statusControls: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  identityRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
+  taskKeyButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, minHeight: 36, paddingHorizontal: Spacing.two },
+  projectBoardCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.three, minHeight: 84, padding: Spacing.three },
+  projectBoardCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
+  boardDestination: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  propertiesCard: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+  propertyDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.one },
+  propertyGrid: { alignItems: 'stretch', flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.one, paddingVertical: Spacing.two },
+  propertyDividerVertical: { width: StyleSheet.hairlineWidth },
+  propertyField: { flex: 1, gap: Spacing.one, justifyContent: 'center', minWidth: 0 },
   unassignedAvatar: { alignItems: 'center', borderRadius: Radius.pill, height: 34, justifyContent: 'center', width: 34 },
   updateButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.three },
   headerActions: { alignItems: 'center', flexDirection: 'row' },
-  hero: { gap: Spacing.two },
+  hero: { gap: Spacing.three },
   titleRow: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.one },
   screen: { flex: 1 },
   taskTitle: { ...Typography.display, flex: 1, fontSize: 28, letterSpacing: -0.5, lineHeight: 35, minWidth: 0 },

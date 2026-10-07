@@ -6,6 +6,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { CompanyThreadBrowser } from "#/features/threads/CompanyThreadBrowser";
 import type { CompanyTaskFilter } from "./company-view-state";
+import { isOpenCompanyTask, matchesCompanyTaskFilters } from "./company-global-work-state";
 
 type ProjectItem = FunctionReturnType<typeof api.sharedProjects.listForActingCompany>[number];
 type TaskItem = FunctionReturnType<typeof api.companyOverview.listTasks>[number];
@@ -34,10 +35,6 @@ function taskInitials(item: TaskItem) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 }
 
-function isOpenTask(item: TaskItem) {
-  return item.state?.category !== "completed" && item.state?.category !== "canceled";
-}
-
 export function CompanyGlobalWork({ actingCompanyId, companyName, currentUserId, initialFilter = "all", projects, searchQuery, tasks, view }: {
   actingCompanyId: Id<"companies">;
   companyName: string;
@@ -54,7 +51,7 @@ export function CompanyGlobalWork({ actingCompanyId, companyName, currentUserId,
   const dueSoonLimit = new Date();
   dueSoonLimit.setDate(dueSoonLimit.getDate() + 7);
   const dueSoonKey = localDateKey(dueSoonLimit);
-  const activeTasks = tasks.filter(isOpenTask);
+  const activeTasks = tasks.filter(isOpenCompanyTask);
   const completedCount = tasks.length - activeTasks.length;
   const overdueCount = activeTasks.filter((item) => item.task.dueDate && item.task.dueDate < today).length;
   const dueSoonCount = activeTasks.filter((item) => item.task.dueDate && item.task.dueDate >= today && item.task.dueDate <= dueSoonKey).length;
@@ -62,16 +59,12 @@ export function CompanyGlobalWork({ actingCompanyId, companyName, currentUserId,
   useEffect(() => setFilter(initialFilter), [initialFilter]);
   const visibleTasks = useMemo(() => {
     const normalized = `${search} ${searchQuery ?? ""}`.trim().toLocaleLowerCase();
-    return tasks.filter((item) => {
-      const dueDate = item.task.dueDate;
-      if (filter === "active" && !isOpenTask(item)) return false;
-      if (filter === "completed" && isOpenTask(item)) return false;
-      if (filter === "overdue" && (!dueDate || dueDate >= today)) return false;
-      if (filter === "due-soon" && (!dueDate || dueDate < today || dueDate > dueSoonKey)) return false;
-      if (filter === "blocked" && item.state?.name.trim().toLocaleLowerCase() !== "blocked") return false;
-      if (filter === "unassigned" && item.assignee) return false;
-      return !normalized || `${item.task.title} ${item.project.name} ${item.state?.name ?? ""}`.toLocaleLowerCase().includes(normalized);
-    });
+    return tasks.filter((item) => matchesCompanyTaskFilters(item, {
+      dueSoonKey,
+      filter,
+      normalizedSearch: normalized,
+      today,
+    }));
   }, [dueSoonKey, filter, search, searchQuery, tasks, today]);
 
   const threadProjects = (

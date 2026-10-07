@@ -5,7 +5,7 @@ import type { EntityMarkColorKey, EntityMarkIconKey } from '@track/shared';
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
@@ -821,15 +821,14 @@ export default function TasksScreen() {
           {heading}
           {collection}
         </View></ScreenEntrance>
-      ) : (
+      ) : tab === 'inbox' ? (
         <ScreenEntrance style={styles.screenContent}><ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset + TouchTarget + Spacing.four }]}
           contentInsetAdjustmentBehavior="automatic"
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled">
           {heading}
-          {tab === 'inbox'
-            ? <SuggestionInbox
+          <SuggestionInbox
                 focusedSuggestionId={suggestionId}
                 onAccept={accept}
                 onDismiss={(row) => void runSuggestion(() => dismissSuggestion({
@@ -851,8 +850,28 @@ export default function TasksScreen() {
                 readOnly={readOnly}
                 suggestions={suggestions}
               />
-            : collection}
         </ScrollView></ScreenEntrance>
+      ) : (
+        <ScreenEntrance style={styles.screenContent}>
+          <TaskCollection
+            activeBoardStateId={activeBoardStateId}
+            assigneeName={assigneeName}
+            bottomPadding={bottomContentInset + TouchTarget + Spacing.four}
+            columns={columns}
+            focusedTaskId={focusedTaskId}
+            listHeader={heading}
+            onActiveBoardStateChange={setActiveBoardStateId}
+            onCreate={() => setCreateOpen(true)}
+            onMove={move}
+            onOpen={(item) => router.push(taskDetailHref(project, item.task.publicKey, identity))}
+            onStatusPress={openProjectTaskStatus}
+            onViewAll={() => undefined}
+            readOnly={readOnly}
+            selectedBoard={selectedBoard}
+            tab={viewMode === 'board' ? 'board' : 'all'}
+            tasks={boards === undefined ? undefined : viewMode === 'board' ? tasks : visibleProjectTasks}
+          />
+        </ScreenEntrance>
       )}
 
       <OptionsSheet onClose={() => setStatusTarget(null)} title="Move to" visible={Boolean(statusTarget)}>
@@ -972,7 +991,7 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  boardScreen: { flex: 1, gap: Spacing.three, padding: Spacing.four },
+  boardScreen: { flex: 1, gap: Spacing.three, padding: Spacing.four, paddingTop: Platform.OS === 'ios' ? Spacing.six : Spacing.four },
   content: { gap: Spacing.three, padding: Spacing.four },
   fieldCell: { flex: 1, minWidth: 150 },
   fieldCellStacked: { flex: 0, width: '100%' },

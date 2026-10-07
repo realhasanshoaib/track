@@ -129,10 +129,6 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   const reducedMotion = useReducedMotion();
   const [rowWidth, setRowWidth] = useState(0);
   const hiddenProgress = useSharedValue(hidden ? 1 : 0);
-  const dragX = useSharedValue(0);
-  const dragOpacity = useSharedValue(0);
-  const dragStretch = useSharedValue(1);
-  const dragPillWidth = rowWidth / Math.max(items.length, 1);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return undefined;
@@ -155,48 +151,27 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
 
   function commitDrag(index: number) {
     const item = items[index];
-    if (item && !item.disabled) onSelect(item);
+    if (item && !item.disabled) {
+      hapticLight();
+      onSelect(item);
+    }
   }
 
   const drag = Gesture.Pan()
     .activateAfterLongPress(180)
-    .onBegin((event) => {
-      dragX.set(event.x);
-      dragOpacity.set(1);
-      dragStretch.set(1.08);
-    })
-    .onUpdate((event) => {
-      dragX.set(Math.max(dragPillWidth / 2, Math.min(rowWidth - dragPillWidth / 2, event.x)));
-      dragStretch.set(Math.min(1.28, 1 + Math.abs(event.velocityX) / 3_000));
-    })
     .onEnd((event) => {
       const index = primaryTabIndexAtX(event.x, rowWidth, items.length);
-      const target = (index + 0.5) * (rowWidth / items.length);
-      dragX.set(reducedMotion ? target : withSpring(target, { dampingRatio: 1, duration: 320, velocity: event.velocityX }));
-      dragStretch.set(withSpring(1, { dampingRatio: 1, duration: 220 }));
-      dragOpacity.set(withTiming(0, { duration: reducedMotion ? 80 : 140 }));
       scheduleOnRN(commitDrag, index);
-    })
-    .onFinalize(() => {
-      dragStretch.set(withSpring(1, { dampingRatio: 1, duration: 180 }));
-      dragOpacity.set(withTiming(0, { duration: 100 }));
     });
 
   const positionStyle = useAnimatedStyle(() => ({
     opacity: 1 - hiddenProgress.get(),
     transform: [{ translateY: hiddenProgress.get() * (navigationHeight + insets.bottom + 24) }],
   }));
-  const dragStyle = useAnimatedStyle(() => ({
-    opacity: dragOpacity.get(),
-    transform: [{ translateX: dragX.get() - dragPillWidth / 2 }, { scaleX: dragStretch.get() }],
-  }));
-
   const solidSelection = isAndroid || reduceTransparency;
-  const selectionSurface = theme.homeBackground;
   const useNativeGlass = Platform.OS === 'ios' && !reduceTransparency && safeGlassAvailability();
   const navigationSurface = solidSelection ? theme.homeSurface : 'transparent';
   const navigationRow = <View accessibilityRole="tablist" onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)} style={[styles.row, { height: navigationHeight }]}>
-    <Animated.View pointerEvents="none" style={[styles.dragPill, { backgroundColor: selectionSurface, borderColor: 'transparent', height: navigationHeight, width: dragPillWidth }, dragStyle]} />
     {items.map((item) => <NavigationTab active={item.key === activeKey} item={item} key={item.key} onPress={() => onSelect(item)} />)}
   </View>;
 
@@ -247,6 +222,7 @@ function NavigationTab({ active, item, onPress }: {
 }) {
   const theme = useTheme();
   const isAndroid = Platform.OS === 'android';
+  const activeIconColor = theme.background === '#1b1917' ? theme.accentStrong : '#A07800';
   return <Pressable
     accessibilityLabel={item.label}
     accessibilityRole="tab"
@@ -256,10 +232,10 @@ function NavigationTab({ active, item, onPress }: {
     onPress={() => { hapticLight(); onPress(); }}
     style={({ pressed }) => [styles.item, { backgroundColor: 'transparent', opacity: item.disabled ? 0.38 : pressed ? 0.9 : 1 }]}
   >
-    <View style={[styles.iconWell, { backgroundColor: active ? 'transparent' : theme.homeSurface, borderColor: active ? 'transparent' : theme.homeBorder }]}>
-      <PlatformIcon color={active ? theme.accentStrong : theme.textSecondary} name={item.icon} size={isAndroid ? 24 : IconSize.large + 4} variant={active ? 'filled' : 'outline'} weight={active ? 'semibold' : 'regular'} />
+    <View style={[styles.iconWell, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
+      <PlatformIcon color={active ? activeIconColor : theme.textSecondary} name={item.icon} size={isAndroid ? 24 : IconSize.large + 4} variant={active ? 'filled' : 'outline'} weight={active ? 'semibold' : 'regular'} />
     </View>
-    <ThemedText numberOfLines={1} style={[styles.itemLabel, isAndroid && styles.androidItemLabel, { color: active ? theme.accentStrong : theme.textSecondary }]} type="captionBold">{item.label}</ThemedText>
+    <ThemedText numberOfLines={1} style={[styles.itemLabel, isAndroid && styles.androidItemLabel, { color: theme.textSecondary }]} type="captionBold">{item.label}</ThemedText>
   </Pressable>;
 }
 
@@ -297,7 +273,6 @@ const styles = StyleSheet.create({
   createButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, height: 56, justifyContent: 'center', width: 56 },
   createButtonFill: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
   createSlot: { alignItems: 'center', elevation: 10, position: 'absolute', zIndex: 10 },
-  dragPill: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, left: 0, position: 'absolute' },
   androidSafeArea: { bottom: 0, left: 0, position: 'absolute', right: 0 },
   fabBand: { overflow: 'visible', position: 'relative', zIndex: 5 },
   iconWell: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 40, justifyContent: 'center', width: 40 },

@@ -6,6 +6,7 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { hapticLight } from '@/lib/haptics';
 import {
   shortTaskKey,
@@ -244,6 +245,7 @@ export function TaskCard({
   const theme = useTheme();
   const board = variant === 'board';
   const statePalette = taskStatePalette(theme, category);
+  const pressFeedback = usePressFeedback({ pressedScale: board ? 0.985 : 0.99 });
 
   if (quiet && !board) {
     const due = taskDueDisplay(dueDate, undefined, category);
@@ -252,26 +254,24 @@ export function TaskCard({
       .join('. ');
     const dueLabel = due?.label ?? (alwaysShowPriority ? 'No due date' : undefined);
     return <View style={[styles.quietRow, glass && styles.quietGlassRow, { backgroundColor: glass ? theme.navigationSelectionGlass : 'transparent', borderColor: glass ? theme.homeBorder : theme.hairline }]}>
-      {onCompletionPress ? <Pressable
+      {onCompletionPress ? <AnimatedPressable
         accessibilityHint={isCompleted ? 'Opens status choices so you can reopen this task' : 'Marks this task complete'}
         accessibilityLabel={`${isCompleted ? 'Completed' : 'Mark complete'}: ${title}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isCompleted }}
         hitSlop={8}
+        onPressIn={pressFeedback.onPressIn}
+        onPressOut={pressFeedback.onPressOut}
         onPress={() => { hapticLight(); onCompletionPress(); }}
-        style={styles.quietCheckbox}
-      ><PlatformIcon color={isCompleted ? theme.success : theme.textSecondary} name={isCompleted ? 'check-circle' : 'circle-outline'} size={21} /></Pressable> : null}
-      <Pressable
+        style={[styles.quietCheckbox, pressFeedback.animatedStyle]}
+      ><PlatformIcon color={isCompleted ? theme.success : theme.textSecondary} name={isCompleted ? 'check-circle' : 'circle-outline'} size={21} /></AnimatedPressable> : null}
+      <AnimatedPressable
         accessibilityLabel={`${title}. ${taskContext}${evidence ? '. Linked to conversation evidence' : ''}. ${stateName}${dueLabel ? `. ${dueLabel}` : ''}`}
         accessibilityRole="button"
         onPress={onPress}
-        style={({ pressed }) => [styles.quietPressable, {
-          backgroundColor: pressed ? theme.backgroundSelected : 'transparent',
-          borderColor: pressed ? theme.textTertiary : 'transparent',
-          borderRadius: Radius.medium,
-          borderWidth: pressed ? StyleSheet.hairlineWidth : 0,
-          boxShadow: pressed ? '0 2px 8px rgba(0,0,0,0.16)' : undefined,
-        }]}
+        onPressIn={pressFeedback.onPressIn}
+        onPressOut={pressFeedback.onPressOut}
+        style={[styles.quietPressable, pressFeedback.animatedStyle]}
       >
         {assignee ? <ColoredAvatar label={assignee} seed={assignee} size={28} /> : null}
         <View style={styles.quietCopy}>
@@ -286,7 +286,7 @@ export function TaskCard({
           <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{[contextLabel ? `Board ${contextLabel}` : null, groupName ? `#${groupName.replace(/^#/, '')}` : null, alwaysShowPriority || priority === 'urgent' || priority === 'high' ? taskPriorityLabel(priority) : null].filter(Boolean).join(' · ')}</ThemedText>
           <TaskDueChip category={category} dueDate={dueDate} showNoDate={alwaysShowPriority} />
         </View>
-      </Pressable>
+      </AnimatedPressable>
       <View style={styles.quietAction}><TaskStatusPill category={category} label={stateName} onPress={onStatusPress} /></View>
     </View>;
   }
@@ -299,13 +299,15 @@ export function TaskCard({
     return (
       <View style={[styles.listRow, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
         <View style={styles.listRowContent}>
-          <Pressable
+          <AnimatedPressable
             accessibilityHint="Opens the task"
             accessibilityLabel={`${title}. ${context}. ${stateName}${due ? `. ${due.label}` : ''}`}
             accessibilityRole="button"
             android_ripple={{ color: theme.backgroundSelected }}
             onPress={onPress}
-            style={({ pressed }) => [styles.listRowPressable, { opacity: pressed ? 0.7 : 1 }]}>
+            onPressIn={pressFeedback.onPressIn}
+            onPressOut={pressFeedback.onPressOut}
+            style={[styles.listRowPressable, pressFeedback.animatedStyle]}>
             <View style={[styles.listLeading, { backgroundColor: statePalette.background }]}>
               {assignee && assignee !== 'You'
                 ? <ColoredAvatar label={assignee} seed={assignee} size={32} />
@@ -329,7 +331,7 @@ export function TaskCard({
                 </ThemedText>
               </View>
             </View>
-          </Pressable>
+          </AnimatedPressable>
           <View style={styles.listTrailing}>
             <View style={styles.listTrailingLine}>
               <TaskDueChip category={category} dueDate={dueDate} />
@@ -367,7 +369,7 @@ export function TaskCard({
         </View>
         <TaskPriorityBadge compact priority={priority} />
       </View>
-      <Pressable
+      <AnimatedPressable
         accessibilityHint={onLongPress ? 'Opens the task. Touch and hold to move it.' : 'Opens the task'}
         accessibilityLabel={`${focused ? 'Opened task. ' : ''}${title}, ${stateName}${evidence ? ', linked to conversation evidence' : ''}`}
         accessibilityRole="button"
@@ -375,7 +377,9 @@ export function TaskCard({
         delayLongPress={350}
         onLongPress={onLongPress ? () => { hapticLight(); onLongPress(); } : undefined}
         onPress={onPress}
-        style={({ pressed }) => [styles.cardPressable, board && styles.boardCardPressable, { opacity: pressed ? 0.84 : 1 }]}>
+        onPressIn={pressFeedback.onPressIn}
+        onPressOut={pressFeedback.onPressOut}
+        style={[styles.cardPressable, board && styles.boardCardPressable, pressFeedback.animatedStyle]}>
         <View style={styles.titleRow}>
           {board ? <PlatformIcon color={theme.text} name="check-box-outline" size={17} /> : null}
           <ThemedText numberOfLines={2} style={styles.cardTitle} type="smallBold">{title}</ThemedText>
@@ -411,7 +415,7 @@ export function TaskCard({
             {!board && assignee ? <ColoredAvatar label={assignee} seed={assignee} size={22} /> : null}
           </View>
         </View>
-      </Pressable>
+      </AnimatedPressable>
     </View>
   );
 }

@@ -1,8 +1,9 @@
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { Radius, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { hapticLight } from '@/lib/haptics';
 
 type Props = {
@@ -30,30 +31,33 @@ export function IconButton({
   const theme = useTheme();
   const unavailable = disabled || loading;
   const color = selected ? theme.accentStrong : theme.textSecondary;
+  const pressFeedback = usePressFeedback({ disabled: unavailable, pressedScale: 0.96 });
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ busy: loading, disabled: unavailable, selected }}
       android_ripple={{ borderless: true, color: theme.backgroundSelected }}
       disabled={unavailable}
       hitSlop={4}
+      onPressIn={pressFeedback.onPressIn}
+      onPressOut={pressFeedback.onPressOut}
       onPress={() => {
         hapticLight();
         onPress();
       }}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         {
           backgroundColor: appearance === 'plain' ? 'transparent' : selected ? theme.accentSoft : theme.homeSurface,
           borderColor: appearance === 'plain' ? 'transparent' : theme.homeBorder,
-          opacity: unavailable ? 0.42 : pressed ? 0.68 : 1,
-          transform: [{ scale: pressed ? 0.96 : 1 }],
+          opacity: unavailable ? 0.42 : 1,
         },
+        pressFeedback.animatedStyle,
       ]}>
       {loading ? <ActivityIndicator color={color} size="small" /> : <PlatformIcon color={color} name={icon} size={size} weight="medium" />}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

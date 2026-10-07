@@ -12,6 +12,7 @@ import { useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { UploadableFile } from '@/lib/attachment-upload';
 import { hapticDestructive, hapticLight, hapticMedium } from '@/lib/haptics';
+import { shouldFinishVoiceOnRelease, type VoiceGestureOutcome } from '@/lib/voice-recording-gesture';
 
 /**
  * Camera frames are re-encoded by the picker before they reach us. Dropping
@@ -240,10 +241,9 @@ export function useVoiceRecorder(handlers: {
   }
 
   /** Called when the hold gesture ends; `outcome` is 0 unless already resolved. */
-  function release(outcome: number) {
+  function release(outcome: VoiceGestureOutcome) {
     hold.current.holding = false;
-    if (outcome !== 0 || modeRef.current !== 'recording') return;
-    void finish();
+    if (shouldFinishVoiceOnRelease(modeRef.current, outcome)) void finish();
   }
 
   return { cancel, durationMs: state.durationMillis, finish, level, lock, mode, release, start };

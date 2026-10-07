@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { AssistantMark } from '@/components/chat/assistant-mark';
 import { CompactPillButton } from '@/components/compact-pill-button';
 import { EntityMark } from '@/components/entity-mark';
@@ -36,7 +36,7 @@ export function TasksToolbar({ boardName, boardId, boardColorKey, boardIconKey, 
 
 function ToolbarIcon({ active, icon, label, onPress }: { active: boolean; icon: 'filter' | 'flag' | 'search'; label: string; onPress: () => void }) {
   const theme = useTheme();
-  return <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ selected: active }} android_ripple={{ color: theme.backgroundSelected, borderless: true }} onPress={onPress} style={[styles.toolbarIcon, { backgroundColor: active ? theme.accentSoft : theme.backgroundElement }]}><PlatformIcon color={active ? theme.accentStrong : theme.textSecondary} name={icon} size={18} /></Pressable>;
+  return <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ selected: active }} android_ripple={{ color: theme.backgroundSelected, borderless: true }} onPress={onPress} style={({ pressed }) => [styles.toolbarIcon, { backgroundColor: Platform.OS === 'ios' ? 'transparent' : active ? theme.accentSoft : theme.backgroundElement, opacity: pressed ? 0.68 : 1 }]}><PlatformIcon color={active ? theme.accentStrong : theme.textSecondary} name={icon} size={18} /></Pressable>;
 }
 
 function ViewToggle({ count, icon, label, mode, onPress, selected }: { count?: number; icon: 'list' | 'view-board'; label: string; mode: TaskViewMode; onPress: (mode: TaskViewMode) => void; selected: boolean }) {

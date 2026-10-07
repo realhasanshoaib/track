@@ -175,6 +175,7 @@ export function DateField({ autoOpen, disabled, label = 'Due date', onChange, va
                 display="inline"
                 mode="date"
                 onChange={pick}
+                style={styles.iosDatePicker}
                 themeVariant={scheme}
                 value={selected}
               />
@@ -422,15 +423,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   applyButton: { flex: 1 },
-  calendar: { borderRadius: Radius.large, overflow: 'hidden', paddingHorizontal: Spacing.two },
+  calendar: { borderRadius: Radius.large, minWidth: 0, overflow: 'hidden', paddingHorizontal: 0, width: '100%' },
   calendarArrow: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },
+  iosDatePicker: {
+    alignSelf: 'center',
+    flexShrink: 1,
+    maxWidth: '100%',
+    transform: [{ scale: 0.88 }],
+    width: '100%',
+  },
   calendarDay: {
     alignItems: 'center',
+    alignSelf: 'center',
     borderRadius: Radius.pill,
     borderWidth: 1,
-    height: 48,
+    height: TouchTarget,
     justifyContent: 'center',
-    maxWidth: 48,
+    maxWidth: 42,
     overflow: 'hidden',
     width: '100%',
   },

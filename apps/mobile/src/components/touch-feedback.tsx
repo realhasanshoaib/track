@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Animated, type NativeSyntheticEvent, View } from 'react-native';
+import { Animated, Platform, type NativeSyntheticEvent, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -64,11 +64,11 @@ export function TouchFeedback({ children }: { children: ReactNode }) {
     <View
       ref={rootRef}
       onLayout={updateRootOffset}
-      onTouchMove={onTouchMove}
-      onTouchStart={onTouchStart}
+      onTouchMove={Platform.OS === 'ios' ? undefined : onTouchMove}
+      onTouchStart={Platform.OS === 'ios' ? undefined : onTouchStart}
       style={{ flex: 1 }}>
       {children}
-      <Animated.View
+      {Platform.OS === 'ios' ? null : <Animated.View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
         pointerEvents="none"
@@ -84,7 +84,7 @@ export function TouchFeedback({ children }: { children: ReactNode }) {
           width: RIPPLE_SIZE,
           zIndex: 20,
         }}
-      />
+      />}
     </View>
   );
 }

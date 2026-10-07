@@ -62,6 +62,14 @@ export function primaryTabGeometry(rowWidth: number, tabCount: number, tabIndex:
   };
 }
 
+/** Centers the circular active marker inside an evenly sized navigation cell. */
+export function primaryTabSelectionOffset(rowWidth: number, tabCount: number, tabIndex: number, markerSize = 40) {
+  const safeCount = Math.max(1, tabCount);
+  const safeIndex = Math.min(Math.max(tabIndex, 0), safeCount - 1);
+  const cellWidth = rowWidth / safeCount;
+  return safeIndex * cellWidth + (cellWidth - markerSize) / 2;
+}
+
 /** Resolves a finger position to the nearest valid primary destination. */
 export function primaryTabIndexAtX(x: number, rowWidth: number, tabCount: number) {
   'worklet';

@@ -1,7 +1,9 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
+import { usePressFeedback } from '@/hooks/use-press-feedback';
 
 type PressableProps = Omit<ComponentProps<typeof Pressable>, 'children' | 'style'>;
 
@@ -15,17 +17,25 @@ type Props = PressableProps & {
 /** Keeps a compact capsule visual inside the platform minimum touch target. */
 export function CompactPillButton({
   children,
+  onPressIn: onPressInProp,
+  onPressOut: onPressOutProp,
   pillStyle,
   pressedPillStyle,
   targetStyle,
   ...pressableProps
 }: Props) {
+  const { animatedStyle, onPressIn, onPressOut } = usePressFeedback({ disabled: Boolean(pressableProps.disabled) });
+
   return (
-    <Pressable {...pressableProps} style={[styles.target, targetStyle]}>
+    <Pressable
+      {...pressableProps}
+      onPressIn={(event) => { onPressIn(); onPressInProp?.(event); }}
+      onPressOut={(event) => { onPressOut(); onPressOutProp?.(event); }}
+      style={[styles.target, targetStyle]}>
       {({ pressed }) => (
-        <View pointerEvents="none" style={[styles.pill, pillStyle, pressed && pressedPillStyle]}>
+        <Animated.View pointerEvents="none" style={[styles.pill, pillStyle, pressed && pressedPillStyle, animatedStyle]}>
           {children}
-        </View>
+        </Animated.View>
       )}
     </Pressable>
   );

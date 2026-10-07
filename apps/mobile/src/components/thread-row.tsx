@@ -15,7 +15,8 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { messageSwipeCancelIntent, messageSwipeIntent, type MessageActionsSwipeDirection } from '@/lib/message-swipe';
+import { messageSwipeCancelIntent, messageSwipeContentWidth, messageSwipeIntent } from '@/lib/message-swipe';
+import { hapticLight } from '@/lib/haptics';
 
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 
@@ -33,6 +34,8 @@ export type ProjectMemberRow = FunctionReturnType<typeof api.mobile.listProjectM
 const SWIPE_LIMIT = 72;
 const SWIPE_THRESHOLD = 56;
 const SWIPE_ACTION_WIDTH = TouchTarget;
+const SWIPE_MESSAGE_OFFSET = 28;
+const SWIPE_ACTION_ENTER_OFFSET = 24;
 
 type Props = {
   highlighted?: boolean;
@@ -68,10 +71,9 @@ export function ThreadRow({
 }: Props) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
-  const actionDirection: MessageActionsSwipeDirection = isOwnMessage ? 'left' : 'right';
-  const actionDirectionSign = actionDirection === 'right' ? 1 : -1;
   const [actionsExposed, setActionsExposed] = useState(false);
   const actionWidth = useSharedValue(0);
+  const containerWidth = useSharedValue(0);
   const replyProgress = useSharedValue(0);
   const trayOpenAtStart = useSharedValue(false);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
@@ -83,7 +85,7 @@ export function ThreadRow({
       trayOpenAtStart.value = actionWidth.value >= SWIPE_ACTION_WIDTH - 1;
     })
     .onUpdate((e) => {
-      const actionDistance = e.translationX * actionDirectionSign;
+      const actionDistance = -e.translationX;
       if (trayOpenAtStart.value) {
         actionWidth.value = Math.min(SWIPE_ACTION_WIDTH, Math.max(0, SWIPE_ACTION_WIDTH + actionDistance));
         replyProgress.value = 0;
@@ -99,8 +101,9 @@ export function ThreadRow({
       }
     })
     .onEnd((e) => {
-      const intent = messageSwipeIntent(e.translationX, Boolean(onSwipeReply), hasSwipeActions, trayOpenAtStart.value, actionDirection);
+      const intent = messageSwipeIntent(e.translationX, Boolean(onSwipeReply), hasSwipeActions, trayOpenAtStart.value);
       if (intent === 'actions') {
+        scheduleOnRN(hapticLight);
         scheduleOnRN(setActionsExposed, true);
         actionWidth.value = reducedMotion ? SWIPE_ACTION_WIDTH : withSpring(SWIPE_ACTION_WIDTH, { damping: 22, stiffness: 240 });
       } else if (intent === 'reply' && onSwipeReply) {
@@ -130,15 +133,19 @@ export function ThreadRow({
   }));
   const actionsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, 1], 'clamp'),
-    transform: [{ scale: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0.88, 1], 'clamp') }],
+    transform: [{ translateX: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [SWIPE_ACTION_ENTER_OFFSET, 0], 'clamp') }],
     width: actionWidth.value,
+  }));
+  const messageSwipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: reducedMotion ? 0 : interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_MESSAGE_OFFSET], 'clamp') }],
+    width: messageSwipeContentWidth(containerWidth.value, actionWidth.value),
   }));
   const actionTray = hasSwipeActions ? <Animated.View
     accessibilityElementsHidden={!actionsExposed}
     accessibilityLabel="Message actions"
     importantForAccessibility={actionsExposed ? 'auto' : 'no-hide-descendants'}
     pointerEvents={actionsExposed ? 'auto' : 'none'}
-    style={[styles.messageActions, isOwnMessage && styles.messageActionsLeading, actionsStyle]}
+    style={[styles.messageActions, actionsStyle]}
   >
     <Pressable accessibilityHint="Opens the available actions for this message" accessibilityLabel="More message actions" accessibilityRole="button" onPress={() => {
       setActionsExposed(false);
@@ -157,10 +164,11 @@ export function ThreadRow({
             <PlatformIcon color={theme.textSecondary} name="reply" size={16} />
           </View>
         </Animated.View>
-        <View style={styles.messageAndActions}>
+        <View onLayout={(event) => { containerWidth.value = event.nativeEvent.layout.width; }} style={styles.messageAndActions}>
           {actionTray}
           <Animated.View pointerEvents="box-none" style={[
           styles.messageContent,
+          messageSwipeStyle,
           isFirstInGroup ? (variant === 'thread' ? styles.threadGroupStart : styles.groupStart) : styles.grouped,
         ]}>
           {item.kind === 'assistant' ? (
@@ -192,10 +200,9 @@ export function ThreadRow({
 }
 
 export function DateSeparator({ label }: { label: string }) {
-  const theme = useTheme();
   return (
-    <View style={[styles.dateSep, { backgroundColor: theme.homeSurface }]}>
-      <View style={[styles.dateSepPill, { backgroundColor: theme.homeSurface }]}>
+    <View style={styles.dateSep}>
+      <View style={styles.dateSepPill}>
         <ThemedText themeColor="textSecondary" type="captionBold">
           {label}
         </ThemedText>
@@ -289,7 +296,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     zIndex: 2,
   },
-  messageActionsLeading: { left: 0, right: undefined },
   messageAndActions: { alignItems: 'stretch', flexDirection: 'row', overflow: 'hidden', position: 'relative', width: '100%' },
   messageContent: { minWidth: 0, width: '100%', zIndex: 1 },
   swipeAction: {

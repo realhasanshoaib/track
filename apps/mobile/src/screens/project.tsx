@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePaginatedQuery, useQuery } from 'convex/react';
 import { useCallback, useEffect, useState } from 'react';
@@ -124,7 +124,7 @@ export default function ProjectOverviewScreen() {
         else router.replace('/');
       }} />,
       headerRight: () => <View style={styles.headerActions}>
-        <IconButton accessibilityLabel="Project options" icon="tune" onPress={() => setOptionsOpen(true)} />
+        <IconButton accessibilityLabel="Project options" appearance={Platform.OS === 'ios' ? 'plain' : 'surface'} icon="tune" onPress={() => setOptionsOpen(true)} />
       </View>,
       title: 'Project',
     }} />
@@ -133,10 +133,10 @@ export default function ProjectOverviewScreen() {
       <View style={styles.centered}><EmptyState body="This Project isn’t available with your current Company access." icon="shield-lock-outline" title="Project unavailable" /></View>
     ) : projectId && project ? (
       <ScreenEntrance style={styles.screenContent}><ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]} contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
-        <ProjectHero archived={navigation.archived} company={project.project.clientLabel ?? projectCompany} description={project.project.description} memberCount={memberCount} name={projectName} role={projectRole} />
-        {release.tasks ? <ProjectProgress completed={completedTaskCount} total={totalTaskCount} /> : null}
-        <ProjectWorkHub channelCount={channelCount} dueSoonCount={dueSoonCount} onBoard={openBoard} onChannels={openChannels} onTasks={openTasks} openTaskCount={openTaskCount} tasksEnabled={release.tasks} unreadCount={unreadCount} />
+        <ProjectHero archived={navigation.archived} colorKey={project.project.markColorKey} company={project.project.clientLabel ?? projectCompany} description={project.project.description} iconKey={project.project.markIconKey} memberCount={memberCount} name={projectName} projectId={String(projectId)} role={projectRole} />
         <ProjectAttention items={projectAttention} onOpen={openAttention} />
+        <ProjectWorkHub channelCount={channelCount} dueSoonCount={dueSoonCount} onBoard={openBoard} onChannels={openChannels} onTasks={openTasks} openTaskCount={openTaskCount} tasksEnabled={release.tasks} unreadCount={unreadCount} />
+        {release.tasks ? <ProjectProgress completed={completedTaskCount} total={totalTaskCount} /> : null}
       </ScrollView></ScreenEntrance>
     ) : <View style={styles.centered}><EmptyState body="Open a Project to see its Channels, tasks, and recent work." icon="project" title="Choose a Project" /></View>}
     <OptionsSheet onClose={() => setOptionsOpen(false)} title="Project options" visible={optionsOpen}>

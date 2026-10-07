@@ -34,6 +34,8 @@ Company and Project settings organize identity, people, Channels, notifications,
 
 On wide screens, the conversation or current work view receives the largest share of the canvas. Navigation and context rails are secondary and use quiet surfaces with clear separators. On small screens, content stacks or moves into drawers; tables and boards may scroll inside their own region, while the page itself avoids accidental horizontal overflow. Focus, escape-to-close, return paths, and visible scope remain predictable across mouse, keyboard, and touch.
 
+The [Track Web UI/UX Contract and Quality Gates](ui-ux-professionalization.md) defines the required route inventory, visual rules, interaction behavior, and browser evidence for web changes.
+
 ## Mobile product flow
 
 ### First screen: Messages
@@ -96,9 +98,9 @@ Light and dark themes share the same layout, hierarchy, and interaction states. 
 
 ### Type and spacing
 
-Typography is platform-specific. The web app uses Inter for interface text, the configured rounded display face for occasional display headings, Geist for metadata, and Geist Mono only for fixed identifiers. The native mobile app uses Manrope V5 Static for app-owned text and the platform monospace for fixed identifiers. Native controls keep their platform font. Mobile bundles the original static Manrope files and shows the required attribution in the account's Fonts and licenses section. Avoid oversized headings on operational screens.
+Typography is platform-specific. Operational web surfaces use Inter for interface text, Geist for headings and metadata, and Geist Mono for fixed identifiers through the web design tokens. The native mobile app uses Manrope V5 Static for app-owned text and the platform monospace for fixed identifiers. Native controls keep their platform font. Mobile bundles the original static Manrope files and shows the required attribution in the account's Fonts and licenses section. Avoid oversized headings on operational screens.
 
-Use an 8-point spacing rhythm and existing shared spacing tokens. Align row starts, titles, metadata, input edges, and navigation cells to consistent vertical lines. Prefer whitespace and a hairline divider to a border around every component. Use the shared 6px, 8px, and 12px radii for ordinary controls; reserve pill and circular shapes for controls whose meaning benefits from that shape.
+Use the platform's shared spacing tokens. Web uses a 4px base scale, with 8px as the normal structural step; mobile follows its native spacing scale. Align row starts, titles, metadata, input edges, and navigation cells to consistent vertical lines. Prefer whitespace and a hairline divider to a border around every component. Use the shared 6px, 8px, and 12px radii for ordinary controls; reserve pill and circular shapes for controls whose meaning benefits from that shape.
 
 ### What to remove
 

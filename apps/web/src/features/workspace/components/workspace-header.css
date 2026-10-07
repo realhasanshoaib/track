@@ -1,0 +1,16 @@
+@media (max-width: 1180px) {
+  .track-thread-header .track-header-title {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .track-thread-header .track-header-title .track-header-scope {
+    display: block;
+    max-width: min(54vw, 420px);
+    color: var(--ink-3);
+    font-size: 10.5px;
+    line-height: 1.2;
+  }
+}

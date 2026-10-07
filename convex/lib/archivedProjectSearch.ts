@@ -3,6 +3,7 @@ import { resolveReleaseFeatureFlag } from '@track/shared/feature-flags'
 import type { Doc, Id } from '../_generated/dataModel'
 import type { QueryCtx } from '../_generated/server'
 import { threadsEnabled } from './channelThreadPolicy'
+import { isUnreadChannelMessage, isUnreadThread, isUnreadThreadMessage } from './searchUnread'
 import {
   getArchivedChannelSnapshot,
   getArchivedMemberSnapshot,
@@ -34,10 +35,11 @@ export async function searchNormalizedProjectArchive(
     term: string
     filter: string
     limit: number
+    unreadOnly: boolean
     threadStatus?: 'active' | 'archived'
   },
 ) {
-  const { entitlement, projectMember, term, limit } = input
+  const { entitlement, projectMember, term, limit, unreadOnly } = input
   const operationId = entitlement.snapshotOperationId
   if (!operationId) throw new Error('archive_snapshot_unavailable')
   const operation = await ctx.db.query('projectExitOperations').withIndex('by_operation_status', (q) =>
@@ -49,7 +51,7 @@ export async function searchNormalizedProjectArchive(
   const visibility = await ctx.db.query('projectExitChannelVisibility').withIndex('by_operation_member', (q) =>
     q.eq('operationId', operationId).eq('projectMemberId', projectMember._id)).collect()
   const channelIds = visibility.map((row) => row.groupId)
-  const includes = (kind: string) => input.filter === 'all' || input.filter === kind
+  const includes = (kind: string) => input.filter === 'all' || input.filter === kind || (input.filter === 'conversations' && ['messages', 'groups', 'threads'].includes(kind))
   const channelCache = new Map<Id<'groups'>, ReturnType<typeof getArchivedChannelSnapshot>>()
   const threadCache = new Map<Id<'channelThreads'>, ReturnType<typeof getArchivedThreadSnapshot>>()
   const memberCache = new Map<Id<'projectMembers'>, ReturnType<typeof getArchivedMemberSnapshot>>()
@@ -74,6 +76,7 @@ export async function searchNormalizedProjectArchive(
     memberCache.set(memberId, result)
     return result
   }
+  const candidateOverflow = { messages: false, groups: false, threads: false }
   const [messageRows, fileRows, channelRows, threadRows, taskViews] = await Promise.all([
     includes('messages') && channelIds.length
       ? ctx.db.query('messages').withSearchIndex('search_body_by_project', (q) =>
@@ -93,7 +96,7 @@ export async function searchNormalizedProjectArchive(
             q.lte(q.field('createdAt'), entitlement.exitAt),
             // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
             ...(threadsEnabled() ? [] : [q.eq(q.field('channelThreadId'), undefined)]),
-          )).take(limit)
+          )).take(unreadOnly ? Math.min(limit, 12) : limit)
       : [],
     includes('groups') && channelIds.length
       ? ctx.db.query('projectExitSnapshotStaging').withSearchIndex('search_name_by_operation', (q) =>
@@ -113,17 +116,48 @@ export async function searchNormalizedProjectArchive(
       ? searchArchivedTasks(ctx, { entitlement, projectMember }, term, limit)
       : [],
   ])
+  if (unreadOnly) {
+    candidateOverflow.messages = messageRows.length > 100
+    candidateOverflow.groups = channelRows.length > 100
+    candidateOverflow.threads = threadRows.length > 100
+  }
   const messages = await Promise.all(messageRows.map(async (message) => {
-    const [group, focusedThread, author] = await Promise.all([
+    const [group, focusedThread, author, groupReadState] = await Promise.all([
       channel(message.groupId),
       message.channelThreadId ? thread(message.channelThreadId) : null,
       message.authorProjectMemberId ? member(message.authorProjectMemberId) : null,
+      message.channelThreadId || !unreadOnly
+        ? null
+        : ctx.db.query('groupReadStates').withIndex('by_project_member_group', (q) =>
+            q.eq('projectMemberId', projectMember._id).eq('groupId', message.groupId),
+          ).unique(),
     ])
     if (!group || (message.channelThreadId && !focusedThread)) return null
     const authorName = author?.user.displayName ?? 'Former member'
     return {
       createdAt: message.createdAt, groupId: group._id, groupName: group.name,
-      id: message._id, kind: 'message' as const, messageId: message._id,
+      id: message._id,
+      isUnread: !unreadOnly
+        ? false
+        : message.channelThreadId && focusedThread
+          ? isUnreadThreadMessage({
+            authorId: message.authorId,
+            authorProjectMemberId: message.authorProjectMemberId,
+            channelSequence: message.channelSequence,
+            following: focusedThread.following,
+            lastReadChannelSequence: focusedThread.lastReadChannelSequence,
+            projectMemberId: projectMember._id,
+            userId: projectMember.userId,
+          })
+          : isUnreadChannelMessage({
+              authorId: message.authorId,
+              authorProjectMemberId: message.authorProjectMemberId,
+              createdAt: message.createdAt,
+              lastReadAt: groupReadState?.lastReadAt ?? 0,
+              projectMemberId: projectMember._id,
+              userId: projectMember.userId,
+            }),
+      kind: 'message' as const, messageId: message._id,
       threadId: message.channelThreadId, threadName: focusedThread?.name,
       preview: preview(message.body, 'Attachment message'),
       subtitle: `${authorName} in ${focusedThread ? `${focusedThread.name} · ` : ''}${group.name}`,
@@ -163,7 +197,13 @@ export async function searchNormalizedProjectArchive(
     if (!group) return null
     return {
       createdAt: snapshot.createdAt, groupId: group._id, groupName: group.name,
-      id: snapshot._id, kind: 'thread' as const,
+      id: snapshot._id,
+      isUnread: unreadOnly && isUnreadThread({
+        following: snapshot.following,
+        latestChannelSequence: snapshot.latestChannelSequence ?? 0,
+        lastReadChannelSequence: snapshot.lastReadChannelSequence,
+      }),
+      kind: 'thread' as const,
       preview: snapshot.status === 'archived' ? 'Archived thread' : 'Active thread',
       subtitle: group.name, threadId: snapshot._id, threadName: snapshot.name, title: snapshot.name,
     }
@@ -173,5 +213,6 @@ export async function searchNormalizedProjectArchive(
     files: files.filter((row) => row !== null), groups,
     tasks: taskViews.map(archivedTaskSearchHit),
     threads: threads.filter((row) => row !== null),
+    unreadSearchCandidateOverflow: candidateOverflow,
   }
 }

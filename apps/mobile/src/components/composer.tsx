@@ -14,6 +14,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  FadeOutUp,
+  LinearTransition,
   cancelAnimation,
   useAnimatedStyle,
   useReducedMotion,
@@ -53,6 +58,12 @@ import {
   type MentionCandidate,
 } from '@/lib/mention-autocomplete';
 import { useVoiceRecorder } from '@/lib/media-capture';
+import {
+  nextVoiceGestureOutcome,
+  VoiceGestureCancelDistance as CancelDistance,
+  VoiceGestureLockDistance as LockDistance,
+  type VoiceGestureOutcome,
+} from '@/lib/voice-recording-gesture';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 export type ComposerProps = {
@@ -81,9 +92,12 @@ export type ComposerProps = {
 };
 
 const HoldDelay = 220;
-const CancelDistance = -90;
-const LockDistance = -64;
 const BarFactors = [0.5, 0.85, 1, 0.7, 0.45];
+const ComposerLayoutTransition = LinearTransition.duration(200);
+const ComposerPartEntering = FadeInDown.duration(150);
+const ComposerPartExiting = FadeOutUp.duration(120);
+const SendStateEntering = FadeIn.duration(110);
+const SendStateExiting = FadeOut.duration(80);
 
 type FailedSubmission = {
   attachments: PendingAttachment[];
@@ -184,7 +198,7 @@ export function Composer({
 
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
-  const outcome = useSharedValue(0);
+  const outcome = useSharedValue<VoiceGestureOutcome>(0);
   const micScale = useSharedValue(1);
 
   const hasContent = Boolean(value.trim()) || attachments.length > 0;
@@ -317,20 +331,27 @@ export function Composer({
       scheduleOnRN(voice.start, false);
     })
     .onUpdate((event) => {
-      if (outcome.value !== 0) return;
+      const nextOutcome = nextVoiceGestureOutcome(outcome.value, event.translationX, event.translationY);
+      if (nextOutcome === outcome.value) {
+        if (outcome.value === 0) {
+          dragX.value = Math.min(0, event.translationX);
+          dragY.value = Math.min(0, event.translationY);
+        }
+        return;
+      }
       dragX.value = Math.min(0, event.translationX);
       dragY.value = Math.min(0, event.translationY);
-      if (event.translationX <= CancelDistance) {
-        outcome.value = 1;
+      outcome.value = nextOutcome;
+      if (nextOutcome === 1) {
         scheduleOnRN(voice.cancel);
-      } else if (event.translationY <= LockDistance) {
-        outcome.value = 2;
+      } else if (nextOutcome === 2) {
         scheduleOnRN(voice.lock);
       }
     })
     .onFinalize(() => {
-      dragX.value = withTiming(0, { duration: 140 });
-      dragY.value = withTiming(0, { duration: 140 });
+      const settleDuration = reducedMotion ? 0 : 140;
+      dragX.value = withTiming(0, { duration: settleDuration });
+      dragY.value = withTiming(0, { duration: settleDuration });
       if (isIOS) micScale.value = withSpring(1, { dampingRatio: 0.8, duration: reducedMotion ? 0 : 200 });
       scheduleOnRN(voice.release, outcome.value);
     });
@@ -345,6 +366,40 @@ export function Composer({
       else if (mode === 'idle') scheduleOnRN(voice.start, true);
     })
     .onFinalize(() => { if (isIOS) micScale.value = withSpring(1, { dampingRatio: 0.8, duration: reducedMotion ? 0 : 200 }); });
+
+  const voiceControl = <GestureDetector gesture={Gesture.Exclusive(micPan, micTap)}>
+    <Animated.View
+      accessibilityActions={mode === 'idle'
+        ? [{ name: 'activate', label: 'Start voice recording' }]
+        : [{ name: 'activate', label: mode === 'locked' ? 'Send voice note' : 'Finish voice recording' }, { name: 'cancel', label: 'Discard voice note' }]}
+      accessibilityHint={mode === 'idle'
+        ? 'Hold to record, slide up to lock, slide left to cancel. Tap to record hands-free.'
+        : mode === 'locked'
+          ? 'Tap or activate to send this voice note. Use the cancel action to discard it.'
+          : 'Recording voice note. Release to send, or use the cancel action to discard it.'}
+      accessibilityLabel={mode === 'locked' ? 'Send voice note' : mode === 'recording' ? `Recording voice note, ${formatDuration(voice.durationMs)}` : 'Record a voice note'}
+      accessibilityState={{ disabled: hasFailedSubmission }}
+      accessibilityRole="button"
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'cancel') void voice.cancel();
+        else if (mode === 'idle') void voice.start(true);
+        else void voice.finish();
+      }}
+      onAccessibilityTap={() => {
+        if (mode === 'idle') void voice.start(true);
+        else void voice.finish();
+      }}
+      style={[styles.circle, Platform.OS === 'ios' && styles.iosMicButton, Platform.OS === 'ios' && micPressStyle,
+        { backgroundColor: mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundElement },
+      ]}>
+      {Platform.OS === 'ios' ? hasLiquidGlass ? <GlassView colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive={false} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosGlassMaterial]} tintColor={mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundElement} /> : <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosFallbackMaterial, { backgroundColor: mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundSelected }]} /> : null}
+      <PlatformIcon
+        color={mode === 'locked' ? theme.accentInk : mode === 'recording' ? theme.danger : theme.textSecondary}
+        name={mode === 'locked' ? 'send' : 'waveform'}
+        size={20}
+      />
+    </Animated.View>
+  </GestureDetector>;
 
   return (
     <Animated.View
@@ -426,7 +481,12 @@ export function Composer({
         </View>
       ) : null}
 
-      {inputExpanded ? <View style={styles.expandedHeader}>
+      {inputExpanded ? <Animated.View
+        entering={reducedMotion ? undefined : ComposerPartEntering}
+        exiting={reducedMotion ? undefined : ComposerPartExiting}
+        layout={reducedMotion ? undefined : ComposerLayoutTransition}
+        style={styles.expandedHeader}
+      >
         <View style={styles.expandedHeaderCopy}>
           <ThemedText type="smallBold">New message</ThemedText>
           <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{activeGroupName ? `#${activeGroupName}` : 'Channel'}</ThemedText>
@@ -434,14 +494,20 @@ export function Composer({
         <Pressable accessibilityLabel="Close expanded composer" accessibilityRole="button" onPress={() => inputRef.current?.blur()} style={({ pressed }) => [styles.expandedClose, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement }]}>
           <PlatformIcon color={theme.textSecondary} name="chevron-down" size={20} />
         </Pressable>
-      </View> : null}
+      </Animated.View> : null}
 
-      <View style={[styles.row, inputExpanded && styles.expandedRow, Platform.OS === 'ios' && styles.iosComposerShell]}>
+      <Animated.View
+        layout={reducedMotion ? undefined : ComposerLayoutTransition}
+        style={[styles.row, inputExpanded && styles.expandedRow, Platform.OS === 'ios' && styles.iosComposerShell]}
+      >
         {mode !== 'idle' ? (
-          <View
+          <Animated.View
             accessibilityLabel={`Recording voice note, ${formatDuration(voice.durationMs)}`}
             accessibilityLiveRegion="polite"
             accessible
+            entering={reducedMotion ? undefined : ComposerPartEntering}
+            exiting={reducedMotion ? undefined : ComposerPartExiting}
+            layout={reducedMotion ? undefined : ComposerLayoutTransition}
             style={[styles.recordBar, { backgroundColor: theme.backgroundElement }]}>
             <RecordingDot color={theme.danger} />
             <ThemedText style={styles.timer} themeColor="danger" type="captionBold">
@@ -467,9 +533,12 @@ export function Composer({
                 <ThemedText themeColor="textSecondary" type="caption">Slide to cancel</ThemedText>
               </Animated.View>
             )}
-          </View>
+          </Animated.View>
         ) : (
-          <View style={[styles.messageField, inputExpanded && styles.expandedMessageField, Platform.OS === 'ios' && styles.iosMessageField]}>
+          <Animated.View
+            layout={reducedMotion ? undefined : ComposerLayoutTransition}
+            style={[styles.messageField, inputExpanded && styles.expandedMessageField, Platform.OS === 'ios' && styles.iosMessageField]}
+          >
             {Platform.OS === 'ios' ? <GlassContainer spacing={Spacing.two} style={[styles.iosActionGroup, inputExpanded && styles.expandedActionGroup]}>
               <Pressable
                 accessibilityLabel="Add to message"
@@ -482,17 +551,23 @@ export function Composer({
                 {hasLiquidGlass ? <GlassView colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive={false} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosGlassMaterial]} tintColor={theme.backgroundElement} /> : <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosFallbackMaterial, { backgroundColor: theme.backgroundSelected }]} />}
                 <PlatformIcon color={theme.textSecondary} name="plus" size={19} />
               </Pressable>
-            </GlassContainer> : <Pressable
-              accessibilityLabel="Add a photo or document"
-              accessibilityRole="button"
-              android_ripple={{ borderless: true, color: theme.backgroundSelected }}
-              disabled={attachmentsLocked}
-              hitSlop={6}
-              onPress={() => { hapticLight(); setMenuOpen(true); }}
-              style={[styles.circle, inputExpanded && styles.expandedActionButton, { backgroundColor: theme.backgroundElement }]}>
-              <PlatformIcon color={theme.textSecondary} name="plus" size={20} />
-            </Pressable>}
-            <View style={[styles.inputPill, inputExpanded && styles.expandedInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}>
+            </GlassContainer> : <Animated.View layout={reducedMotion ? undefined : ComposerLayoutTransition} style={inputExpanded && styles.expandedActionButton}>
+              <Pressable
+                accessibilityLabel="Add a photo or document"
+                accessibilityRole="button"
+                android_ripple={{ borderless: true, color: theme.backgroundSelected }}
+                disabled={attachmentsLocked}
+                hitSlop={6}
+                onPress={() => { hapticLight(); setMenuOpen(true); }}
+                style={[styles.circle, { backgroundColor: theme.backgroundElement }]}
+              >
+                <PlatformIcon color={theme.textSecondary} name="plus" size={20} />
+              </Pressable>
+            </Animated.View>}
+            <Animated.View
+              layout={reducedMotion ? undefined : ComposerLayoutTransition}
+              style={[styles.inputPill, inputExpanded && styles.expandedInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder, paddingRight: !showSend ? TouchTarget + Spacing.one : 0 }]}
+            >
               {Platform.OS === 'ios' && hasLiquidGlass ? (
                 <GlassView
                   colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'}
@@ -544,25 +619,42 @@ export function Composer({
               {value.length === 0 ? <View pointerEvents="none" style={[styles.placeholderContainer, inputExpanded && styles.expandedPlaceholderContainer]}>
                 <ThemedText accessible={false} numberOfLines={1} style={styles.placeholderText} themeColor="textTertiary" type="small">Message or ask @Track</ThemedText>
               </View> : null}
-            </View>
-          </View>
+              {!showSend && mode === 'idle' ? <View style={[styles.inlineVoiceOverlay, inputExpanded && styles.expandedVoiceOverlay]}>
+                {voiceControl}
+              </View> : null}
+            </Animated.View>
+          </Animated.View>
         )}
 
         {showSend ? (
-          <Pressable
-            accessibilityLabel={sending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canSend }}
-            android_ripple={{ borderless: true, color: theme.backgroundSelected }}
-            disabled={!canSend}
-            hitSlop={6}
-            onPress={handleSend}
-            style={({ pressed }) => Platform.OS === 'ios'
-              ? [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : pressed ? 0.82 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]
-              : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : 1 }]}>
-            {sending ? <ActivityIndicator color={theme.accentInk} size="small" /> : <PlatformIcon color={theme.accentInk} name="send" size={19} />}
-          </Pressable>
-        ) : (
+          <Animated.View
+            entering={reducedMotion ? undefined : FadeIn.duration(130)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(90)}
+            layout={reducedMotion ? undefined : ComposerLayoutTransition}
+          >
+            <Pressable
+              accessibilityLabel={sending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSend, busy: sending }}
+              android_ripple={{ borderless: true, color: theme.backgroundSelected }}
+              disabled={!canSend}
+              hitSlop={6}
+              onPress={handleSend}
+              style={({ pressed }) => Platform.OS === 'ios'
+                ? [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : pressed ? 0.82 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]
+                : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : 1 }]}
+            >
+              <Animated.View
+                key={sending ? 'sending' : 'ready'}
+                entering={reducedMotion ? undefined : SendStateEntering}
+                exiting={reducedMotion ? undefined : SendStateExiting}
+                style={styles.sendState}
+              >
+                {sending ? <ActivityIndicator color={theme.accentInk} size="small" /> : <PlatformIcon color={theme.accentInk} name="send" size={19} />}
+              </Animated.View>
+            </Pressable>
+          </Animated.View>
+        ) : mode !== 'idle' ? (
           <View>
             {mode === 'recording' ? (
               <Animated.View
@@ -571,42 +663,10 @@ export function Composer({
                 <PlatformIcon color={theme.textSecondary} name="chevron-up" size={14} />
               </Animated.View>
             ) : null}
-            <GestureDetector gesture={Gesture.Exclusive(micPan, micTap)}>
-              <Animated.View
-                accessibilityActions={mode === 'idle'
-                  ? [{ name: 'activate', label: 'Start voice recording' }]
-                  : [{ name: 'activate', label: mode === 'locked' ? 'Send voice note' : 'Finish voice recording' }, { name: 'cancel', label: 'Discard voice note' }]}
-                accessibilityHint={mode === 'idle'
-                  ? 'Hold to record, slide up to lock, slide left to cancel. Tap to record hands-free.'
-                  : mode === 'locked'
-                    ? 'Tap or activate to send this voice note. Use the cancel action to discard it.'
-                    : 'Recording voice note. Release to send, or use the cancel action to discard it.'}
-                accessibilityLabel={mode === 'locked' ? 'Send voice note' : mode === 'recording' ? `Recording voice note, ${formatDuration(voice.durationMs)}` : 'Record a voice note'}
-                accessibilityState={{ disabled: hasFailedSubmission }}
-                accessibilityRole="button"
-                onAccessibilityAction={(event) => {
-                  if (event.nativeEvent.actionName === 'cancel') void voice.cancel();
-                  else if (mode === 'idle') void voice.start(true);
-                  else void voice.finish();
-                }}
-                onAccessibilityTap={() => {
-                  if (mode === 'idle') void voice.start(true);
-                  else void voice.finish();
-                }}
-                style={[styles.circle, Platform.OS === 'ios' && styles.iosMicButton, Platform.OS === 'ios' && micPressStyle,
-                  { backgroundColor: mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundElement },
-                ]}>
-                {Platform.OS === 'ios' ? hasLiquidGlass ? <GlassView colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive={false} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosGlassMaterial]} tintColor={mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundElement} /> : <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosFallbackMaterial, { backgroundColor: mode === 'locked' ? theme.accent : mode === 'recording' ? theme.dangerSoft : theme.backgroundSelected }]} /> : null}
-                <PlatformIcon
-                  color={mode === 'locked' ? theme.accentInk : mode === 'recording' ? theme.danger : theme.textSecondary}
-                  name={mode === 'locked' ? 'send' : 'microphone-outline'}
-                  size={20}
-                />
-              </Animated.View>
-            </GestureDetector>
+            {voiceControl}
           </View>
-        )}
-      </View>
+        ) : null}
+      </Animated.View>
 
       <ChatAttachMenu
         onClose={() => setMenuOpen(false)}
@@ -668,6 +728,7 @@ const styles = StyleSheet.create({
   expandedHeaderCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
   expandedInput: { maxHeight: undefined, minHeight: 0, paddingBottom: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.three, textAlignVertical: 'top' },
   expandedInputPill: { borderRadius: Radius.large, flex: 1, minHeight: 0 },
+  expandedVoiceOverlay: { bottom: Spacing.two, top: undefined },
   expandedMessageField: { alignItems: 'stretch', flex: 1, height: '100%', position: 'relative' },
   expandedRow: { alignItems: 'flex-end', flex: 1 },
   expandedSurface: { flex: 1 },
@@ -683,7 +744,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   iosCenteredInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0 },
-  placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: Spacing.three, top: 0 },
+  inlineVoiceOverlay: { bottom: 0, justifyContent: 'center', position: 'absolute', right: Spacing.one, top: 0, zIndex: 2 },
+  placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: TouchTarget + Spacing.two, top: 0 },
   expandedPlaceholderContainer: { justifyContent: 'flex-start', paddingTop: Spacing.three },
   placeholderText: { ...Typography.message },
   inputPill: {
@@ -766,6 +828,7 @@ const styles = StyleSheet.create({
     paddingRight: Spacing.three,
   },
   slideHint: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  sendState: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
   surface: { gap: Spacing.two, paddingTop: Spacing.two },
   iosSurface: { borderTopWidth: 0 },
   timer: { minWidth: 34 },

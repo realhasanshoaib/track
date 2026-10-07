@@ -65,6 +65,7 @@ import {
 import "./company-overview-reference.css";
 import "./company-collaboration.css";
 import "./company-global-work.css";
+import "./company-experience.css";
 
 function getInitials(name: string) {
   return name
@@ -852,6 +853,7 @@ export function CompanyHubPage({
               onCreateTaskRequest={() => setCreateTaskOpen(true)}
               overview={companyOverview}
               projects={projects}
+              searchQuery={overviewSearch}
               run={run}
             />
           ) : null}

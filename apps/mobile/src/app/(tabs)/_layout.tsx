@@ -10,9 +10,9 @@ export default function PrimaryTabsLayout() {
         tabBarPosition="bottom"
         tabBar={(props: Parameters<typeof PrimaryNavigation>[0]) => <PrimaryNavigation {...props} />}
         screenOptions={{
-          animationEnabled: true,
-          lazy: false,
-          swipeEnabled: true,
+          animationEnabled: false,
+          lazy: true,
+          swipeEnabled: false,
         }}
       >
         <TopTabs.Screen name="(home)" options={{ title: 'Chats' }} />

@@ -14,8 +14,11 @@
   --palette-rule: #e5e1db;
   --palette-rule-strong: #cbc5bc;
   --palette-signal: #f0b100;
-  --palette-signal-strong: #765600;
+  --palette-signal-strong: #8a6400;
   --palette-signal-soft: #fff6d6;
+  --palette-status-success: #15803d;
+  --palette-status-danger: #b91c1c;
+  --palette-status-info: #1d4ed8;
 
   --surface-canvas: var(--palette-canvas);
   --surface-raised: var(--palette-surface);
@@ -28,10 +31,20 @@
   --border-strong: var(--palette-rule-strong);
   --action-primary: var(--palette-ink);
   --action-primary-hover: #353532;
+  --action-primary-foreground: var(--palette-surface);
   --action-signal: var(--palette-signal);
   --action-signal-strong: var(--palette-signal-strong);
+  --action-signal-foreground: var(--palette-ink);
   --action-signal-soft: var(--palette-signal-soft);
   --focus-ring: var(--palette-signal-strong);
+  --status-success: var(--palette-status-success);
+  --status-danger: var(--palette-status-danger);
+  --status-info: var(--palette-status-info);
+  --status-warning: var(--action-signal-strong);
+  --status-success-soft: color-mix(in srgb, var(--status-success) 12%, transparent);
+  --status-danger-soft: color-mix(in srgb, var(--status-danger) 12%, transparent);
+  --status-info-soft: color-mix(in srgb, var(--status-info) 12%, transparent);
+  --status-warning-soft: var(--action-signal-soft);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -51,6 +64,9 @@
   --radius-control: 6px;
   --radius-card: 8px;
   --radius-panel: 12px;
+  --motion-feedback: 160ms;
+  --motion-layout: 260ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
   --app-nav-width: 248px;
   --context-rail-width: 288px;
   --page-max-width: 1280px;
@@ -67,22 +83,46 @@
   --ink: var(--text-primary);
   --ink-2: var(--text-secondary);
   --ink-3: var(--text-muted);
-  --ink-4: #716c66;
+  --ink-4: var(--text-muted);
   --hairline: var(--border-subtle);
   --hairline-strong: var(--border-strong);
-  --accent: var(--action-signal);
   --accent-tint: var(--action-signal-soft);
   --accent-strong: var(--action-signal-strong);
-  --background: var(--surface-raised);
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
   --card: var(--surface-raised);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--action-primary);
+  --primary-foreground: var(--action-primary-foreground);
   --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--text-primary);
   --muted: var(--surface-subtle);
+  --muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-hover);
+  --color-accent-foreground: var(--text-primary);
+  --destructive: var(--status-danger);
+  --success: var(--status-success);
+  --danger: var(--status-danger);
+  --info: var(--status-info);
   --border: var(--border-subtle);
   --input: var(--border-strong);
   --ring: var(--focus-ring);
   --sidebar: var(--surface-canvas);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--action-primary);
+  --sidebar-primary-foreground: var(--action-primary-foreground);
+  --sidebar-accent: var(--action-signal-soft);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--focus-ring);
+  --radius: 8px;
   --shadow-pop: 0 12px 32px rgb(29 29 27 / 12%);
   --shadow-sheet: 0 24px 72px rgb(29 29 27 / 18%);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-meta: var(--font-display);
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;
@@ -106,9 +146,14 @@
   --palette-signal: #f0b100;
   --palette-signal-strong: #f5c53d;
   --palette-signal-soft: #30270e;
+  --palette-status-success: #5bbf74;
+  --palette-status-danger: #f87171;
+  --palette-status-info: #7ea7ff;
   --focus-ring: var(--palette-signal-strong);
   --action-primary: #f0f0eb;
   --action-primary-hover: #ffffff;
+  --action-primary-foreground: var(--palette-canvas);
+  --action-signal-foreground: var(--palette-ink);
   --shadow-pop: 0 12px 32px rgb(0 0 0 / 38%);
   --shadow-sheet: 0 24px 64px rgb(0 0 0 / 50%);
 }
@@ -128,8 +173,9 @@
 }
 
 .track-ui-v2 :where(button, a, input, textarea, select, [role="button"]):focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+  box-shadow: none;
 }
 
 .track-ui-v2 {
@@ -169,6 +215,34 @@
   overscroll-behavior: contain;
 }
 
+.track-ui-v2 :where([data-slot="tabs-list"]) {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.track-ui-v2 :where([data-slot="tabs-trigger"]) {
+  min-width: 0;
+  min-height: var(--control-xs);
+  flex: 0 0 auto;
+}
+
+.track-ui-v2 :where([data-slot="select-item"], [data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"]) {
+  overflow-wrap: anywhere;
+}
+
+.track-ui-v2 :where([data-slot="select-item"] > *) {
+  min-width: 0;
+  flex-shrink: 1;
+  white-space: normal;
+}
+
+.track-ui-v2 :where([data-slot="input-group"]) {
+  height: auto;
+  min-height: var(--control-sm);
+  border-radius: var(--radius-control);
+}
+
 /* Shared overlays are matte, compact, and elevated only while floating. */
 .track-ui-v2 :where(
   [data-slot="dialog-content"],
@@ -179,21 +253,88 @@
 ) {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
-  background: color-mix(in srgb, var(--surface-raised) 97%, transparent);
+  background: var(--surface-raised);
   color: var(--text-primary);
   box-shadow: var(--shadow-pop);
-  backdrop-filter: blur(6px);
+  backdrop-filter: none;
 }
 
 .track-ui-v2 :where([data-slot="dialog-overlay"], [data-slot="sheet-overlay"]) {
   background: rgb(8 8 7 / 72%);
-  backdrop-filter: blur(2px);
+  backdrop-filter: none;
+}
+
+.track-ui-v2 .track-toast {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  transition-duration: var(--motion-feedback);
+}
+
+.track-ui-v2 .track-toast::before {
+  width: 1px;
+}
+
+.track-ui-v2 .track-toast[data-type="success"]::before,
+.track-ui-v2 .track-toast[data-type="success"] .track-toast-icon {
+  background: var(--status-success-soft);
+  color: var(--status-success);
+}
+
+.track-ui-v2 .track-toast[data-type="success"]::before {
+  background: var(--status-success);
+}
+
+.track-ui-v2 .track-toast[data-type="error"]::before,
+.track-ui-v2 .track-toast[data-type="error"] .track-toast-icon {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+}
+
+.track-ui-v2 .track-toast[data-type="error"]::before {
+  background: var(--status-danger);
+}
+
+.track-ui-v2 .track-toast[data-type="warning"]::before,
+.track-ui-v2 .track-toast[data-type="warning"] .track-toast-icon {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+
+.track-ui-v2 .track-toast[data-type="warning"]::before {
+  background: var(--status-warning);
+}
+
+.track-ui-v2 .track-toast[data-type="info"]::before,
+.track-ui-v2 .track-toast[data-type="loading"]::before,
+.track-ui-v2 .track-toast[data-type="info"] .track-toast-icon,
+.track-ui-v2 .track-toast[data-type="loading"] .track-toast-icon {
+  background: var(--status-info-soft);
+  color: var(--status-info);
+}
+
+.track-ui-v2 .track-toast[data-type="info"]::before,
+.track-ui-v2 .track-toast[data-type="loading"]::before {
+  background: var(--status-info);
+}
+
+.track-ui-v2 .track-toast-title {
+  color: var(--text-primary);
+}
+
+.track-ui-v2 .track-toast-description {
+  color: var(--text-secondary);
+}
+
+.track-ui-v2 .track-toast[data-type="warning"] .track-toast-title {
+  color: var(--status-warning);
 }
 
 /* Drawers share one structural contract; feature CSS only owns content layout. */
 .track-ui-v2 .track-drawer-overlay {
   background: rgb(8 8 7 / 64%);
-  backdrop-filter: blur(2px);
+  backdrop-filter: none;
 }
 
 .track-ui-v2 .track-drawer[data-slot="sheet-content"] {
@@ -395,6 +536,36 @@
     min-width: var(--control-lg);
     min-height: var(--control-lg);
   }
+
+  .track-ui-v2 :where(input, textarea, select, [data-slot="input"], [data-slot="textarea"], [data-slot="native-select"]) {
+    min-height: var(--control-lg);
+  }
+
+  .track-ui-v2 :where([data-slot="input-group"], [data-slot="searchable-select-group"]) {
+    min-height: var(--control-lg);
+  }
+
+  .track-ui-v2 :where([data-slot="searchable-select-trigger"], [data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="select-item"], [data-slot="tabs-trigger"], [data-slot="toggle"], [data-slot="toggle-group-item"]) {
+    min-height: var(--control-lg);
+  }
+
+  .track-ui-v2 :where([data-slot="searchable-select-trigger"], [data-slot="toggle"][data-size^="icon"]) {
+    min-width: var(--control-lg);
+  }
+
+  .track-ui-v2 :where([data-slot="tabs-list"]) {
+    height: auto;
+    min-height: var(--control-lg);
+  }
+
+  .track-ui-v2 [data-slot="tabs"][data-orientation="vertical"] [data-slot="tabs-list"] {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .track-ui-v2 [data-slot="switch"]::after {
+    inset-block: -14px;
+  }
 }
 
 .track-ui-v2 :where(input, textarea, select, [data-slot="input"], [data-slot="textarea"], [data-slot="native-select"]) {
@@ -414,6 +585,13 @@
   font-size: 14px;
 }
 
+.track-ui-v2 :where([data-slot="searchable-select-group"], [data-slot="input-group"]):has(:focus-visible) {
+  border-color: var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
 .track-ui-v2 [data-slot="searchable-select-input"] {
   border: 0;
   border-radius: 0;
@@ -426,8 +604,6 @@
 .track-ui-v2 :where(input, textarea, select):focus-visible,
 .track-ui-v2 :where([data-slot="input"], [data-slot="textarea"], [data-slot="native-select"]):focus-visible {
   border-color: var(--ring);
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 
 /* Application shells */
@@ -919,7 +1095,7 @@
   border-color: var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
-  box-shadow: 0 20px 60px rgb(29 29 27 / 10%);
+  box-shadow: none;
 }
 
 .track-ui-v2 .track-profile-sidebar {

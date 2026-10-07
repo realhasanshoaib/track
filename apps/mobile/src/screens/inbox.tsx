@@ -255,7 +255,15 @@ export default function InboxScreen() {
           ListHeaderComponent={
             <View style={styles.header}>
               <View style={styles.intro}>
-                <View style={styles.titleLine}><ThemedText accessibilityRole="header" numberOfLines={1} style={styles.title} type="display">Inbox</ThemedText><IconButton accessibilityLabel="Notification settings" icon="bell-outline" onPress={() => router.push('/notifications')} /></View>
+                <View style={styles.titleLine}>
+                  <ThemedText accessibilityRole="header" numberOfLines={1} style={styles.title} type="display">Inbox</ThemedText>
+                  <View style={styles.headerActions}>
+                    <View accessibilityLabel={`${visibleItems.length}${itemStatus === 'CanLoadMore' ? ' or more' : ''} new updates`} accessible style={[styles.updateCount, { backgroundColor: theme.backgroundElement }]}>
+                      <ThemedText themeColor="textSecondary" type="captionBold">{visibleItems.length}{itemStatus === 'CanLoadMore' ? '+' : ''} new</ThemedText>
+                    </View>
+                    <IconButton accessibilityLabel="Notification settings" icon="bell-outline" onPress={() => router.push('/notifications')} />
+                  </View>
+                </View>
                 <ThemedText themeColor="textSecondary" type="small">Updates across your work</ThemedText>
               </View>
               <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
@@ -350,7 +358,10 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
         : item.eventType === 'overdue'
           ? { background: theme.dangerSoft, foreground: theme.danger }
           : { background: theme.backgroundElement, foreground: theme.textSecondary };
-    const title = item.kind === 'task' ? item.taskTitle : item.kind === 'message' ? `${item.senderName}: ${item.preview}` : item.title;
+    const title = item.kind === 'task' ? item.taskTitle : item.kind === 'message'
+      ? `${item.senderName} ${item.eventType === 'mention' ? 'mentioned you' : item.eventType === 'direct_reply' ? 'replied to you' : item.eventType === 'thread_activity' ? 'updated a thread' : 'posted a message'}`
+      : item.title;
+    const preview = item.kind === 'task' ? eventCopy(item.eventType) : item.preview;
     const state = item.kind === 'task'
       ? eventCopy(item.eventType)
       : item.kind === 'message'
@@ -361,7 +372,6 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
       item.projectName,
       item.kind === 'task' ? null : item.kind === 'message' ? `#${item.groupName}` : 'Suggestion',
     ].filter((part, index, parts) => Boolean(part) && parts.indexOf(part) === index).join(' · ');
-    const direct = item.kind === 'message' && (item.eventType === 'mention' || item.eventType === 'direct_reply');
     const threadId = item.kind === 'message' ? item.threadId : undefined;
     const sourceLabel = item.kind === 'message' ? threadId ? 'Thread' : 'Channel' : null;
     return (
@@ -373,15 +383,16 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
         style={({ pressed }) => [styles.activityRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent', borderBottomColor: theme.hairline }]}
       >
         <View style={[styles.iconWrap, { backgroundColor: notificationTone.background }]}>
-          <PlatformIcon color={notificationTone.foreground} name={item.kind === 'task' ? 'task' : item.kind === 'message' ? 'message' : 'inbox'} size={20} />
+          <PlatformIcon color={notificationTone.foreground} name={item.kind === 'task' ? 'task' : item.kind === 'message' ? 'message' : 'lightbulb-outline'} size={20} />
         </View>
         <View style={styles.activityCopy}>
           <View style={styles.activityTitleLine}>
-            <ThemedText style={styles.activityTitle} type={direct ? 'smallBold' : 'small'}>{title}</ThemedText>
+            <ThemedText numberOfLines={1} style={styles.activityTitle} type="smallBold">{title}</ThemedText>
+            <View style={[styles.unreadDot, { backgroundColor: theme.accentStrong }]} />
             <ThemedText themeColor="textTertiary" type="caption">{relativeTime(item.createdAt)}</ThemedText>
           </View>
+          <ThemedText numberOfLines={2} themeColor="textSecondary" type="caption">{preview}</ThemedText>
           <ThemedText themeColor="textSecondary" type="caption">{context}</ThemedText>
-          <ThemedText themeColor="textTertiary" type="caption">{state}{sourceLabel ? ` · ${sourceLabel}` : ''}</ThemedText>
         </View>
       </Pressable>
     );
@@ -393,7 +404,7 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
         accessibilityLabel={`${item.title}: ${item.preview}`}
         android_ripple={{ color: theme.backgroundSelected }}
         onPress={onPress}
-        style={styles.cardPressable}>
+        style={({ pressed }) => [styles.cardPressable, pressed && { backgroundColor: theme.backgroundSelected }]}>
         <View style={[styles.iconWrap, { backgroundColor: theme.accentSoft }]}>
           <PlatformIcon color={theme.accentStrong} name="office-building" size={20} />
         </View>
@@ -434,9 +445,9 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
 
 const styles = StyleSheet.create({
   activityCopy: { flex: 1, gap: 3, minWidth: 0 },
-  activityRow: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.three, minHeight: 78, paddingVertical: Spacing.three },
+  activityRow: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.three, minHeight: 88, paddingVertical: Spacing.three },
   activityTitle: { flex: 1 },
-  activityTitleLine: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.two },
+  activityTitleLine: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   connection: { marginHorizontal: Spacing.four, marginTop: Spacing.two },
   dayHeading: { marginBottom: Spacing.one, marginTop: Spacing.two },
   daySection: { gap: Spacing.one },
@@ -446,6 +457,7 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', gap: Spacing.one, paddingRight: Spacing.two },
   footer: { alignItems: 'center', minHeight: TouchTarget, paddingVertical: Spacing.two },
   header: { gap: Spacing.three, paddingBottom: Spacing.two },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   iconWrap: { alignItems: 'center', borderRadius: Radius.medium, height: 40, justifyContent: 'center', width: 40 },
   invitationActions: { borderTopColor: 'rgba(128,128,128,0.18)', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, justifyContent: 'flex-end', padding: Spacing.two },
   invitationButton: { flex: 1, paddingHorizontal: Spacing.three },
@@ -464,4 +476,6 @@ const styles = StyleSheet.create({
   sourcePill: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', flexShrink: 0, gap: 4, minHeight: 24, paddingHorizontal: Spacing.two, paddingVertical: 3 },
   title: { flex: 1, minWidth: 0 },
   titleLine: { alignItems: 'center', flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'space-between', width: '100%' },
+  unreadDot: { borderRadius: Radius.pill, height: 7, width: 7 },
+  updateCount: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, justifyContent: 'center', minHeight: 30, paddingHorizontal: Spacing.two },
 });

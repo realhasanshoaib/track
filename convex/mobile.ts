@@ -540,7 +540,12 @@ export const listMyTasks = query({
             ...view,
             assigneeName: assigneeName ?? null,
             group: group ? { _id: group._id, name: group.name } : null,
-            project: { _id: project._id, name: project.name },
+            project: {
+              _id: project._id,
+              name: project.name,
+              markColorKey: project.markColorKey,
+              markIconKey: project.markIconKey,
+            },
             companyId: membership.companyId,
             companyName: membership.companyDisplayNameSnapshot,
             projectMemberId: membership._id,

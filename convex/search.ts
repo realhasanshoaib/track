@@ -2,15 +2,18 @@ import { resolveReleaseFeatureFlag } from '@track/shared/feature-flags'
 import { v } from 'convex/values'
 
 import type { Id } from './_generated/dataModel'
-import { query } from './_generated/server'
+import { query, type QueryCtx } from './_generated/server'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
 import { createTaskRequestScope } from './lib/taskPolicy'
 import { threadsEnabled } from './lib/channelThreadPolicy'
 import { searchArchivedTasks } from './lib/taskData'
 import { archivedTaskSearchHit, searchNormalizedProjectArchive } from './lib/archivedProjectSearch'
+import { getGroupUnreadCount } from './lib/groupUnreadCount'
+import { isUnreadChannelMessage, isUnreadThread, isUnreadThreadMessage } from './lib/searchUnread'
 
 const searchScope = v.union(
   v.literal('all'),
+  v.literal('conversations'),
   v.literal('messages'),
   v.literal('files'),
   v.literal('groups'),
@@ -22,6 +25,49 @@ const searchScope = v.union(
 
 const searchThreadStatus = v.union(v.literal('active'), v.literal('archived'))
 
+type ProjectSearchResult = {
+  files: unknown[]
+  groups: Array<{
+    createdAt: number
+    groupId: Id<'groups'>
+    groupName: string
+    id: Id<'groups'>
+    kind: 'group'
+    preview: string
+    subtitle: string
+    title: string
+  }>
+  messages: Array<{
+    createdAt: number
+    groupId: Id<'groups'>
+    groupName: string
+    id: Id<'messages'>
+    kind: 'message'
+    messageId: Id<'messages'>
+    preview: string
+    subtitle: string
+    threadId: Id<'channelThreads'> | undefined
+    threadName: string | undefined
+    title: string
+  }>
+  people: unknown[]
+  projects: unknown[]
+  tasks: unknown[]
+  threads: Array<{
+    createdAt: number
+    groupId: Id<'groups'>
+    groupName: string
+    id: Id<'channelThreads'>
+    kind: 'thread'
+    preview: string
+    subtitle: string
+    threadId: Id<'channelThreads'>
+    threadName: string
+    title: string
+  }>
+  unreadSearchTruncated: boolean
+}
+
 function compactPreview(value: string, fallback = 'No preview available') {
   const preview = value.replace(/\s+/g, ' ').trim()
   if (!preview) return fallback
@@ -29,8 +75,65 @@ function compactPreview(value: string, fallback = 'No preview available') {
 }
 
 function enabled(scope: string, candidate: string) {
-  return scope === 'all' || scope === candidate
+  return scope === 'all' || scope === candidate || (scope === 'conversations' && ['messages', 'groups', 'threads'].includes(candidate))
 }
+
+type ProjectSearchArgs = {
+  actingCompanyId?: Id<'companies'>
+  filter?: 'all' | 'conversations' | 'messages' | 'files' | 'groups' | 'people' | 'projects' | 'tasks' | 'threads'
+  groupId?: Id<'groups'>
+  limit?: number
+  projectId: Id<'projects'>
+  projectMemberId?: Id<'projectMembers'>
+  query: string
+  threadStatus?: 'active' | 'archived'
+  unreadOnly?: boolean
+  userId: Id<'users'>
+}
+
+const projectSearchArgs = {
+  filter: v.optional(searchScope),
+  limit: v.optional(v.number()),
+  projectId: v.id('projects'),
+  query: v.string(),
+  userId: v.id('users'),
+  groupId: v.optional(v.id('groups')),
+  actingCompanyId: v.optional(v.id('companies')),
+  projectMemberId: v.optional(v.id('projectMembers')),
+  threadStatus: v.optional(searchThreadStatus),
+  unreadOnly: v.optional(v.boolean()),
+}
+
+export const project = query({ args: projectSearchArgs, handler: searchProject })
+
+export const conversations = query({
+  args: {
+    projects: v.array(v.object({
+      actingCompanyId: v.optional(v.id('companies')),
+      projectId: v.id('projects'),
+      projectMemberId: v.id('projectMembers'),
+    })),
+    query: v.string(),
+    unreadOnly: v.boolean(),
+    userId: v.id('users'),
+  },
+  handler: async (ctx, args): Promise<{ projects: Array<{ projectId: Id<'projects'>; results: ProjectSearchResult }> }> => {
+    const term = args.query.trim()
+    if (term.length < 2) return { projects: [] }
+    const projects = await Promise.all(args.projects.map(async (scope) => ({
+      projectId: scope.projectId,
+      results: await searchProject(ctx, {
+        ...scope,
+        filter: 'conversations',
+        limit: 12,
+        query: term,
+        unreadOnly: args.unreadOnly,
+        userId: args.userId,
+      }),
+    })))
+    return { projects }
+  },
+})
 
 type ArchivedChannelSnapshot = {
   _id: Id<'groups'>
@@ -43,6 +146,9 @@ type ArchivedThreadSnapshot = {
   _id: Id<'channelThreads'>
   createdAt?: number
   groupId?: Id<'groups'>
+  following?: boolean
+  lastReadChannelSequence?: number
+  latestChannelSequence?: number
   name: string
   status: 'active' | 'archived'
 }
@@ -52,19 +158,7 @@ type ArchivedMemberSnapshot = {
   user: { displayName: string }
 }
 
-export const project = query({
-  args: {
-    filter: v.optional(searchScope),
-    limit: v.optional(v.number()),
-    projectId: v.id('projects'),
-    query: v.string(),
-    userId: v.id('users'),
-    groupId: v.optional(v.id('groups')),
-    actingCompanyId: v.optional(v.id('companies')),
-    projectMemberId: v.optional(v.id('projectMembers')),
-    threadStatus: v.optional(searchThreadStatus),
-  },
-  handler: async (ctx, args) => {
+async function searchProject(ctx: QueryCtx, args: ProjectSearchArgs): Promise<ProjectSearchResult> {
     const access = await authorizeScopedRequest(ctx, {
       projectId: args.projectId,
       claimedUserId: args.userId,
@@ -85,14 +179,16 @@ export const project = query({
         projects: [],
         tasks: [],
         threads: [],
+        unreadSearchTruncated: false,
       }
     }
 
     if (access.companyAccess?.entitlement?.snapshotOperationId) {
+      const unreadCandidateLimit = args.unreadOnly ? 101 : perSectionLimit
       const archivedResults = await searchNormalizedProjectArchive(ctx, {
         entitlement: access.companyAccess.entitlement,
         projectMember: access.companyAccess.projectMember,
-        term, filter, limit: perSectionLimit, threadStatus: args.threadStatus,
+        term, filter, limit: unreadCandidateLimit, threadStatus: args.threadStatus, unreadOnly: args.unreadOnly ?? false,
       })
       const normalizedTerm = term.toLowerCase()
       const people = enabled(filter, 'people')
@@ -123,13 +219,30 @@ export const project = query({
             title: archivedProject.name,
           }]
         : []
+      let archivedMessages = args.groupId
+        ? archivedResults.messages.filter((message) => message.groupId === args.groupId)
+        : archivedResults.messages
+      let archivedGroups = archivedResults.groups
+      let archivedThreads = archivedResults.threads
+      if (args.unreadOnly) {
+        const groupIds = [...new Set(archivedGroups.map((group) => String(group.groupId)))]
+        const unreadCounts = new Map(await Promise.all(groupIds.map(async (groupId) => [
+          groupId,
+          await getGroupUnreadCount(ctx, groupId as Id<'groups'>, args.userId, access.projectMember._id, access.companyAccess?.entitlement?.exitAt),
+        ] as const)))
+        archivedMessages = archivedMessages.filter((message) => message.isUnread)
+        archivedGroups = archivedGroups.filter((group) => (unreadCounts.get(String(group.groupId)) ?? 0) > 0)
+        archivedThreads = archivedThreads.filter((thread) => thread.isUnread)
+      }
+      const unreadSearchTruncated = args.unreadOnly === true && Object.values(archivedResults.unreadSearchCandidateOverflow).some(Boolean)
       return {
         ...archivedResults,
-        messages: args.groupId
-          ? archivedResults.messages.filter((message) => message.groupId === args.groupId)
-          : archivedResults.messages,
+        groups: args.unreadOnly ? archivedGroups.slice(0, perSectionLimit) : archivedGroups,
+        messages: args.unreadOnly ? archivedMessages.slice(0, perSectionLimit) : archivedMessages,
         people,
         projects,
+        threads: args.unreadOnly ? archivedThreads.slice(0, perSectionLimit) : archivedThreads,
+        unreadSearchTruncated,
       }
     }
 
@@ -152,6 +265,7 @@ export const project = query({
     const memberSnapshotValues = (access.companyAccess?.entitlement?.memberSnapshots ?? []) as Array<ArchivedMemberSnapshot>
     const channelSnapshots = new Map(channelSnapshotValues.map((channel) => [String(channel._id), channel]))
     const threadSnapshots = new Map(threadSnapshotValues.map((thread) => [String(thread._id), thread]))
+    const candidateLimit = args.unreadOnly ? 101 : perSectionLimit
 
     const messages = enabled(filter, 'messages')
       && searchableGroupIds.length > 0
@@ -174,7 +288,7 @@ export const project = query({
                   )]
                 : []),
           ))
-          .take(perSectionLimit)
+          .take(candidateLimit)
       : []
     const messageResults = (
       await Promise.all(
@@ -184,18 +298,54 @@ export const project = query({
                   ? snapshot.membership._id === message.authorProjectMemberId
                   : snapshot.membership.userId === message.authorId)
               : undefined
-            const [liveAuthor, group, channelThread] = await Promise.all([
+            const [liveAuthor, group, channelThread, groupReadState, threadFollower, threadReadState] = await Promise.all([
               cutoff ? null : ctx.db.get(message.authorId),
               ctx.db.get(message.groupId),
               message.channelThreadId ? ctx.db.get(message.channelThreadId) : null,
+              args.unreadOnly && !message.channelThreadId
+                ? ctx.db.query('groupReadStates').withIndex('by_project_member_group', (q) =>
+                    q.eq('projectMemberId', access.projectMember._id).eq('groupId', message.groupId),
+                  ).unique()
+                : null,
+              args.unreadOnly && message.channelThreadId
+                ? ctx.db.query('channelThreadFollowers').withIndex('by_thread_project_member', (q) =>
+                    q.eq('channelThreadId', message.channelThreadId!).eq('projectMemberId', access.projectMember._id),
+                  ).unique()
+                : null,
+              args.unreadOnly && message.channelThreadId
+                ? ctx.db.query('channelThreadReadStates').withIndex('by_thread_project_member', (q) =>
+                    q.eq('channelThreadId', message.channelThreadId!).eq('projectMemberId', access.projectMember._id),
+                  ).unique()
+                : null,
             ])
             const authorName = archivedAuthor?.user.displayName ?? liveAuthor?.displayName ?? 'Unknown member'
             const groupName = channelSnapshots.get(String(message.groupId))?.name ?? group?.name ?? 'Unknown channel'
+            const isUnread = args.unreadOnly && message.channelThreadId
+              ? isUnreadThreadMessage({
+                  authorId: message.authorId,
+                  authorProjectMemberId: message.authorProjectMemberId,
+                  channelSequence: message.channelSequence,
+                  following: threadFollower?.preference === 'following',
+                  lastReadChannelSequence: threadReadState?.lastReadChannelSequence ?? 0,
+                  projectMemberId: access.projectMember._id,
+                  userId: args.userId,
+                })
+              : args.unreadOnly
+                ? isUnreadChannelMessage({
+                    authorId: message.authorId,
+                    authorProjectMemberId: message.authorProjectMemberId,
+                    createdAt: message.createdAt,
+                    lastReadAt: groupReadState?.lastReadAt ?? 0,
+                    projectMemberId: access.projectMember._id,
+                    userId: args.userId,
+                  })
+                : false
             return {
               createdAt: message.createdAt,
               groupId: message.groupId,
               groupName,
               id: message._id,
+              isUnread,
               kind: 'message' as const,
               messageId: message._id,
               threadId: message.channelThreadId,
@@ -279,7 +429,7 @@ export const project = query({
           .filter((q) => q.or(
             ...visibleGroupIdValues.map((groupId) => q.eq(q.field('_id'), groupId)),
           ))
-          .take(perSectionLimit)
+          .take(candidateLimit)
       : []
     const visibleGroupIds = new Set(visibleGroupIdValues.map(String))
     const groupResults = cutoff
@@ -366,7 +516,7 @@ export const project = query({
           .filter((q) => q.or(
             ...visibleGroupIdValues.map((groupId) => q.eq(q.field('groupId'), groupId)),
           ))
-          .take(perSectionLimit)
+          .take(candidateLimit)
       : []
     const archivedThreadMatches = cutoff && threadsEnabled() && enabled(filter, 'threads')
       ? threadSnapshotValues
@@ -374,7 +524,7 @@ export const project = query({
             (!args.threadStatus || thread.status === args.threadStatus) &&
             thread.name.toLowerCase().includes(term.toLowerCase()),
           )
-          .slice(0, perSectionLimit)
+          .slice(0, candidateLimit)
       : []
     const threadResults = (await Promise.all(
       cutoff
@@ -388,6 +538,13 @@ export const project = query({
               groupId,
               groupName,
               id: snapshot._id,
+              isUnread: args.unreadOnly
+                ? isUnreadThread({
+                    following: snapshot.following === true,
+                    latestChannelSequence: snapshot.latestChannelSequence ?? 0,
+                    lastReadChannelSequence: snapshot.lastReadChannelSequence ?? 0,
+                  })
+                : false,
               kind: 'thread' as const,
               preview: snapshot.status === 'archived' ? 'Archived thread' : 'Active thread',
               subtitle: groupName,
@@ -397,13 +554,30 @@ export const project = query({
             }
           })
         : channelThreads.map(async (thread) => {
-            const group = await ctx.db.get(thread.groupId)
+            const [group, follower, readState] = await Promise.all([
+              ctx.db.get(thread.groupId),
+              args.unreadOnly
+                ? ctx.db.query('channelThreadFollowers').withIndex('by_thread_project_member', (q) =>
+                    q.eq('channelThreadId', thread._id).eq('projectMemberId', access.projectMember._id),
+                  ).unique()
+                : null,
+              args.unreadOnly
+                ? ctx.db.query('channelThreadReadStates').withIndex('by_thread_project_member', (q) =>
+                    q.eq('channelThreadId', thread._id).eq('projectMemberId', access.projectMember._id),
+                  ).unique()
+                : null,
+            ])
             const groupName = group?.name ?? 'Unknown channel'
             return {
               createdAt: thread.createdAt,
               groupId: thread.groupId,
               groupName,
               id: thread._id,
+              isUnread: args.unreadOnly && isUnreadThread({
+                following: follower?.preference === 'following',
+                latestChannelSequence: thread.latestChannelSequence ?? 0,
+                lastReadChannelSequence: readState?.lastReadChannelSequence ?? 0,
+              }),
               kind: 'thread' as const,
               preview: thread.status === 'archived' ? 'Archived thread' : 'Active thread',
               subtitle: groupName,
@@ -413,6 +587,20 @@ export const project = query({
             }
           }))
     ).filter((result) => result !== null)
+
+    const unreadCounts = new Map<string, number>()
+    if (args.unreadOnly) {
+      const groupIds = [...new Set(groupResults.map((group) => String(group.groupId)))]
+      const counts = await Promise.all(groupIds.map(async (groupId) => [
+        groupId,
+        await getGroupUnreadCount(ctx, groupId as Id<'groups'>, args.userId, access.projectMember._id, cutoff),
+      ] as const))
+      for (const [groupId, unreadCount] of counts) unreadCounts.set(groupId, unreadCount)
+    }
+    const unreadSearchTruncated = args.unreadOnly === true && (
+      messages.length > 100 || groupResults.length > 100
+      || (cutoff ? archivedThreadMatches.length : channelThreads.length) > 100
+    )
 
     const normalizedTerm = term.toLowerCase()
     const activeProject = await ctx.db.get(args.projectId)
@@ -456,12 +644,14 @@ export const project = query({
 
     return {
       files: fileResults,
-      groups: groupResults,
-      messages: messageResults,
+      groups: args.unreadOnly
+        ? groupResults.filter((group) => (unreadCounts.get(String(group.groupId)) ?? 0) > 0).slice(0, perSectionLimit)
+        : groupResults,
+      messages: args.unreadOnly ? messageResults.filter((message) => message.isUnread).slice(0, perSectionLimit) : messageResults,
       people,
       projects,
       tasks: taskResults,
-      threads: threadResults,
+      threads: args.unreadOnly ? threadResults.filter((thread) => thread.isUnread).slice(0, perSectionLimit) : threadResults,
+      unreadSearchTruncated,
     }
-  },
-})
+}

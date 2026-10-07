@@ -211,16 +211,19 @@ const styles = StyleSheet.create({
   },
   bars: {
     alignItems: 'center',
+    alignSelf: 'center',
     flexDirection: 'row',
     gap: 2,
-    height: '100%',
+    height: 26,
     justifyContent: 'center',
+    width: '100%',
   },
   knob: {
     borderRadius: Radius.pill,
     height: 10,
     marginLeft: -5,
     position: 'absolute',
+    top: 13,
     width: 10,
   },
   main: {
@@ -236,7 +239,7 @@ const styles = StyleSheet.create({
   },
   playButton: {
     alignItems: 'center',
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
     borderRadius: Radius.pill,
     height: PLAY_SIZE,
     justifyContent: 'center',
@@ -244,13 +247,14 @@ const styles = StyleSheet.create({
   },
   playedClip: {
     bottom: 0,
+    justifyContent: 'center',
     left: 0,
     overflow: 'hidden',
     position: 'absolute',
     top: 0,
   },
   row: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: Spacing.one,
   },
@@ -263,7 +267,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.one,
   },
   track: {
-    height: 26,
+    alignItems: 'center',
+    height: PLAY_SIZE,
     justifyContent: 'center',
   },
 });

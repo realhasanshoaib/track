@@ -70,14 +70,12 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
       // A screen input may still hold the keyboard; the modal is a separate
       // window, so stale keyboard padding would float the sheet mid-screen.
       Keyboard.dismiss();
-      translateY.value = 0;
-      translateX.value = 0;
       const entrance = presentation === 'drawer' ? translateX : translateY;
-      entrance.value = reducedMotion ? 0 : distance;
-      entrance.value = withTiming(0, {
-        duration: reducedMotion ? 0 : 210,
-        easing: Easing.out(Easing.cubic),
-      });
+      translateY.value = presentation === 'drawer' ? 0 : distance;
+      translateX.value = presentation === 'drawer' ? distance : 0;
+      entrance.value = reducedMotion
+        ? withTiming(0, { duration: 0 })
+        : withSpring(0, { dampingRatio: 0.88, duration: 250 });
       scrim.value = withTiming(1, { duration: reducedMotion ? 0 : 180 });
     } else {
       scrim.value = withTiming(0, { duration: reducedMotion ? 0 : 120 });
@@ -104,6 +102,7 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
         ? event.translationX > DISMISS_DISTANCE || event.velocityX > DISMISS_VELOCITY
         : event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY;
       if (shouldClose) {
+        scheduleOnRN(hapticLight);
         scheduleOnRN(onClose);
         return;
       }

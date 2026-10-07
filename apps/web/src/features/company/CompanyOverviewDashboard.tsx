@@ -27,6 +27,7 @@ type Props = {
   isAdmin: boolean
   overview: Overview | undefined
   projects: ProjectDirectory | undefined
+  searchQuery: string
   onCreateProjectRequestHandled: () => void
   run: AsyncAction
 }
@@ -41,7 +42,7 @@ function relativeTime(timestamp: number) {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-export function CompanyOverviewDashboard({ activeCompanyId, companyName, createProjectRequest, currentUserId, isAdmin, onCreateProjectRequestHandled, onCreateTaskRequest, overview, projects, run }: Props & { onCreateTaskRequest?: () => void }) {
+export function CompanyOverviewDashboard({ activeCompanyId, companyName, createProjectRequest, currentUserId, isAdmin, onCreateProjectRequestHandled, onCreateTaskRequest, overview, projects, run, searchQuery }: Props & { onCreateTaskRequest?: () => void }) {
   const [quickAction, setQuickAction] = useState<QuickAction | null>(null)
   const [rangeDays, setRangeDays] = useState<7 | 30 | 90>(7)
   const [chartProjectId, setChartProjectId] = useState<Id<'projects'> | ''>('')
@@ -49,6 +50,11 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
   const [settingsProject, setSettingsProject] = useState<OverviewProjectDialogTarget | null>(null)
   const uniqueProjects = useMemo(() => Array.from(new Map((projects ?? []).map((row) => [row.project._id, row])).values()), [projects])
   const overviewProjects = useMemo(() => Array.from(new Map((overview?.projects ?? []).map((project) => [project.id, project])).values()), [overview?.projects])
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase()
+  const matchesSearch = (value: string) => !normalizedSearch || value.toLocaleLowerCase().includes(normalizedSearch)
+  const visibleOverviewProjects = overviewProjects.filter((project) => matchesSearch(`${project.name} ${project.description ?? ''}`)).slice(0, 4)
+  const visibleActivity = (overview?.recentActivity ?? []).filter((activity) => matchesSearch(`${activity.preview} ${activity.projectName} ${activity.action}`))
+  const visibleWorkload = (overview?.workload ?? []).filter((owner) => matchesSearch(`${owner.name} ${owner.projects?.join(' ') ?? ''}`))
   useEffect(() => {
     if (createProjectRequest <= 0) return
     setQuickAction('project')
@@ -61,7 +67,7 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
   const trend = (shouldUseInitialOverview ? overview?.activityTrend : rangedOverview?.activityTrend) ?? []
   const hasTaskActivity = trend.some((point) => point.created > 0 || point.completed > 0)
   const workload = overview?.workload ?? []
-  const maxWorkload = Math.max(1, ...workload.map((owner) => owner.open))
+  const maxWorkload = Math.max(1, ...visibleWorkload.map((owner) => owner.open))
 
   function openQuickAction(action: QuickAction) { if (action === 'task') { onCreateTaskRequest?.(); return } setQuickAction(action) }
   function closeQuickAction() { setQuickAction(null) }
@@ -84,10 +90,6 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
   }
 
   return <div aria-busy={!overview} className="company-overview-live">
-    <section aria-label={`${companyName} overview`} className="company-dashboard-welcome">
-      <div><h2>{companyName}</h2><p>Projects and recent activity.</p></div>
-    </section>
-
     <section aria-label="Company task summary" className="company-dashboard-stat-grid">
       {[
         { label: 'Open tasks', value: overview?.stats?.openTasks, tone: 'amber', context: 'Company total', icon: <Mail aria-hidden="true" /> },
@@ -98,7 +100,7 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
     </section>
 
     <div className="company-dashboard-grid">
-      <section className="company-dashboard-panel company-dashboard-progress"><div className="company-dashboard-panel-heading"><div><h2>Project progress</h2><p>Completion across all company projects</p></div></div><div className="company-dashboard-project-list">{!overview ? <div aria-label="Loading projects" className="company-dashboard-skeleton" role="status" /> : overviewProjects.length === 0 ? <div className="company-quiet-empty"><FolderKanban aria-hidden="true" size={18} /><strong>No projects yet</strong></div> : overviewProjects.slice(0, 4).map((project, index) => {
+      <section className="company-dashboard-panel company-dashboard-progress"><div className="company-dashboard-panel-heading"><div><h2>Projects at a glance</h2><p>Progress and health across this Company.</p></div><Link search={{ view: 'projects', taskFilter: undefined }} to="/workspace/company">All Projects</Link></div><div className="company-dashboard-project-list">{!overview ? <div aria-label="Loading projects" className="company-dashboard-skeleton" role="status" /> : overviewProjects.length === 0 ? <div className="company-quiet-empty"><FolderKanban aria-hidden="true" size={18} /><strong>No projects yet</strong></div> : visibleOverviewProjects.length === 0 ? <div className="company-quiet-empty"><strong>No Projects match this search.</strong></div> : visibleOverviewProjects.map((project, index) => {
         const source = projectSources.get(project.id)
         const content = <><span className={`company-dashboard-project-icon tone-${(index % 3) + 1}`}><FolderKanban aria-hidden="true" size={20} /></span><div className="company-dashboard-project-copy"><strong>{project.name}</strong><span>{project.completedTasks}/{project.totalTasks} tasks done · {project.description ?? 'No project description'}</span><div className="company-dashboard-progress-track"><i style={{ width: `${project.progress}%` }} /></div></div><span className={`company-dashboard-health ${project.health.toLowerCase().replace(' ', '-')}`}>{project.health}</span><strong className="company-dashboard-percent">{project.progress}%</strong></>
         return <div className="company-dashboard-project-row-shell" key={project.id}>
@@ -116,7 +118,7 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
         </div>
       })}</div></section>
 
-      <section className="company-dashboard-panel company-dashboard-activity"><div className="company-dashboard-panel-heading"><div><h2>Recent activity</h2><p>Latest updates across your projects, tasks, and threads.</p></div></div><div className="company-dashboard-activity-list">{!overview ? <div aria-label="Loading activity" className="company-dashboard-skeleton" role="status" /> : overview.recentActivity.length === 0 ? <div className="company-quiet-empty"><strong>No recent activity yet</strong></div> : overview.recentActivity.map((activity, index) => {
+      <section className="company-dashboard-panel company-dashboard-activity"><div className="company-dashboard-panel-heading"><div><h2>Recent activity</h2><p>Latest updates across your projects, tasks, and threads.</p></div></div><div className="company-dashboard-activity-list">{!overview ? <div aria-label="Loading activity" className="company-dashboard-skeleton" role="status" /> : overview.recentActivity.length === 0 ? <div className="company-quiet-empty"><strong>No recent activity yet</strong></div> : visibleActivity.length === 0 ? <div className="company-quiet-empty"><strong>No activity matches this search.</strong></div> : visibleActivity.map((activity, index) => {
         const href = activityHref(activity)
         const content = <><span className={`company-dashboard-avatar tone-${(index % 4) + 1}`}>{activity.actorInitials}</span><div><strong>{activity.preview}</strong><span>{activity.projectName} · {activity.action}</span></div><time>{relativeTime(activity.createdAt)}</time><small className={activity.kind}>{activity.kind === 'message' ? 'Comment' : activity.kind === 'task' ? 'Task' : 'Project'}</small></>
         return <div className="company-dashboard-activity-row-shell" key={activity.id}>
@@ -135,7 +137,7 @@ export function CompanyOverviewDashboard({ activeCompanyId, companyName, createP
     </div>
 
     <div className="company-dashboard-bottom-grid company-dashboard-bottom-grid-live">
-      <section aria-label="Workload by owner" className="company-dashboard-panel company-dashboard-workload-panel"><div className="company-dashboard-panel-heading"><div><h2>Workload by owner</h2><p>Open and overdue tasks across projects</p></div><UsersRound aria-hidden="true" size={18} /></div>{!overview ? <div aria-label="Loading workload" className="company-dashboard-skeleton" role="status" /> : workload.length === 0 ? <div className="company-quiet-empty"><strong>No assigned work yet</strong><span>Workload will appear when tasks are assigned.</span></div> : <ol className="company-dashboard-workload-list">{workload.map((owner) => <li key={owner.id}><span aria-hidden="true" className="company-dashboard-workload-avatar">{owner.initials}</span><div className="company-dashboard-workload-copy"><strong>{owner.name}</strong><span title={owner.projects?.join(', ')}>{owner.projects?.length ? owner.projects.join(', ') : `${owner.open} open · ${owner.completed} done`}</span><div aria-hidden="true" className="company-dashboard-workload-track"><i style={{ width: `${(owner.open / maxWorkload) * 100}%` }} /></div></div><span className="company-dashboard-workload-meta"><strong aria-label={`${owner.open} open ${owner.open === 1 ? 'task' : 'tasks'}`}>{owner.open}</strong><small>{owner.overdue ? `${owner.overdue} overdue` : 'On track'}</small></span></li>)}</ol>}</section>
+      <section aria-label="Workload by owner" className="company-dashboard-panel company-dashboard-workload-panel"><div className="company-dashboard-panel-heading"><div><h2>Workload by owner</h2><p>Open and overdue tasks across projects</p></div><UsersRound aria-hidden="true" size={18} /></div>{!overview ? <div aria-label="Loading workload" className="company-dashboard-skeleton" role="status" /> : workload.length === 0 ? <div className="company-quiet-empty"><strong>No assigned work yet</strong><span>Workload will appear when tasks are assigned.</span></div> : visibleWorkload.length === 0 ? <div className="company-quiet-empty"><strong>No people match this search.</strong></div> : <ol className="company-dashboard-workload-list">{visibleWorkload.map((owner) => <li key={owner.id}><span aria-hidden="true" className="company-dashboard-workload-avatar">{owner.initials}</span><div className="company-dashboard-workload-copy"><strong>{owner.name}</strong><span title={owner.projects?.join(', ')}>{owner.projects?.length ? owner.projects.join(', ') : `${owner.open} open · ${owner.completed} done`}</span><div aria-hidden="true" className="company-dashboard-workload-track"><i style={{ width: `${(owner.open / maxWorkload) * 100}%` }} /></div></div><span className="company-dashboard-workload-meta"><strong aria-label={`${owner.open} open ${owner.open === 1 ? 'task' : 'tasks'}`}>{owner.open}</strong><small>{owner.overdue ? `${owner.overdue} overdue` : 'On track'}</small></span></li>)}</ol>}</section>
 
       <section className="company-dashboard-panel company-dashboard-chart-panel">
         <div className="company-dashboard-panel-heading">

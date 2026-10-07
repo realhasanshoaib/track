@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Building2, Clock3, FolderKanban, Users } from 'lucide-react'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
+import './workspace-home.css'
 
 type WorkspaceProject = {
   project: Doc<'projects'>
@@ -39,7 +40,6 @@ export function WorkspaceHomePage({ projects }: { projects: Array<WorkspaceProje
     <div className="track-workspace-home">
       <header className="track-workspace-home-intro">
         <div>
-          <p className="mono-label">Workspace</p>
           <h2>Projects</h2>
           <p>Continue in a project, channel, or task without losing the conversation around it.</p>
         </div>
