@@ -56,18 +56,18 @@
     "@q9labsai/config-tsconfig": "^0.3.0",
     "@q9labsai/diagnostics": "^0.3.0",
     "@q9labsai/gates": "^0.3.0",
-    "@types/node": "^25.9.5",
+    "@types/node": "^26.6.4",
     "@types/web-push": "^3.6.4",
     "convex": "^1.42.1",
-    "convex-test": "0.0.54",
-    "dependency-cruiser": "18.2.0",
-    "oxfmt": "0.70.0",
-    "oxlint": "1.79.0",
-    "oxlint-tsgolint": "7.0.2001",
-    "turbo": "^2.10.4",
+    "convex-test": "0.0.60",
+    "dependency-cruiser": "18.5.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "turbo": "^2.11.7",
     "typescript": "7.0.2",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.110.0"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.147.0"
   },
   "engines": {
     "node": ">=24"
