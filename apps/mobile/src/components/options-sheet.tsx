@@ -4,6 +4,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,12 +38,13 @@ const SEARCH_PAGE = 30;
 type Props = {
   children: React.ReactNode;
   onClose: () => void;
+  onClosed?: () => void;
   presentation?: 'sheet' | 'drawer';
   title: string;
   visible: boolean;
 };
 
-export function OptionsSheet({ children, onClose, presentation = 'sheet', title, visible }: Props) {
+export function OptionsSheet({ children, onClose, onClosed, presentation = 'sheet', title, visible }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(0);
@@ -50,6 +52,8 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
   const scrim = useSharedValue(0);
   const reducedMotion = useReducedMotion();
   const [mounted, setMounted] = useState(visible);
+  const [rendered, setRendered] = useState(visible);
+  const wasRendered = useRef(rendered);
   const scrollMetrics = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
   const [showScrollHint, setShowScrollHint] = useState(false);
 
@@ -64,6 +68,7 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
     const distance = presentation === 'drawer' ? 440 : 520;
     let dismissTimer: ReturnType<typeof setTimeout> | undefined;
     if (visible) {
+      setRendered(true);
       setMounted(true);
       scrollMetrics.current = { contentHeight: 0, offsetY: 0, viewportHeight: 0 };
       setShowScrollHint(false);
@@ -91,6 +96,17 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
     }
     return () => { if (dismissTimer) clearTimeout(dismissTimer); };
   }, [presentation, reducedMotion, scrim, translateX, translateY, visible]);
+
+  useEffect(() => {
+    // iOS needs the Modal to stay mounted with visible=false until native
+    // dismissal finishes. Android does not report onDismiss.
+    if (Platform.OS !== 'ios' && rendered && !mounted && !visible) setRendered(false);
+  }, [mounted, rendered, visible]);
+
+  useEffect(() => {
+    if (wasRendered.current && !rendered && !visible) onClosed?.();
+    wasRendered.current = rendered;
+  }, [onClosed, rendered, visible]);
 
   const pan = (presentation === 'drawer' ? Gesture.Pan().activeOffsetX([-12, 12]) : Gesture.Pan().activeOffsetY([-12, 12]))
     .onUpdate((event) => {
@@ -120,10 +136,15 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
     transform: presentation === 'drawer' ? [{ translateX: translateX.value }] : [{ translateY: translateY.value }],
   }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: scrim.value }));
-  if (!mounted) return null;
+  if (!rendered) return null;
 
   return (
-    <Modal animationType="none" transparent visible={mounted} onRequestClose={onClose}>
+    <Modal
+      animationType="none"
+      onDismiss={() => { if (!visible) setRendered(false); }}
+      onRequestClose={onClose}
+      transparent
+      visible={mounted}>
       <GestureHandlerRootView style={styles.modal}>
         <KeyboardAvoidingView behavior="padding" style={styles.modal}>
           <Animated.View style={[styles.scrimLayer, scrimStyle]}>
@@ -216,6 +237,7 @@ export function OptionsSheet({ children, onClose, presentation = 'sheet', title,
 export function SheetSection({ children, title }: { children: React.ReactNode; title?: string }) {
   const theme = useTheme();
   const items = Children.toArray(children);
+  if (items.length === 0) return null;
   return (
     <View style={styles.section}>
       {title ? (
@@ -255,7 +277,11 @@ export function SheetNote({
   return (
     <View
       accessibilityRole={state === 'error' ? 'alert' : undefined}
-      style={[styles.note, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
+      style={[styles.note, state === 'default' && styles.notePlain, {
+        backgroundColor: state === 'default' ? 'transparent' : theme.backgroundElement,
+        borderColor: state === 'default' ? 'transparent' : theme.homeBorder,
+        borderWidth: state === 'default' ? 0 : StyleSheet.hairlineWidth,
+      }]}>
       <ThemedText style={{ color }} type="caption">{children}</ThemedText>
     </View>
   );
@@ -273,6 +299,7 @@ export function SheetRow({
   loading,
   onPress,
   selected,
+  selectedAppearance = 'accent',
   state = 'default',
   trailing,
 }: {
@@ -287,43 +314,47 @@ export function SheetRow({
   loading?: boolean;
   onPress?: () => void;
   selected?: boolean;
+  selectedAppearance?: 'accent' | 'neutral';
   state?: 'default' | 'success' | 'error' | 'offline';
   trailing?: React.ReactNode;
 }) {
   const theme = useTheme();
   const textColor = destructive || state === 'error' ? theme.danger : state === 'success' ? theme.success : theme.text;
   const iconColor = destructive || state === 'error' ? theme.danger : state === 'success' ? theme.success : state === 'offline' ? theme.accentStrong : theme.textSecondary;
+  const selectedColor = selectedAppearance === 'neutral' ? theme.text : theme.accentStrong;
+  const selectedBackground = selectedAppearance === 'neutral' ? theme.backgroundSelected : theme.accentSoft;
   const unavailable = disabled || loading;
 
   return (
     <Pressable
+      accessible={Boolean(onPress)}
       accessibilityHint={accessibilityHint}
-      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      accessibilityLabel={onPress ? (detail ? `${label}, ${detail}` : label) : undefined}
       accessibilityRole={onPress ? accessibilityRole ?? (selected === undefined ? 'button' : 'radio') : undefined}
-      accessibilityState={{
+      accessibilityState={onPress ? {
         busy: Boolean(loading),
         disabled: Boolean(unavailable),
         ...(accessibilityRole === 'checkbox' ? { checked: Boolean(selected) } : { selected }),
-      }}
-      android_ripple={{ color: theme.backgroundSelected }}
-      disabled={unavailable}
-      onPress={() => { if (onPress) { hapticLight(); onPress(); } }}
+      } : undefined}
+      android_ripple={onPress ? { color: theme.backgroundSelected } : undefined}
+      disabled={unavailable || !onPress}
+      onPress={onPress ? () => { hapticLight(); onPress(); } : undefined}
       style={({ pressed }) => [
         styles.sheetRow,
         {
-          backgroundColor: selected ? theme.accentSoft : pressed ? theme.backgroundElement : 'transparent',
+          backgroundColor: selected ? selectedBackground : pressed && onPress ? theme.backgroundElement : 'transparent',
           opacity: unavailable ? 0.45 : 1,
         },
       ]}>
-      <View style={styles.sheetRowLeading}>
-        {leading ?? (icon || state === 'offline' ? (
+      {leading || icon || state === 'offline' ? <View style={styles.sheetRowLeading}>
+        {leading ?? (
           <View style={[styles.sheetRowIcon, { backgroundColor: theme.backgroundElement }]}>
             <PlatformIcon color={iconColor} name={icon ?? 'cloud-off'} size={19} />
           </View>
-        ) : null)}
-      </View>
+        )}
+      </View> : null}
       <View style={styles.sheetRowBody}>
-        <ThemedText numberOfLines={1} style={{ color: textColor }} type="small">
+        <ThemedText numberOfLines={2} style={{ color: textColor }} type="small">
           {label}
         </ThemedText>
         {detail ? (
@@ -331,7 +362,7 @@ export function SheetRow({
         ) : null}
       </View>
       {loading ? <ActivityIndicator color={iconColor} size="small" /> : selected ? (
-        <PlatformIcon color={theme.accentStrong} name="check-circle" size={19} />
+        <PlatformIcon color={selectedColor} name="check-circle" size={19} />
       ) : trailing ? (
         trailing
       ) : null}
@@ -411,34 +442,36 @@ export function SheetFieldButton({
   return (
     <View style={styles.inputWrap}>
       <ThemedText accessible={false} themeColor="textSecondary" type="captionBold">{label}</ThemedText>
-      <Pressable
-        accessibilityHint={`Opens the ${label.toLowerCase()} picker`}
-        accessibilityLabel={`${label}: ${value || placeholder}`}
-        accessibilityRole="button"
-        accessibilityState={expanded === undefined ? undefined : { expanded }}
-        android_ripple={{ color: theme.backgroundSelected }}
-        onPress={() => { hapticLight(); onPress(); }}
-        style={[styles.field, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
-        {icon ? <PlatformIcon color={theme.textSecondary} name={icon} size={19} /> : null}
-        <ThemedText
-          numberOfLines={1}
-          style={styles.fieldValue}
-          themeColor={value ? 'text' : 'textTertiary'}
-          type="small">
-          {value || placeholder}
-        </ThemedText>
+      <View style={[styles.field, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+        <Pressable
+          accessibilityHint={`Opens the ${label.toLowerCase()} picker`}
+          accessibilityLabel={`${label}: ${value || placeholder}`}
+          accessibilityRole="button"
+          accessibilityState={expanded === undefined ? undefined : { expanded }}
+          android_ripple={{ color: theme.backgroundSelected }}
+          onPress={() => { hapticLight(); onPress(); }}
+          style={styles.fieldMain}>
+          {icon ? <PlatformIcon color={theme.textSecondary} name={icon} size={19} /> : null}
+          <ThemedText
+            numberOfLines={1}
+            style={styles.fieldValue}
+            themeColor={value ? 'text' : 'textTertiary'}
+            type="small">
+            {value || placeholder}
+          </ThemedText>
+          {!value || !onClear ? <PlatformIcon color={theme.textTertiary} name={expanded === undefined ? 'chevron-right' : expanded ? 'chevron-up' : 'chevron-down'} size={18} /> : null}
+        </Pressable>
         {value && onClear ? (
           <Pressable
             accessibilityLabel={`Clear ${label.toLowerCase()}`}
             accessibilityRole="button"
-            hitSlop={14}
-            onPress={() => { hapticLight(); onClear(); }}>
+            android_ripple={{ color: theme.backgroundSelected, borderless: false }}
+            onPress={() => { hapticLight(); onClear(); }}
+            style={styles.fieldClear}>
             <PlatformIcon color={theme.textSecondary} name="close" size={17} />
           </Pressable>
-        ) : (
-          <PlatformIcon color={theme.textTertiary} name={expanded === undefined ? 'chevron-right' : expanded ? 'chevron-up' : 'chevron-down'} size={18} />
-        )}
-      </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -546,7 +579,7 @@ const styles = StyleSheet.create({
     width: TouchTarget,
   },
   content: {
-    gap: Spacing.four,
+    gap: Spacing.three,
     paddingBottom: Spacing.four,
   },
   field: {
@@ -554,9 +587,24 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
+    minHeight: TouchTarget,
+    overflow: 'hidden',
+  },
+  fieldMain: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
     gap: Spacing.two,
     minHeight: TouchTarget,
+    minWidth: 0,
     paddingHorizontal: Spacing.three,
+  },
+  fieldClear: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    minHeight: TouchTarget,
+    width: TouchTarget,
   },
   fieldValue: {
     flex: 1,
@@ -578,7 +626,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     justifyContent: 'space-between',
     minHeight: 52,
-    paddingBottom: Spacing.four,
+    paddingBottom: Spacing.two,
   },
   headerTitle: {
     flex: 1,
@@ -662,6 +710,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
+  notePlain: { minHeight: 0, paddingHorizontal: Spacing.one, paddingVertical: 0 },
   section: {
     gap: Spacing.two,
   },
@@ -676,7 +725,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: 64,
+    marginHorizontal: Spacing.three,
   },
   sheet: {
     borderRadius: Radius.xlarge,
@@ -706,7 +755,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: Spacing.three,
-    minHeight: 56,
+    minHeight: 52,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
@@ -724,8 +773,9 @@ const styles = StyleSheet.create({
   },
   sheetRowLeading: { alignItems: 'center', justifyContent: 'center', minWidth: 36 },
   sheetWrap: {
+    alignSelf: 'stretch',
     flexShrink: 1,
-    marginHorizontal: Spacing.two,
+    marginHorizontal: 0,
   },
   drawerWrap: {
     alignSelf: 'stretch',

@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { ImageViewer } from '@/components/chat/image-viewer';
 import type { ViewableImage } from '@/components/chat/types';
@@ -39,11 +40,12 @@ function knownImageRatio(image: ViewableImage) {
 }
 
 type Props = {
+  deliveryMeta?: ReactNode;
   images: ViewableImage[];
   onLongPress?: () => void;
 };
 
-export function ImageAttachments({ images, onLongPress }: Props) {
+export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
   const { width } = useWindowDimensions();
   const [openImage, setOpenImage] = useState<ViewableImage | null>(null);
   const maxWidth = Math.min(width * 0.72, 320);
@@ -87,6 +89,7 @@ export function ImageAttachments({ images, onLongPress }: Props) {
           ))}
         </View>
       )}
+      {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
       <ImageViewer image={openImage} onClose={() => setOpenImage(null)} />
     </View>
   );
@@ -119,6 +122,7 @@ function SingleImage({
       onPress={() => onPress(image)}
       style={[styles.tile, { backgroundColor: theme.skeleton, width: maxWidth }]}>
       <Image
+        cachePolicy="memory-disk"
         contentFit="cover"
         onError={() => {
           if (image.previewUrl && !previewFailed) {
@@ -130,12 +134,12 @@ function SingleImage({
         onLoad={({ source }) =>
           setRatio(knownImageRatio(image) ?? Math.min(Math.max(source.width / source.height, SINGLE_MIN_RATIO), SINGLE_MAX_RATIO))
         }
-        placeholder={PLACEHOLDER}
+        placeholder={Platform.OS === 'web' ? undefined : PLACEHOLDER}
         placeholderContentFit="cover"
         recyclingKey={image.id}
         source={{ uri: imageSource(image, previewFailed) }}
         style={{ aspectRatio: ratio, width: maxWidth }}
-        transition={180}
+        transition={90}
       />
     </Pressable>
   );
@@ -175,6 +179,7 @@ function ImageTile({
       onPress={() => onPress(image)}
       style={[styles.tile, { backgroundColor: theme.skeleton, height, width }]}>
       <Image
+        cachePolicy="memory-disk"
         contentFit="cover"
         onError={() => {
           if (image.previewUrl && !previewFailed) {
@@ -183,12 +188,12 @@ function ImageTile({
           }
           setOriginalFailed(true);
         }}
-        placeholder={PLACEHOLDER}
+        placeholder={Platform.OS === 'web' ? undefined : PLACEHOLDER}
         placeholderContentFit="cover"
         recyclingKey={image.id}
         source={{ uri: imageSource(image, previewFailed) }}
         style={styles.tileImage}
-        transition={180}
+        transition={90}
       />
       {overflow ? (
         <View style={[styles.overflow, { backgroundColor: theme.overlay }]}>
@@ -224,6 +229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.five,
   },
+  deliveryMeta: { bottom: 7, position: 'absolute', right: 8 },
   grid: {
     gap: GRID_GAP,
   },
@@ -249,5 +255,6 @@ const styles = StyleSheet.create({
   },
   wrap: {
     gap: Spacing.one,
+    position: 'relative',
   },
 });

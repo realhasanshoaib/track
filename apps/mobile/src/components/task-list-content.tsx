@@ -114,6 +114,7 @@ export function TaskCollection({
       onStatusPress={readOnly ? undefined : () => onStatusPress(item)}
       priority={item.task.priority}
       publicKey={item.task.publicKey}
+      showKey={false}
       stateName={item.state?.name ?? 'Unknown'}
       title={item.task.title}
     />

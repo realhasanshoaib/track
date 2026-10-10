@@ -54,8 +54,9 @@ export const Colors = {
     workflowCanceled: '#b91c1c',
     workflowCanceledSoft: '#fee2e2',
     workflowCanceledStrong: '#991b1b',
-    bubbleOwn: '#fef3c7',
+    bubbleOwn: '#ffffff',
     bubbleOther: '#f3f1ed',
+    messageBubbleBorder: '#d4cec4',
     overlay: 'rgba(27,25,23,0.45)',
     skeleton: '#e9e5dd',
   },
@@ -105,8 +106,9 @@ export const Colors = {
     workflowCanceled: '#fca5a5',
     workflowCanceledSoft: '#4b2222',
     workflowCanceledStrong: '#fecaca',
-    bubbleOwn: '#4a3800',
+    bubbleOwn: '#332f2a',
     bubbleOther: '#292522',
+    messageBubbleBorder: '#655d52',
     overlay: 'rgba(0,0,0,0.6)',
     skeleton: '#332f2a',
   },
@@ -271,6 +273,13 @@ export const Spacing = {
   six: 32,
 } as const;
 
+/** Shared spacing for native and content-level mobile headers. */
+export const MobileHeaderMetrics = {
+  actionGap: Spacing.one,
+  contentTop: Spacing.four,
+  rowMinHeight: 56,
+} as const;
+
 export const Radius = {
   small: 6,
   medium: 8,
@@ -298,6 +307,8 @@ export const IconSize = {
  * The navigation owns the device safe-area inset; screens only need this
  * stable content reserve so the last row never hides behind the bar.
  */
-export const BottomTabInset = 76;
-export const AndroidBottomTabHeight = 64;
+export const BottomTabInset = 70;
+export const AndroidBottomTabHeight = 56;
+export const PrimaryCreateActionSize = 56;
+export const PrimaryCreateActionClearance = Spacing.three;
 export const MaxContentWidth = 800;

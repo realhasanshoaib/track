@@ -433,6 +433,9 @@ export async function buildMessageDetail(
     ? archiveAuthorSnapshot ?? archivedMemberForMessage(message, archivedMemberSnapshots)
     : undefined
   const author = cutoff ? archivedAuthor?.user ?? null : await ctx.db.get(message.authorId)
+  const authorAvatarStorageId = author && 'avatarStorageId' in author && typeof author.avatarStorageId === 'string'
+    ? author.avatarStorageId
+    : null
   const authorProjectMember = cutoff
     ? archivedAuthor?.membership ?? null
     : message.authorProjectMemberId
@@ -440,27 +443,31 @@ export async function buildMessageDetail(
       : await ctx.db.query('projectMembers').withIndex('by_project_user', (q) =>
           q.eq('projectId', message.projectId).eq('userId', message.authorId),
         ).first()
-  const attachments = await Promise.all(
-    message.attachmentIds.map(async (attachmentId) => {
-      const attachment = await ctx.db.get(attachmentId)
-      if (!attachment || (cutoff && attachment.createdAt > cutoff)) return null
-      const [url, previewUrl] = await Promise.all([
-        ctx.storage.getUrl(attachment.storageId),
-        attachment.previewStatus === 'ready' && attachment.previewStorageId
-          ? ctx.storage.getUrl(attachment.previewStorageId)
-          : Promise.resolve(null),
-      ])
-      return {
-        attachment,
-        height: attachment.height,
-        previewHeight: attachment.previewHeight,
-        previewUrl,
-        previewWidth: attachment.previewWidth,
-        url,
-        width: attachment.width,
-      }
-    }),
+  const attachments = await Promise.all(message.attachmentIds.map(async (attachmentId) => {
+    const attachment = await ctx.db.get(attachmentId)
+    if (!attachment || (cutoff && attachment.createdAt > cutoff)) return null
+    const [url, previewUrl] = await Promise.all([
+      ctx.storage.getUrl(attachment.storageId),
+      attachment.previewStatus === 'ready' && attachment.previewStorageId
+        ? ctx.storage.getUrl(attachment.previewStorageId)
+        : Promise.resolve(null),
+    ])
+    return {
+      attachment,
+      height: attachment.height,
+      previewHeight: attachment.previewHeight,
+      previewUrl,
+      previewWidth: attachment.previewWidth,
+      url,
+      width: attachment.width,
+    }
+  }))
+  const hasAudioAttachment = attachments.some((entry) =>
+    entry && (entry.attachment.kind === 'voice_note' || entry.attachment.contentType.startsWith('audio/')),
   )
+  const authorAvatarUrl = hasAudioAttachment && authorAvatarStorageId
+    ? await ctx.storage.getUrl(authorAvatarStorageId)
+    : null
   const replyToMessage = message.replyToMessageId ? await ctx.db.get(message.replyToMessageId) : null
   const archiveReplyAuthorSnapshot = cutoff && archiveSnapshotOperationId && replyToMessage?.authorProjectMemberId
     ? await getArchivedMemberSnapshot(ctx, archiveSnapshotOperationId, replyToMessage.authorProjectMemberId)
@@ -521,6 +528,7 @@ export async function buildMessageDetail(
   return {
     message: message.forwardedFrom ? { ...message, forwardedFrom: undefined } : message,
     author,
+    authorAvatarUrl,
     authorRole: authorProjectMember?.role ?? null,
     authorCompany: authorProjectMember?.companyId
       ? {
@@ -537,7 +545,7 @@ export async function buildMessageDetail(
         ? {
             messageId: replyToMessage._id,
             authorName: replyToAuthor?.displayName ?? 'Unknown Member',
-            body: replyToMessage.body,
+            body: replyToMessage.deletedAt ? 'Message deleted' : replyToMessage.body,
             createdAt: replyToMessage.createdAt,
           }
         : null,
@@ -691,6 +699,48 @@ export const listDetailed = query({
   },
 })
 
+/** Returns aggregate read positions for message receipts inside this Channel. */
+export const readReceiptSequences = query({
+  args: {
+    groupId: v.id('groups'),
+    userId: v.id('users'),
+    actingCompanyId: v.optional(v.id('companies')),
+    projectMemberId: v.optional(v.id('projectMembers')),
+  },
+  handler: async (ctx, args) => {
+    const group = await ctx.db.get(args.groupId)
+    if (!group) throw new Error('channel_unavailable')
+    const access = await authorizeScopedRequest(ctx, {
+      projectId: group.projectId,
+      groupId: group._id,
+      claimedUserId: args.userId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }, 'readChannel')
+    if (access.companyAccess?.entitlement?.exitAt) return { recipientCount: 0, readThroughSequences: [] }
+
+    const [members, states] = await Promise.all([
+      ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', group._id)).collect(),
+      ctx.db.query('groupReadStates').withIndex('by_group', (q) => q.eq('groupId', group._id)).collect(),
+    ])
+    const recipients = new Set(members
+      .filter((member) => (!member.status || member.status === 'active') && member.userId !== args.userId)
+      .map((member) => String(member.userId)))
+    const recipientStates = states.filter((state) => state.userId !== args.userId && recipients.has(String(state.userId)))
+    const readThroughSequences = await Promise.all(recipientStates.map(async (state) => {
+      if (!state.lastReadMessageId) return 0
+      const lastReadMessage = await ctx.db.get(state.lastReadMessageId)
+      return lastReadMessage?.groupId === group._id && !lastReadMessage.channelThreadId
+        ? lastReadMessage.channelSequence ?? 0
+        : 0
+    }))
+    return {
+      recipientCount: recipients.size,
+      readThroughSequences,
+    }
+  },
+})
+
 export const listPage = query({
   args: {
     groupId: v.id('groups'),
@@ -787,6 +837,7 @@ export const edit = mutation({
   handler: async (ctx, args) => {
     const message = await ctx.db.get(args.messageId)
     if (!message) throw new Error('message_not_found')
+    if (message.deletedAt) throw new Error('message_deleted')
     const access = await authorizeScopedRequest(ctx, { projectId: message.projectId, groupId: message.groupId, claimedUserId: args.actorId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'writeChannel')
     const member = await resolveActorProjectMember(ctx, message.projectId, args.actorId, access.companyAccess?.projectMember)
     if (message.authorProjectMemberId ? message.authorProjectMemberId !== member._id : message.authorId !== args.actorId) throw new Error('message_edit_forbidden')
@@ -1077,6 +1128,7 @@ export const forwardMessage = mutation({
     if (!sourceMessage || sourceMessage.projectId !== args.projectId) {
       throw new Error('source_message_not_found')
     }
+    if (sourceMessage.deletedAt) throw new Error('source_message_deleted')
     if (sourceMessage.channelThreadId) requireThreadsEnabled()
     await authorizeScopedRequest(ctx, {
       projectId: args.projectId,
@@ -1327,6 +1379,7 @@ export const remove = mutation({
       ? message.authorProjectMemberId === projectMember._id
       : message.authorId === args.actorId
     if (!isAuthor) throw new Error('message_delete_forbidden')
+    if (message.deletedAt) throw new Error('message_already_deleted')
 
     const attachments = await Promise.all(
       message.attachmentIds.map(async (attachmentId) => await ctx.db.get(attachmentId)),
@@ -1387,12 +1440,22 @@ export const remove = mutation({
         updatedAt: Date.now(),
       })
     }))
+    await ctx.db.patch(message._id, {
+      attachmentIds: [],
+      body: '',
+      deletedAt: Date.now(),
+      deletedBy: args.actorId,
+      forwardedFrom: undefined,
+      mentionedProjectMemberIds: [],
+      mentions: [],
+      notificationPreview: undefined,
+      trackInvocationId: undefined,
+    })
     for (const attachment of attachments) {
       if (!attachment) continue
       await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
       await ctx.db.delete(attachment._id)
     }
-    await ctx.db.delete(message._id)
     await Promise.all(
       unsharedStorageIds.map(async (storageId) =>
         await ctx.storage.delete(storageId).catch(() => undefined),
@@ -1711,6 +1774,7 @@ export const attachFile = mutation({
     ) {
       throw new Error('message_scope_mismatch')
     }
+    if (message.deletedAt) throw new Error('message_deleted')
     const representedCompanyId = access.companyAccess?.company._id
     const messageAuthorMatches = message.authorProjectMemberId
       ? message.authorProjectMemberId === projectMember._id

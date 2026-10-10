@@ -1,4 +1,5 @@
-import { StyleSheet } from 'react-native';
+import type { ReactNode } from 'react';
+import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 
 import { ThemedText, type ThemedTextType } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
@@ -9,21 +10,23 @@ const MENTION = /(@\w+)/g;
 export function MessageText({
   body,
   suffix,
+  style,
   type = 'message',
 }: {
   body: string;
   /** Rendered inside the text flow after the body, e.g. a timestamp spacer. */
-  suffix?: React.ReactNode;
+  suffix?: ReactNode;
+  style?: StyleProp<TextStyle>;
   type?: ThemedTextType;
 }) {
   const theme = useTheme();
   const parts = body.split(MENTION);
 
   return (
-    <ThemedText selectable type={type}>
+    <ThemedText selectable style={style} type={type}>
       {parts.map((part, index) =>
         part.startsWith('@') ? (
-          <ThemedText key={index} style={[styles.mention, { color: theme.accentStrong }]} type={type}>
+          <ThemedText key={index} style={[styles.mention, { color: theme.textSecondary }]} type={type}>
             {part}
           </ThemedText>
         ) : (

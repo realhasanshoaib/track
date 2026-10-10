@@ -26,7 +26,7 @@ const searchScope = v.union(
 const searchThreadStatus = v.union(v.literal('active'), v.literal('archived'))
 
 type ProjectSearchResult = {
-  files: unknown[]
+  files: ProjectFileSearchHit[]
   groups: Array<{
     createdAt: number
     groupId: Id<'groups'>
@@ -38,6 +38,7 @@ type ProjectSearchResult = {
     title: string
   }>
   messages: Array<{
+    authorId: Id<'users'>
     createdAt: number
     groupId: Id<'groups'>
     groupName: string
@@ -50,9 +51,9 @@ type ProjectSearchResult = {
     threadName: string | undefined
     title: string
   }>
-  people: unknown[]
-  projects: unknown[]
-  tasks: unknown[]
+  people: ProjectSearchHit[]
+  projects: ProjectSearchHit[]
+  tasks: ProjectSearchHit[]
   threads: Array<{
     createdAt: number
     groupId: Id<'groups'>
@@ -66,6 +67,31 @@ type ProjectSearchResult = {
     title: string
   }>
   unreadSearchTruncated: boolean
+}
+
+type ProjectSearchHit = {
+  attachmentId?: Id<'attachments'>
+  contentType?: string
+  createdAt: number
+  groupId?: Id<'groups'>
+  groupName: string
+  id: string
+  isUnread?: boolean
+  kind: 'file' | 'person' | 'project' | 'task'
+  messageId?: Id<'messages'>
+  preview: string
+  subtitle: string
+  taskKey?: string
+  threadId?: Id<'channelThreads'>
+  threadName?: string
+  title: string
+}
+
+type ProjectFileSearchHit = ProjectSearchHit & {
+  attachmentId: Id<'attachments'>
+  groupId: Id<'groups'>
+  kind: 'file'
+  messageId: Id<'messages'>
 }
 
 function compactPreview(value: string, fallback = 'No preview available') {
@@ -341,6 +367,7 @@ async function searchProject(ctx: QueryCtx, args: ProjectSearchArgs): Promise<Pr
                   })
                 : false
             return {
+              authorId: message.authorId,
               createdAt: message.createdAt,
               groupId: message.groupId,
               groupName,

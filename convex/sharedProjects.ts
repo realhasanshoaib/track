@@ -408,6 +408,46 @@ export const updateDetails = mutation({
   },
 })
 
+export const updateDeliveryHealth = mutation({
+  args: {
+    projectId: v.id('projects'),
+    actingCompanyId: v.id('companies'),
+    projectMemberId: v.id('projectMembers'),
+    health: v.union(v.literal('on_track'), v.literal('at_risk'), v.literal('off_track')),
+  },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    const access = await requireCompanyProjectManager(ctx, actor, args)
+    if (access.project.owningCompanyId !== access.company._id) {
+      throw new Error('owning_company_required')
+    }
+    if (access.project.status !== 'active' && access.project.status !== 'proposed') {
+      throw new Error('project_unavailable')
+    }
+    const now = Date.now()
+    const previousHealth = access.project.deliveryHealth
+    await ctx.db.patch(access.project._id, {
+      deliveryHealth: args.health,
+      deliveryHealthUpdatedBy: actor.userId,
+      deliveryHealthUpdatedAt: now,
+      updatedAt: now,
+      revision: (access.project.revision ?? 0) + 1,
+    })
+    await appendAuditEvent(ctx, {
+      projectId: access.project._id,
+      actorId: actor.userId,
+      actorProjectMemberId: access.projectMember._id,
+      actingCompanyId: access.company._id,
+      entityType: 'project',
+      entityId: access.project._id,
+      action: 'project.delivery_health_changed',
+      before: { deliveryHealth: previousHealth ?? null },
+      after: { deliveryHealth: args.health },
+    })
+    return { projectId: access.project._id, health: args.health, updatedAt: now }
+  },
+})
+
 export const listInvitations = query({
   args: { actingCompanyId: v.id('companies') },
   handler: async (ctx, args) => {

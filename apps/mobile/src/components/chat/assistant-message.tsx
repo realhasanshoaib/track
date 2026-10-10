@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
 import { AssistantMark } from '@/components/chat/assistant-mark';
-import { MessageActionShortcut } from '@/components/chat/message-action-shortcut';
 import {
   assistantFailureHint,
   assistantProgressLabel,
@@ -96,7 +95,6 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
             {timeInline ? (
               <View style={styles.timeMeta}>
                 <ThemedText style={styles.timeInline} themeColor="textSecondary" type="caption">{timeLabel}</ThemedText>
-                <MessageActionShortcut authorName="Track Assistant" onPress={onLongPress} timeLabel={timeLabel} />
               </View>
             ) : null}
           </View>
@@ -139,7 +137,6 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
         {timeInline ? null : (
           <View style={styles.timeMeta}>
             <ThemedText style={styles.timeFooter} themeColor="textSecondary" type="caption">{timeLabel}</ThemedText>
-            <MessageActionShortcut authorName="Track Assistant" onPress={onLongPress} timeLabel={timeLabel} />
           </View>
         )}
       </Pressable>

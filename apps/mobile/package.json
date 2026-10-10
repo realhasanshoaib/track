@@ -4,8 +4,8 @@
   "version": "1.2.0",
   "private": true,
   "scripts": {
-    "dev": "expo start --dev-client --localhost",
-    "start": "expo start --dev-client --localhost",
+    "dev": "node --dns-result-order=ipv4first ../../node_modules/expo/bin/cli start --dev-client --localhost",
+    "start": "node --dns-result-order=ipv4first ../../node_modules/expo/bin/cli start --dev-client --localhost",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -19,6 +19,7 @@
     "@convex-dev/better-auth": "^0.12.5",
     "@expo/dom-webview": "^57.0.1",
     "@expo/metro-runtime": "~57.0.16",
+    "@expo/ui": "~57.0.20",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-navigation/native": "^7.4.1",

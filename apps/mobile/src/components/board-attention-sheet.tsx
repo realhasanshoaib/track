@@ -20,8 +20,7 @@ export function BoardAttentionSheet({
 }: Props) {
   return (
     <OptionsSheet onClose={onClose} title={`${boardName} attention`} visible={visible}>
-      <SheetNote>Urgent and high-priority tasks on this Board.</SheetNote>
-      <SheetSection title="Tasks">
+      <SheetSection title="Urgent and high priority">
         {attentionTasksLoading
           ? <SheetNote>Loading high-priority tasks…</SheetNote>
           : attentionTasks.length

@@ -53,7 +53,7 @@ export function TaskUpdatesFeed({ assignees, compact = false, emptyMessage = 'No
       if (kind === 'comment') {
         const author = assignees?.find((candidate) => candidate.member._id === item.authorProjectMemberId)?.user.displayName ?? 'Project member';
         return <View key={'comment:' + item._id} style={styles.updateEntry}>
-          {showDay ? <ThemedText style={styles.dayLabel} themeColor="textSecondary" type="captionBold">{day}</ThemedText> : null}
+          {showDay ? <ThemedText style={[styles.dayLabel, { backgroundColor: theme.backgroundElement }]} themeColor="textSecondary" type="captionBold">{day}</ThemedText> : null}
           <View style={styles.comment}>
             <ColoredAvatar label={author} seed={item.authorProjectMemberId} size={32} />
             <View style={[styles.commentBubble, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline }]}>
@@ -71,7 +71,7 @@ export function TaskUpdatesFeed({ assignees, compact = false, emptyMessage = 'No
       const actor = assignees?.find((candidate) => candidate.member._id === item.actorProjectMemberId)?.user.displayName ?? 'A member';
       const canExpand = Boolean(presentation.before || presentation.after);
       return <View key={'activity:' + item._id} style={styles.updateEntry}>
-        {showDay ? <ThemedText style={styles.dayLabel} themeColor="textSecondary" type="captionBold">{day}</ThemedText> : null}
+        {showDay ? <ThemedText style={[styles.dayLabel, { backgroundColor: theme.backgroundElement }]} themeColor="textSecondary" type="captionBold">{day}</ThemedText> : null}
         <Pressable accessibilityLabel={actor + ' ' + presentation.title + '. ' + formatTimestamp(item.createdAt)} accessibilityRole={canExpand ? 'button' : 'text'} accessibilityState={canExpand ? { expanded } : undefined} disabled={!canExpand} onPress={() => setExpandedActivityId(expanded ? null : item._id)} style={styles.timelineRow}>
           <View style={styles.timelineRail}>
             <View style={[styles.timelineMarker, { backgroundColor: theme.backgroundElement }]}>
@@ -79,7 +79,8 @@ export function TaskUpdatesFeed({ assignees, compact = false, emptyMessage = 'No
             </View>
           </View>
           <View style={styles.timelineBody}>
-            <ThemedText themeColor="textSecondary" type="small">{actor} {presentation.title.charAt(0).toLowerCase() + presentation.title.slice(1)}</ThemedText>
+            <ThemedText type="smallBold">{actor}</ThemedText>
+            <ThemedText themeColor="textSecondary" type="small">{presentation.title.charAt(0).toLowerCase() + presentation.title.slice(1)}</ThemedText>
             <ThemedText themeColor="textTertiary" type="caption">{formatTimestamp(item.createdAt)}</ThemedText>
             {expanded && (presentation.before || presentation.after) ? <View style={[styles.activityChange, { backgroundColor: theme.backgroundElement }]}>
               {presentation.before ? <ThemedText themeColor="textSecondary" type="caption">{presentation.before}</ThemedText> : null}
@@ -106,7 +107,9 @@ export function TaskOverview({
   onOpenSubtask,
   onOpenReference,
   onLoadMoreReferences,
+  onSubtaskBlur,
   onSubtaskChange,
+  onSubtaskFocus,
   onToggleSubtask,
   readOnly,
   subtask,
@@ -126,7 +129,9 @@ export function TaskOverview({
   onOpenSubtask: (item: MobileTaskListItem) => void;
   onOpenReference: (reference: Doc<'taskReferences'>) => void;
   onLoadMoreReferences?: () => void;
+  onSubtaskBlur: () => void;
   onSubtaskChange: (value: string) => void;
+  onSubtaskFocus: () => void;
   onToggleSubtask: (item: MobileTaskListItem) => void;
   readOnly: boolean;
   subtask: string;
@@ -175,15 +180,12 @@ export function TaskOverview({
         {sourcesExpanded && referencesLoadingMore ? <LoadMoreButton label="sources" loading onPress={onLoadMoreReferences} /> : null}
       </TaskSection> : null}
 
-      {detail.task.description || !readOnly ? <TaskSection title="Description" trailing={!readOnly ? <Pressable accessibilityRole="button" onPress={() => onEditField('description')} style={styles.sectionAction}>
-        <ThemedText themeColor="accentStrong" type="captionBold">{detail.task.description ? 'Edit' : 'Add'}</ThemedText>
+      {detail.task.description || !readOnly ? <TaskSection title="Description" trailing={!readOnly ? <Pressable accessibilityLabel={detail.task.description ? 'Edit description' : 'Add description'} accessibilityRole="button" onPress={() => onEditField('description')} style={styles.sectionAction}>
+        <ThemedText themeColor="accentStrong" type="captionBold">{detail.task.description ? 'Edit description' : 'Add description'}</ThemedText>
       </Pressable> : undefined}>
         {detail.task.description ? <ThemedText numberOfLines={!descriptionExpanded && detail.task.description.length > 180 ? 4 : undefined} selectable type="small">
           {detail.task.description}
-        </ThemedText> : <Pressable accessibilityHint="Adds a description to explain this task" accessibilityRole="button" onPress={() => onEditField('description')} style={styles.descriptionPrompt}>
-          <PlatformIcon color={theme.textTertiary} name="plus" size={16} />
-          <ThemedText themeColor="textSecondary" type="small">Add a short description</ThemedText>
-        </Pressable>}
+        </ThemedText> : <ThemedText themeColor="textSecondary" type="caption">No description yet. Add context for the team.</ThemedText>}
         {detail.task.description && detail.task.description.length > 180 ? <Pressable accessibilityRole="button" onPress={() => setDescriptionExpanded((current) => !current)} style={styles.textAction}>
           <ThemedText themeColor="accentStrong" type="smallBold">{descriptionExpanded ? 'Show less' : 'Show more'}</ThemedText>
         </Pressable> : null}
@@ -191,6 +193,7 @@ export function TaskOverview({
 
       {visibleSubtasks.length || (!readOnly && !detail.task.parentTaskId) ? <View onLayout={onChecklistLayout}>
         <TaskSection title="Checklist" trailing={visibleSubtasks.length ? `${completedSubtasks}/${visibleSubtasks.length}` : undefined}>
+          {!visibleSubtasks.length ? <ThemedText themeColor="textSecondary" type="caption">No checklist items yet.</ThemedText> : null}
           {visibleSubtasks.length ? (
             <>
               <View
@@ -268,11 +271,15 @@ export function TaskOverview({
               <ThemedTextInput
                 accessibilityLabel="New checklist item"
                 allowFontScaling
+                onBlur={onSubtaskBlur}
                 maxFontSizeMultiplier={MaxFontScale}
                 keyboardAppearance={theme.background === '#1b1917' ? 'dark' : 'light'}
                 onChangeText={onSubtaskChange}
+                onFocus={onSubtaskFocus}
+                onSubmitEditing={onAddSubtask}
                 placeholder="Add a checklist item"
                 placeholderTextColor={theme.textSecondary}
+                returnKeyType="done"
                 style={[styles.inlineInput, {
                   backgroundColor: theme.backgroundElement,
                   borderColor: theme.hairline,
@@ -282,15 +289,17 @@ export function TaskOverview({
               />
               <Pressable
                 accessibilityLabel="Add checklist item"
+                accessibilityHint="Adds this item to the checklist"
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !subtask.trim() || busy }}
                 disabled={!subtask.trim() || busy}
                 onPress={onAddSubtask}
-                style={[styles.addButton, {
-                  backgroundColor: theme.backgroundSelected,
+                style={[styles.addAction, {
+                  backgroundColor: theme.accent,
                   opacity: subtask.trim() ? 1 : 0.5,
                 }]}>
-                <PlatformIcon color={theme.text} name="plus" size={20} />
+                <PlatformIcon color={theme.accentInk} name="plus" size={16} />
+                <ThemedText style={{ color: theme.accentInk }} type="captionBold">Add</ThemedText>
               </Pressable>
             </View>
           ) : null}
@@ -307,6 +316,7 @@ export function TaskOverview({
             <PlatformIcon color={theme.textSecondary} name="tag" size={16} weight="medium" />
             <ThemedText themeColor="textSecondary" type="smallBold">{labels.length ? 'Edit' : 'Add labels'}</ThemedText>
           </CompactPillButton> : null}
+          {!labels.length ? <ThemedText style={styles.emptySectionCopy} themeColor="textSecondary" type="caption">No labels yet.</ThemedText> : null}
         </View>
       </TaskSection> : null}
     </>
@@ -567,7 +577,7 @@ function formatTimestamp(value: number) {
 }
 
 const styles = StyleSheet.create({
-  addButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, height: TouchTarget, justifyContent: 'center', width: TouchTarget },
+  addAction: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.one, height: TouchTarget, justifyContent: 'center', minWidth: 72, paddingHorizontal: Spacing.three },
   addSubtask: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
   checkCopy: { flex: 1, gap: 2, justifyContent: 'center', minHeight: TouchTarget, minWidth: 0, paddingVertical: Spacing.two },
   checkDescription: { borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.two, marginLeft: TouchTarget + Spacing.three, paddingBottom: Spacing.three, paddingRight: Spacing.three, paddingTop: Spacing.two },
@@ -581,12 +591,12 @@ const styles = StyleSheet.create({
   comment: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.two },
   commentBubble: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flex: 1, gap: Spacing.one, padding: Spacing.three },
   commentMeta: { alignItems: 'baseline', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
-  dayLabel: { alignSelf: 'center', paddingVertical: Spacing.two },
+  dayLabel: { alignSelf: 'flex-start', borderCurve: 'continuous', borderRadius: Radius.small, marginLeft: 40, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   composer: { borderTopWidth: StyleSheet.hairlineWidth, gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   composerClose: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },
   composerInput: { ...Typography.message, borderRadius: Radius.xlarge, flex: 1, maxHeight: 112, minHeight: TouchTarget, paddingHorizontal: Spacing.three, paddingVertical: Platform.OS === 'ios' ? 11 : 8 },
   composerRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.two },
-  descriptionPrompt: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, paddingHorizontal: Spacing.one },
+  emptySectionCopy: { alignSelf: 'center', minHeight: TouchTarget, paddingVertical: Spacing.three, textAlignVertical: 'center' },
   inlineInput: { ...Typography.body, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flex: 1, minHeight: TouchTarget, paddingHorizontal: Spacing.three },
   label: { alignItems: 'center', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   labelDot: { borderRadius: 4, height: 8, width: 8 },
@@ -606,10 +616,10 @@ const styles = StyleSheet.create({
   textAction: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.one },
   sendButton: { alignItems: 'center', borderRadius: TouchTarget / 2, height: TouchTarget, justifyContent: 'center', width: TouchTarget },
   activityChange: { alignItems: 'center', borderRadius: Radius.small, flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
-  timelineBody: { flex: 1, gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget },
+  timelineBody: { flex: 1, gap: Spacing.half, justifyContent: 'center', minHeight: TouchTarget, paddingVertical: Spacing.two },
   timelineMarker: { alignItems: 'center', borderRadius: Radius.pill, height: 28, justifyContent: 'center', width: 28 },
   timelineRail: { alignItems: 'center', width: 32 },
-  timelineRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget },
+  timelineRow: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget },
   updateEntry: { gap: Spacing.one },
   updatesFeed: { gap: Spacing.three },
 });

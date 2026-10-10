@@ -1,9 +1,11 @@
 import { entityMarkColorKeys, entityMarkIconKeys, type EntityMarkColorKey, type EntityMarkIconKey } from '@track/shared'
 
 const iconLabels: Record<EntityMarkIconKey, string> = {
-  analytics: 'Analytics', board: 'Board', book: 'Knowledge', building: 'Company', calendar: 'Calendar',
-  channel: 'Channel', code: 'Engineering', conversation: 'Conversation', design: 'Design',
-  launch: 'Launch', people: 'People', project: 'Project', shield: 'Security',
+  analytics: 'Analytics', archive: 'Archive', board: 'Board', bookmark: 'Reference', book: 'Knowledge', building: 'Company',
+  bug: 'Quality', calendar: 'Calendar', channel: 'Channel', checklist: 'Tasks', code: 'Engineering', conversation: 'Conversation',
+  design: 'Design', files: 'Files', globe: 'International', idea: 'Ideas', inbox: 'Triage', integration: 'Integrations',
+  launch: 'Launch', media: 'Media', milestone: 'Milestone', mobile: 'Mobile', people: 'People', project: 'Project', question: 'Questions',
+  shield: 'Security', support: 'Support', target: 'Goals', timeline: 'Timeline', video: 'Video',
 }
 
 export function EntityMarkPicker({
@@ -34,7 +36,7 @@ export function EntityMarkPicker({
           {entityMarkColorKeys.map((key) => <option key={key} value={key}>{key[0]!.toUpperCase() + key.slice(1)}</option>)}
         </select>
       </label>
-      <p>Automatic keeps the background stable and chooses an icon from the name.</p>
+      <p>Automatic keeps the background stable and chooses an icon from the name. Channel lists vary repeated icons so visible Channels stay easy to recognize.</p>
     </fieldset>
   )
 }

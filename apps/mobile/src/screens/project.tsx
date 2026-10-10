@@ -1,7 +1,7 @@
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePaginatedQuery, useQuery } from 'convex/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -20,7 +20,6 @@ import { ScreenLoading } from '@/components/screen-loading';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTrackUser } from '@/contexts/track-user-context';
-import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { channelHref, projectChannelsHref, projectSettingsHref } from '@/lib/company-navigation';
 import type { MobileAttentionItem } from '@/lib/mobile-attention';
@@ -33,7 +32,6 @@ export default function ProjectOverviewScreen() {
   const bottomContentInset = useBottomTabContentInset();
   const router = useRouter();
   const release = useReleaseConfig();
-  const { setCreateContext } = usePrimaryNavigationVisibility();
   const { trackUserId } = useTrackUser();
   const [optionsOpen, setOptionsOpen] = useState(false);
   const params = useLocalSearchParams<{ projectId?: string; companyId?: string; membershipId?: string; archive?: string }>();
@@ -42,16 +40,6 @@ export default function ProjectOverviewScreen() {
   const membershipId = typeof params.membershipId === 'string' ? params.membershipId as Id<'projectMembers'> : undefined;
   const archived = params.archive === '1';
   const context = companyId && membershipId ? { archived, companyId, membershipId } : null;
-
-  useFocusEffect(useCallback(() => {
-    if (!projectId) {
-      setCreateContext(null);
-      return undefined;
-    }
-    setCreateContext({ archive: archived, companyId, membershipId, projectId, scope: 'project' });
-    return () => setCreateContext(null);
-  }, [archived, companyId, membershipId, projectId, setCreateContext]));
-
   const navigation = useQuery(api.mobile.resolveNavigation, trackUserId && projectId ? {
     userId: trackUserId, projectId, actingCompanyId: companyId, projectMemberId: membershipId,
   } : 'skip');
@@ -119,6 +107,11 @@ export default function ProjectOverviewScreen() {
 
   return <ThemedView style={styles.screen}>
     <Stack.Screen options={{
+      ...(Platform.OS === 'ios' ? {
+        headerBackground: () => <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />,
+        headerStyle: { backgroundColor: 'transparent' },
+        headerTransparent: true,
+      } : {}),
       headerLeft: () => <IconButton accessibilityLabel="Back" appearance="plain" icon="arrow-left" onPress={() => {
         if (router.canGoBack()) router.back();
         else router.replace('/');

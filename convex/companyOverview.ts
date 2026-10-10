@@ -4,7 +4,7 @@ import { isTerminalTaskState } from '@track/shared/tasks'
 import { query } from './_generated/server'
 import type { Id } from './_generated/dataModel'
 import { requireAuthenticatedActor } from './lib/actorContext'
-import { requireActiveCompanyMembership } from './lib/companyPolicy'
+import { requireActiveCompanyMembership, requireCompanyOwner } from './lib/companyPolicy'
 import { createTaskRequestScope } from './lib/taskPolicy'
 import { getTaskCapabilitiesInScope } from './lib/taskPolicy'
 import { deriveProjectTaskMetrics, isCompletedWorkflowState } from './lib/projectOverviewMetrics'
@@ -41,7 +41,18 @@ function initials(name: string) {
 }
 
 function actionLabel(action: string) {
-  return action.replaceAll('_', ' ')
+  const labels: Record<string, string> = {
+    created: 'created task',
+    state_changed: 'changed task status',
+    assignee_changed: 'changed task owner',
+    priority_changed: 'changed task priority',
+    due_date_changed: 'changed task due date',
+    board_changed: 'moved task to another board',
+    scope_changed: 'changed task scope',
+    archived: 'archived task',
+    restored: 'restored task',
+  }
+  return labels[action] ?? action.replaceAll('_', ' ')
 }
 
 const overviewDays = v.union(v.literal(7), v.literal(30), v.literal(90))
@@ -247,7 +258,7 @@ export const getProject = query({
 
     const health = blocked.length || overdue.length ? 'At risk' : tasks.length > 0 && completedTasks.length === tasks.length ? 'Completed' : 'On track'
     return {
-      project: { id: scope.project.project._id, name: scope.project.project.name, markIconKey: scope.project.project.markIconKey, markColorKey: scope.project.project.markColorKey, description: scope.project.project.description ?? null, status: scope.project.project.status ?? 'active', updatedAt: scope.project.project.updatedAt, health },
+      project: { id: scope.project.project._id, name: scope.project.project.name, markIconKey: scope.project.project.markIconKey, markColorKey: scope.project.project.markColorKey, description: scope.project.project.description ?? null, status: scope.project.project.status ?? 'active', deliveryHealth: scope.project.project.deliveryHealth ?? null, deliveryHealthUpdatedAt: scope.project.project.deliveryHealthUpdatedAt ?? null, updatedAt: scope.project.project.updatedAt, health },
       members: memberSummaries.filter((member): member is NonNullable<typeof member> => Boolean(member)),
       memberCount: members.length,
       permissions: { canManageProject: scope.project.capabilities.canManageProject, canWriteProject: scope.project.capabilities.canWriteProject },
@@ -273,32 +284,40 @@ export const get = query({
   },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
-    const { company } = await requireActiveCompanyMembership(ctx, actor, args.companyId)
+    // Company owners receive task aggregates across active Company Projects; task and Channel content stays membership-gated below.
+    const { company } = await requireCompanyOwner(ctx, actor, args.companyId)
     const rangeDays = args.days ?? 7
 
-    const [actorProjectMemberships, relationshipRows] = await Promise.all([
+    const [actorProjectMemberships, relationshipRows, companyParticipations, ownedProjects] = await Promise.all([
       ctx.db.query('projectMembers').withIndex('by_user', (q) => q.eq('userId', actor.userId)).collect(),
       ctx.db.query('relationshipCompanies').withIndex('by_company_status', (q) => q.eq('companyId', company._id).eq('status', 'active')).collect(),
+      ctx.db.query('projectCompanies').withIndex('by_company_status', (q) => q.eq('companyId', company._id).eq('status', 'active')).collect(),
+      ctx.db.query('projects').withIndex('by_owning_company_status', (q) => q.eq('owningCompanyId', company._id).eq('status', 'active')).collect(),
     ])
 
     const representedMemberships = actorProjectMemberships.filter((membership) =>
       membership.companyId === company._id && membership.status === 'active',
     )
     const membershipByProjectId = new Map(representedMemberships.map((membership) => [String(membership.projectId), membership]))
-    if (args.projectId && !membershipByProjectId.has(String(args.projectId))) throw new Error('project_unavailable')
-    const selectedProjectIds = [...new Map(
-      representedMemberships
-        .filter((membership) => !args.projectId || membership.projectId === args.projectId)
-        .map((membership) => [String(membership.projectId), membership.projectId] as const),
-    ).values()]
-    const selectedProjects = (await Promise.all(selectedProjectIds.map((projectId) => ctx.db.get(projectId))))
+    const companyProjectIds = new Set([
+      ...companyParticipations.map((participation) => String(participation.projectId)),
+      ...ownedProjects.map((project) => String(project._id)),
+    ])
+    const selectedProjectIds = [...companyProjectIds]
+      .filter((projectId) => !args.projectId || projectId === String(args.projectId))
+    const selectedProjects = (await Promise.all(selectedProjectIds.map((projectId) => ctx.db.get(projectId as Id<'projects'>))))
       .filter((project): project is NonNullable<typeof project> => Boolean(project && project.status === 'active'))
+    if (args.projectId && !selectedProjects.some((project) => project._id === args.projectId)) {
+      throw new Error('project_unavailable')
+    }
 
     const perProject = await Promise.all(selectedProjects.map(async (project) => {
-      const representedMembership = membershipByProjectId.get(String(project._id))!
-      const [allTasks, members, workflowStates, taskActivities, allMessages, audits, groupMemberships] = await Promise.all([
+      const representedMembership = membershipByProjectId.get(String(project._id))
+      const [allTasks, members, workflowStates, taskActivities, allMessages, audits, groupMemberships, taskReferences] = await Promise.all([
         ctx.db.query('tasks').withIndex('by_project_archived', (q) => q.eq('projectId', project._id).eq('archivedAt', undefined)).collect(),
-        ctx.db.query('projectMembers').withIndex('by_project_status', (q) => q.eq('projectId', project._id).eq('status', 'active')).collect(),
+        representedMembership
+          ? ctx.db.query('projectMembers').withIndex('by_project_status', (q) => q.eq('projectId', project._id).eq('status', 'active')).collect()
+          : Promise.resolve([]),
         Promise.all(['backlog', 'unstarted', 'started', 'completed', 'canceled'].map((category) => ctx.db.query('taskWorkflowStates').withIndex('by_project_category', (q) => q.eq('projectId', project._id).eq('category', category as 'backlog')).collect())).then((groups) => groups.flat()),
         ctx.db.query('taskActivities').withIndex('by_project_created_at', (q) => q.eq('projectId', project._id)).order('desc').take(100),
         ctx.db.query('messages').withIndex('by_project_created_at', (q) => q.eq('projectId', project._id)).order('desc').take(100),
@@ -306,7 +325,12 @@ export const get = query({
           .withIndex('by_project_action_created_at', (q) => q.eq('projectId', project._id).eq('action', action))
           .order('desc')
           .take(5))).then((groups) => groups.flat().sort((left, right) => right.createdAt - left.createdAt).slice(0, 5)),
-        ctx.db.query('groupMembers').withIndex('by_project_member_status', (q) => q.eq('projectMemberId', representedMembership._id).eq('status', 'active')).collect(),
+        representedMembership
+          ? ctx.db.query('groupMembers').withIndex('by_project_member_status', (q) => q.eq('projectMemberId', representedMembership._id).eq('status', 'active')).collect()
+          : Promise.resolve([]),
+        representedMembership
+          ? ctx.db.query('taskReferences').withIndex('by_project_created_at', (q) => q.eq('projectId', project._id)).order('desc').take(100)
+          : Promise.resolve([]),
       ])
       const visibleGroupIds = new Set(groupMemberships.map((membership) => String(membership.groupId)))
       const canReadGroup = (groupId: Id<'groups'> | undefined) => !groupId || visibleGroupIds.has(String(groupId))
@@ -324,13 +348,17 @@ export const get = query({
           }
         })).then((previews) => previews.filter((preview): preview is NonNullable<typeof preview> => Boolean(preview))),
       ])
-      const tasks = allTasks.filter((task) => canReadGroup(task.groupId))
+      const hasProjectAccess = Boolean(representedMembership)
+      const tasks = hasProjectAccess ? allTasks.filter((task) => canReadGroup(task.groupId)) : []
       const visibleTaskIds = new Set(tasks.map((task) => String(task._id)))
+      const linkedMessageIds = new Set(taskReferences
+        .filter((reference) => visibleTaskIds.has(String(reference.taskId)) && reference.messageId)
+        .map((reference) => String(reference.messageId)))
       const messages = allMessages.filter((message) => canReadGroup(message.groupId))
       const visibleTaskActivities = taskActivities.filter((activity) => visibleTaskIds.has(String(activity.taskId)) && canReadGroup(activity.originalGroupId))
       const visibleAudits = audits.filter((audit) => canReadGroup(audit.groupId))
       const stateById = new Map(workflowStates.map((state) => [state._id, state]))
-      return { project, representedMembership, tasks, members, memberPreviews, visibleGroups, stateById, taskActivities: visibleTaskActivities, messages, audits: visibleAudits }
+      return { project, representedMembership, hasProjectAccess, tasks, metricsTasks: allTasks, members, memberPreviews, visibleGroups, stateById, taskActivities: visibleTaskActivities, messages, linkedMessageIds, audits: visibleAudits }
     }))
 
     const now = new Date()
@@ -351,25 +379,28 @@ export const get = query({
       trendMap.set(dayKey(date.getTime()), { created: 0, completed: 0 })
     }
 
-    const projectRows = perProject.map(({ project, representedMembership, tasks, members, memberPreviews, visibleGroups, stateById }) => {
+    const projectRows = perProject.map(({ project, representedMembership, hasProjectAccess, tasks, metricsTasks, members, memberPreviews, visibleGroups, stateById }) => {
+      const visibleTaskIds = new Set(tasks.map((task) => String(task._id)))
       let completed = 0
-      let actionable = 0
       let overdue = 0
       let blocked = 0
-      tasks.forEach((task) => {
+      let dueSoon = 0
+      metricsTasks.forEach((task) => {
         const state = stateById.get(task.workflowStateId)
         const category = state?.category ?? 'unstarted'
         const done = isCompletedWorkflowState(state ? { category: state.category, stateName: state.name } : undefined)
         const terminal = done || category === 'canceled'
         if (!terminal) {
-          if (task.assigneeProjectMemberId) {
+          if (hasProjectAccess && visibleTaskIds.has(String(task._id)) && task.assigneeProjectMemberId) {
             const assignee = members.find((member) => member._id === task.assigneeProjectMemberId)
             if (assignee) assignedPeople.add(assignee.userId)
           }
           openTasks += 1
-          actionable += 1
           if (task.dueDate === today) dailyTasks += 1
-          if (task.dueDate && task.dueDate > today && task.dueDate <= dueThrough) upcomingTasks += 1
+          if (task.dueDate && task.dueDate > today && task.dueDate <= dueThrough) {
+            upcomingTasks += 1
+            dueSoon += 1
+          }
           if (task.dueDate && task.dueDate < today) {
             overdueTasks += 1
             overdue += 1
@@ -395,24 +426,29 @@ export const get = query({
           if (completedTrend) completedTrend.completed += 1
         }
       })
-      const progress = actionable + completed > 0 ? Math.round((completed / (actionable + completed)) * 100) : 0
+      const totalTasks = metricsTasks.filter((task) => stateById.get(task.workflowStateId)?.category !== 'canceled').length
+      const progress = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0
       const health = overdue > 0 ? 'At risk' : progress === 100 && tasks.length > 0 ? 'Completed' : tasks.length === 0 ? 'Active' : 'On track'
       return {
         id: project._id,
         name: project.name,
         description: project.description ?? project.clientLabel ?? null,
         progress,
+        status: project.status ?? 'active',
+        deliveryHealth: project.deliveryHealth ?? null,
         completedTasks: completed,
-        totalTasks: actionable + completed,
+        totalTasks,
+        blockedTasks: blocked,
         overdueTasks: overdue,
+        dueSoonTasks: dueSoon,
         health,
-        memberCount: members.length,
-        members: memberPreviews,
-        channelCount: visibleGroups.length,
-        channels: visibleGroups.slice(0, 2).map((group) => ({ id: group._id, name: group.name })),
+        memberCount: hasProjectAccess ? members.length : null,
+        members: hasProjectAccess ? memberPreviews : [],
+        channelCount: hasProjectAccess ? visibleGroups.length : null,
+        channels: hasProjectAccess ? visibleGroups.slice(0, 2).map((group) => ({ id: group._id, name: group.name })) : [],
         companyId: company._id,
-        membershipId: representedMembership._id,
-        role: representedMembership.role,
+        membershipId: representedMembership?._id ?? null,
+        role: representedMembership?.role ?? null,
       }
     })
 
@@ -464,9 +500,18 @@ export const get = query({
       .sort((left, right) => right.open - left.open || right.total - left.total || left.name.localeCompare(right.name))
       .slice(0, 6)
 
-    const attentionByProject = await Promise.all(perProject.map(async ({ project, tasks, members, stateById }) => {
+    const attentionByProject = await Promise.all(perProject.map(async ({ project, tasks, metricsTasks, members, stateById }) => {
       const userByMemberId = new Map(members.map((member) => [String(member._id), userById.get(String(member.userId))?.displayName ?? null]))
       const counts = { overdue: 0, blocked: 0, dueSoon: 0, unassigned: 0 }
+      for (const task of metricsTasks) {
+        const state = stateById.get(task.workflowStateId)
+        const category = state?.category ?? 'unstarted'
+        if (isCompletedWorkflowState(state ? { category: state.category, stateName: state.name } : undefined) || category === 'canceled') continue
+        if (state?.name.trim().toLocaleLowerCase() === 'blocked') counts.blocked += 1
+        if (task.dueDate && task.dueDate < today) counts.overdue += 1
+        if (task.dueDate && task.dueDate >= today && task.dueDate <= dueThrough) counts.dueSoon += 1
+        if (!task.assigneeProjectMemberId) counts.unassigned += 1
+      }
       const items = tasks.flatMap((task) => {
         const state = stateById.get(task.workflowStateId)
         const category = state?.category ?? 'unstarted'
@@ -477,11 +522,6 @@ export const get = query({
         const isOverdue = Boolean(task.dueDate && task.dueDate < today)
         const isDueSoon = Boolean(task.dueDate && task.dueDate >= today && task.dueDate <= dueThrough)
         const isUnassigned = !task.assigneeProjectMemberId
-        if (isOverdue) counts.overdue += 1
-        if (isBlocked) counts.blocked += 1
-        if (isDueSoon) counts.dueSoon += 1
-        if (isUnassigned) counts.unassigned += 1
-
         const categoryForItem = isBlocked ? 'blocked' : isOverdue ? 'overdue' : isDueSoon ? 'dueSoon' : isUnassigned ? 'unassigned' : null
         if (!categoryForItem) return []
         return [{
@@ -511,8 +551,11 @@ export const get = query({
       })
       .slice(0, 6)
 
-    const taskHistory = perProject.flatMap(({ tasks, members, stateById }) => tasks.map((task) => ({
+    const taskHistory = perProject.flatMap(({ tasks, metricsTasks, members, stateById }) => {
+      const visibleTaskIds = new Set(tasks.map((task) => String(task._id)))
+      return metricsTasks.map((task) => ({
       assigneeUserId: task.assigneeProjectMemberId
+        && visibleTaskIds.has(String(task._id))
         ? members.find((member) => member._id === task.assigneeProjectMemberId)?.userId
         : undefined,
       category: (() => {
@@ -522,7 +565,8 @@ export const get = query({
       createdAt: task.createdAt,
       dueDate: task.dueDate,
       terminalAt: task.terminalAt,
-    })))
+    }))
+    })
     const statTrends = [...trendMap.keys()].map((date) => {
       const endOfDay = Date.parse(`${date}T23:59:59.999Z`)
       const openForDay = taskHistory.filter((task) =>
@@ -557,19 +601,32 @@ export const get = query({
       threadId?: Id<'channelThreads'>
     }
     const feed: FeedItem[] = []
+    const companyFeedTaskActions = new Set([
+      'created', 'state_changed', 'assignee_changed', 'priority_changed',
+      'due_date_changed', 'board_changed', 'scope_changed', 'archived', 'restored',
+    ])
     for (const row of perProject) {
       for (const activity of row.taskActivities) {
+        if (!companyFeedTaskActions.has(activity.action)) continue
         const task = row.tasks.find((item) => item._id === activity.taskId)
         const member = activity.actorProjectMemberId ? memberById.get(String(activity.actorProjectMemberId)) : null
         const user = member ? userById.get(String(member.userId)) : null
         const actorName = user?.displayName ?? 'A teammate'
-        feed.push({ id: String(activity._id), projectId: row.project._id, projectName: row.project.name, actorName, actorInitials: initials(actorName), action: actionLabel(activity.action), title: task?.title ?? 'Project task', preview: `${actorName} ${actionLabel(activity.action)} ${task?.title ?? 'a task'}.`, createdAt: activity.createdAt, kind: 'task', taskKey: task?.publicKey })
+        const taskTitle = task?.title ?? 'Project task'
+        feed.push({ id: String(activity._id), projectId: row.project._id, projectName: row.project.name, actorName, actorInitials: initials(actorName), action: actionLabel(activity.action), title: taskTitle, preview: `${actorName} ${activityCopy(activity.action, taskTitle, activity.after)}.`, createdAt: activity.createdAt, kind: 'task', taskKey: task?.publicKey })
       }
+      const latestThreadMessages = new Map<string, typeof row.messages[number]>()
       for (const message of row.messages) {
+        if (!message.channelThreadId || !row.linkedMessageIds.has(String(message._id))) continue
+        const key = String(message.channelThreadId)
+        if (!latestThreadMessages.has(key)) latestThreadMessages.set(key, message)
+      }
+      for (const message of latestThreadMessages.values()) {
         const member = message.authorProjectMemberId ? memberById.get(String(message.authorProjectMemberId)) : null
         const user = member ? userById.get(String(member.userId)) : null
         const actorName = user?.displayName ?? 'A teammate'
-        feed.push({ id: String(message._id), projectId: row.project._id, projectName: row.project.name, actorName, actorInitials: initials(actorName), action: 'commented', title: row.project.name, preview: message.body || message.notificationPreview || 'Added a project update.', createdAt: message.createdAt, kind: 'message', groupId: message.groupId, threadId: message.channelThreadId })
+        const messagePreview = (message.notificationPreview || message.body || 'Shared a thread update.').trim().slice(0, 160)
+        feed.push({ id: String(message._id), projectId: row.project._id, projectName: row.project.name, actorName, actorInitials: initials(actorName), action: 'updated a thread linked to work', title: row.project.name, preview: messagePreview, createdAt: message.createdAt, kind: 'message', groupId: message.groupId, threadId: message.channelThreadId })
       }
       for (const audit of row.audits) {
         const actor = audit.actorId ? userById.get(String(audit.actorId)) : null
@@ -604,12 +661,13 @@ export const get = query({
         activePeople: assignedPeople.size,
         trends: statTrends,
       },
-      projects: projectRows.sort((left, right) => right.overdueTasks - left.overdueTasks || right.progress - left.progress).slice(0, 5),
+      activeProjectCount: projectRows.length,
+      projects: projectRows.sort((left, right) => right.overdueTasks - left.overdueTasks || right.blockedTasks - left.blockedTasks || right.progress - left.progress),
       taskDistribution: distribution,
       attentionCounts,
       attention,
       activityTrend: [...trendMap.entries()].map(([date, values]) => ({ date, ...values })),
-      recentActivity: feed.slice(0, 5),
+      recentActivity: feed.slice(0, 8),
       workload,
       partners: partnerRows.filter((partner): partner is NonNullable<typeof partner> => Boolean(partner)).slice(0, 3),
     }

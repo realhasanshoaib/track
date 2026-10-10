@@ -3,15 +3,14 @@ import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useKeyboardState } from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView, useKeyboardState } from 'react-native-keyboard-controller';
+import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  AccessibilityInfo,
   Clipboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   type TextInput,
@@ -40,11 +39,11 @@ import { ScreenEntrance } from '@/components/screen-entrance';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
-import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
+import { MaxFontScale, MobileHeaderMetrics, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useTheme } from '@/hooks/use-theme';
 import { taskErrorMessage } from '@/lib/user-facing-error';
-import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
+import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { channelHref, projectOverviewHref } from '@/lib/company-navigation';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
@@ -91,7 +90,7 @@ function errorMessage(failure: unknown) {
 export default function TaskScreen() {
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
-  const bottomTabBarInset = useBottomTabBarInset();
+  const bottomDockClearance = useBottomTabContentInset(0);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const router = useRouter();
   const release = useReleaseConfig();
@@ -118,7 +117,7 @@ export default function TaskScreen() {
     companyId: companyId as Id<'companies'>,
     membershipId: membershipId as Id<'projectMembers'>,
   } : null;
-  const detail = useQuery(api.tasks.getByKey, release.tasks ? {
+  const sourceDetail = useQuery(api.tasks.getByKey, release.tasks ? {
     projectId: project,
     publicKey: taskKey,
     ...identity,
@@ -127,28 +126,28 @@ export default function TaskScreen() {
     projectId: project,
     ...identity,
   } : 'skip');
-  const childPage = usePaginatedQuery(api.tasks.listChildren, detail ? {
-    parentTaskId: detail.task._id,
-    includeArchived: archive === '1' || Boolean(detail.task.archivedAt),
+  const childPage = usePaginatedQuery(api.tasks.listChildren, sourceDetail ? {
+    parentTaskId: sourceDetail.task._id,
+    includeArchived: archive === '1' || Boolean(sourceDetail.task.archivedAt),
     ...identity,
   } : 'skip', { initialNumItems: 50 });
-  const commentPage = usePaginatedQuery(api.tasks.listHistory, detail ? {
-    taskId: detail.task._id,
+  const commentPage = usePaginatedQuery(api.tasks.listHistory, sourceDetail ? {
+    taskId: sourceDetail.task._id,
     kind: 'comments',
     ...identity,
   } : 'skip', { initialNumItems: 50 });
-  const activityPage = usePaginatedQuery(api.tasks.listHistory, detail ? {
-    taskId: detail.task._id,
+  const activityPage = usePaginatedQuery(api.tasks.listHistory, sourceDetail ? {
+    taskId: sourceDetail.task._id,
     kind: 'activities',
     ...identity,
   } : 'skip', { initialNumItems: 50 });
-  const referencePage = usePaginatedQuery(api.tasks.listReferences, detail ? {
-    taskId: detail.task._id,
+  const referencePage = usePaginatedQuery(api.tasks.listReferences, sourceDetail ? {
+    taskId: sourceDetail.task._id,
     ...identity,
   } : 'skip', { initialNumItems: 50 });
-  const assignees = useQuery(api.tasks.listEligibleAssignees, detail && archive !== '1' ? {
+  const assignees = useQuery(api.tasks.listEligibleAssignees, sourceDetail && archive !== '1' ? {
     projectId: project,
-    groupId: detail.task.groupId,
+    groupId: sourceDetail.task.groupId,
     ...identity,
   } : 'skip');
   const projectNavigation = useQuery(api.mobile.resolveNavigation, trackUserId && projectId ? {
@@ -158,16 +157,25 @@ export default function TaskScreen() {
     projectMemberId: membershipId as Id<'projectMembers'> | undefined,
   } : 'skip');
   const assignableAssignees = useMemo(() => {
-    if (!assignees || !detail) return assignees;
-    if (detail.capabilities.canAssignOthers) return assignees;
+    if (!assignees || !sourceDetail) return assignees;
+    if (sourceDetail.capabilities.canAssignOthers) return assignees;
     return assignees.filter((item) => item.member._id === identity.projectMemberId);
-  }, [assignees, detail, identity.projectMemberId]);
-  const canClearAssignee = Boolean(detail?.capabilities.canAssignOthers)
-    || detail?.task.assigneeProjectMemberId === identity.projectMemberId;
+  }, [assignees, identity.projectMemberId, sourceDetail]);
+  const canClearAssignee = Boolean(sourceDetail?.capabilities.canAssignOthers)
+    || sourceDetail?.task.assigneeProjectMemberId === identity.projectMemberId;
   const labels = useQuery(api.taskLabels.list, release.tasks && archive !== '1' ? {
     projectId: project,
     ...identity,
   } : 'skip');
+  const sourceComments = useMemo(
+    () => commentPage.results.filter((item): item is Doc<'taskComments'> => 'body' in item),
+    [commentPage.results],
+  );
+  const sourceActivities = useMemo(
+    () => activityPage.results.filter((item): item is Doc<'taskActivities'> => 'action' in item),
+    [activityPage.results],
+  );
+  const detail = sourceDetail;
   const updateTask = useMutation(api.tasks.update);
   const createTask = useMutation(api.tasks.create);
   const createComment = useMutation(api.taskComments.create);
@@ -176,6 +184,7 @@ export default function TaskScreen() {
   const setTaskLabels = useMutation(api.taskLabels.setTaskLabels);
   const [field, setField] = useState<TaskEditField | null>(null);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const [description, setDescription] = useState('');
   const [subtask, setSubtask] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
@@ -193,13 +202,34 @@ export default function TaskScreen() {
   // without waiting for the reactive query to catch up.
   const savedRevision = useRef<number | null>(null);
   const checklistY = useRef(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const checklistInputFocused = useRef(false);
   const subtaskIntentRef = useRef(idempotencyKey());
   const commentDraftKey = useRef<string | null>(null);
   const subtaskPendingRef = useRef(false);
+  const keyCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!keyboardVisible || !checklistInputFocused.current) return;
+
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [keyboardVisible]);
+
+  const focusChecklistInput = useCallback(() => {
+    checklistInputFocused.current = true;
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
+
+  const blurChecklistInput = useCallback(() => {
+    checklistInputFocused.current = false;
+  }, []);
   const focusTitleInput = useCallback((input: TextInput | null) => {
     if (input) input.focus();
   }, []);
+
   const taskIdentityRef = useRef<string | null>(null);
   const serverSnapshotRef = useRef<TaskEditableSnapshot | null>(null);
   const baselineSnapshotRef = useRef<TaskEditableSnapshot | null>(null);
@@ -210,17 +240,21 @@ export default function TaskScreen() {
     membershipId ?? '',
   ].join(':');
 
+  useEffect(() => () => {
+    if (keyCopiedTimer.current) clearTimeout(keyCopiedTimer.current);
+  }, []);
+
   useEffect(() => {
-    if (!detail || detail.task.publicKey !== taskKey) return;
+    if (!sourceDetail || sourceDetail.task.publicKey !== taskKey) return;
     const nextSnapshot = {
-      description: detail.task.description ?? '',
-      title: detail.task.title,
+      description: sourceDetail.task.description ?? '',
+      title: sourceDetail.task.title,
     };
     if (taskIdentityRef.current !== taskIdentity || !serverSnapshotRef.current || !baselineSnapshotRef.current) {
       taskIdentityRef.current = taskIdentity;
       serverSnapshotRef.current = nextSnapshot;
       baselineSnapshotRef.current = nextSnapshot;
-      savedRevision.current = detail.task.revision;
+      savedRevision.current = sourceDetail.task.revision;
       setTitleDraft(null);
       setDescription('');
       setConflict(false);
@@ -242,33 +276,28 @@ export default function TaskScreen() {
     serverSnapshotRef.current = nextSnapshot;
     if (!titleDirty && !descriptionDirty) {
       baselineSnapshotRef.current = nextSnapshot;
-      savedRevision.current = detail.task.revision;
+      savedRevision.current = sourceDetail.task.revision;
     }
-  }, [description, detail, field, taskIdentity, taskKey, titleDraft]);
+  }, [description, field, sourceDetail, taskIdentity, taskKey, titleDraft]);
 
   const offline = network.isConnected === false || network.isInternetReachable === false;
   const board = boards?.find((item) => item.board._id === detail?.task.boardId);
-  const subtasks = useMemo(() => childPage.results, [childPage.results]);
+  const subtasks = childPage.results;
   const visibleSubtasks = uniqueTaskViews(subtasks);
   const openSubtaskCount = visibleSubtasks.filter((item) =>
     item.state?.category !== 'completed' && item.state?.category !== 'canceled',
   ).length;
-  const comments = useMemo(
-    () => commentPage.results.filter((item): item is Doc<'taskComments'> => 'body' in item),
-    [commentPage.results],
-  );
-  const activities = useMemo(
-    () => activityPage.results.filter((item): item is Doc<'taskActivities'> => 'action' in item),
-    [activityPage.results],
-  );
-  const hasMoreUpdates = commentPage.status === 'CanLoadMore' || commentPage.status === 'LoadingMore'
-    || activityPage.status === 'CanLoadMore' || activityPage.status === 'LoadingMore';
+  const comments = sourceComments;
+  const activities = sourceActivities;
+  const hasMoreComments = commentPage.status === 'CanLoadMore' || commentPage.status === 'LoadingMore';
+  const hasMoreActivities = activityPage.status === 'CanLoadMore' || activityPage.status === 'LoadingMore';
+  const hasMoreUpdates = hasMoreComments || hasMoreActivities;
   const updates = useMemo(() => visibleTaskUpdates(
     comments,
     activities,
-    commentPage.status === 'CanLoadMore' || commentPage.status === 'LoadingMore',
-    activityPage.status === 'CanLoadMore' || activityPage.status === 'LoadingMore',
-  ), [activities, activityPage.status, commentPage.status, comments]);
+    hasMoreComments,
+    hasMoreActivities,
+  ), [activities, comments, hasMoreActivities, hasMoreComments]);
   const references = referencePage.results;
   const readOnly = archive === '1' || Boolean(detail && !detail.capabilities.canEdit);
   const labelIds = detail?.labels.flatMap((label) => label ? [label._id] : []) ?? [];
@@ -462,6 +491,7 @@ export default function TaskScreen() {
   if (!release.tasks) {
     return (
       <ThemedView style={styles.screen}>
+        <Stack.Screen options={{ title: 'Task unavailable' }} />
         <EmptyState icon="task" title="Tasks aren’t available here yet" body="You can still use Project conversations while task tools are unavailable." />
       </ThemedView>
     );
@@ -469,7 +499,7 @@ export default function TaskScreen() {
   if (detail === undefined) {
     return (
       <ThemedView style={styles.screen}>
-        <Stack.Screen options={{ title: taskKey ? shortTaskKey(taskKey) : 'Task' }} />
+        <Stack.Screen options={{ title: 'Task' }} />
         <ScreenLoading variant="task" />
       </ThemedView>
     );
@@ -485,6 +515,8 @@ export default function TaskScreen() {
 
   const assigneeName = assignees?.find((item) => item.member._id === detail.task.assigneeProjectMemberId)?.user.displayName
     ?? (detail.assignee ? 'Assigned member' : 'Unassigned');
+  const displayedAssigneeName = assigneeName;
+  const projectName = projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project';
   const updatesLoading = updateFilter === 'comments'
     ? commentPage.status === 'LoadingFirstPage'
     : updateFilter === 'activity'
@@ -493,20 +525,27 @@ export default function TaskScreen() {
   const taskDecision = taskDecisionForCategory(detail.state?.category);
   const decisionState = board?.states.find((state) => state.category === taskDecision.targetCategory);
   const canAdvance = !readOnly;
+  const canComment = detail.capabilities.canComment;
   const filteredUpdates = updateFilter === 'all'
     ? updates
     : updates.filter(({ kind }) => updateFilter === 'comments' ? kind === 'comment' : kind === 'activity');
   const visibleUpdates = updatesExpanded ? filteredUpdates : filteredUpdates.slice(-1);
   const hasMoreFilteredUpdates = updateFilter === 'comments'
-    ? commentPage.status === 'CanLoadMore' || commentPage.status === 'LoadingMore'
+    ? hasMoreComments
     : updateFilter === 'activity'
-      ? activityPage.status === 'CanLoadMore' || activityPage.status === 'LoadingMore'
+      ? hasMoreActivities
       : hasMoreUpdates;
+  const updateFilters = [
+    ['all', 'All', updates.length, hasMoreUpdates],
+    ['comments', 'Comments', updates.filter(({ kind }) => kind === 'comment').length, hasMoreComments],
+    ['activity', 'Activity', updates.filter(({ kind }) => kind === 'activity').length, hasMoreActivities],
+  ] as const;
 
   return (
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{
         title: 'Task',
+        headerTitleAlign: 'left',
         headerRight: () => (
           <View style={styles.headerActions}>
             <IconButton
@@ -531,16 +570,17 @@ export default function TaskScreen() {
           </View>
         ),
       }} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
-        <ScrollView
+      <KeyboardAwareScrollView
           ref={scrollRef}
+          bottomOffset={Spacing.two}
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: Spacing.four },
+            { paddingBottom: Spacing.three },
           ]}
           contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled">
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          style={styles.screen}>
           {offline ? <TaskStateBanner icon="cloud-off" message="Offline — reconnect to update this task" tone="offline" /> : null}
           {archive === '1' ? <TaskStateBanner icon="shield-lock-outline" message="Read-only archive" /> : null}
           {readOnly && archive !== '1' ? <TaskStateBanner icon="shield-lock-outline" message="You can view this task, but editing is restricted" /> : null}
@@ -560,14 +600,17 @@ export default function TaskScreen() {
 
           <ScreenEntrance style={styles.hero}>
             {titleDraft === null ? (
-              <View style={styles.titleRow}>
-                <ThemedText accessibilityRole="header" style={styles.taskTitle}>{detail.task.title}</ThemedText>
-                {!readOnly ? <Pressable accessibilityLabel="Edit task title" accessibilityRole="button" hitSlop={8} onPress={() => setTitleDraft(detail.task.title)} style={({ pressed }) => [styles.editTitleButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, borderColor: theme.homeBorder }]}>
-                  <PlatformIcon color={theme.textSecondary} name="edit" size={17} />
-                  <ThemedText themeColor="textSecondary" type="captionBold">Edit</ThemedText>
-                </Pressable> : null}
-              </View>
+              <Pressable
+                  accessibilityHint={titleExpanded ? 'Collapses the task title' : 'Shows the full task title'}
+                  accessibilityLabel={detail.task.title}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: titleExpanded }}
+                  onPress={() => setTitleExpanded((expanded) => !expanded)}
+                  style={styles.titleHeading}>
+                  <ThemedText accessibilityRole="header" numberOfLines={titleExpanded ? undefined : 2} style={styles.taskTitle}>{detail.task.title}</ThemedText>
+              </Pressable>
             ) : (
+              <View style={styles.titleEdit}>
               <ThemedTextInput
                 accessibilityLabel="Task title"
                 allowFontScaling
@@ -577,14 +620,6 @@ export default function TaskScreen() {
                 keyboardAppearance={theme.background === '#1b1917' ? 'dark' : 'light'}
                 maxFontSizeMultiplier={MaxFontScale}
                 multiline
-                onBlur={() => {
-                  const next = titleDraft.trim();
-                  if (!next || next === detail.task.title) {
-                    setTitleDraft(null);
-                    return;
-                  }
-                  void saveField({ title: next });
-                }}
                 onChangeText={setTitleDraft}
                 selectionColor={theme.accent}
                 selectionHandleColor={theme.accent}
@@ -594,35 +629,50 @@ export default function TaskScreen() {
                 }]}
                 value={titleDraft}
               />
+              <View style={styles.titleEditActions}>
+                <ActionButton disabled={busy} label="Cancel" onPress={() => setTitleDraft(null)} style={styles.titleEditButton} variant="secondary" />
+                <ActionButton
+                  disabled={!titleDraft.trim() || titleDraft.trim() === detail.task.title || busy}
+                  label={busy ? 'Saving…' : 'Save title'}
+                  loading={busy}
+                  onPress={() => {
+                    const next = titleDraft.trim();
+                    if (next) void saveField({ title: next });
+                  }}
+                  style={styles.titleEditButton}
+                />
+              </View>
+              </View>
             )}
             <View style={styles.identityRow}>
-              <TaskStatusPill
-                category={detail.state?.category}
-                label={detail.state?.name ?? 'Unknown'}
-                onPress={readOnly ? undefined : () => setField('status')}
-              />
               <Pressable
-                accessibilityHint="Copies the full task id"
-                accessibilityLabel={`Task id ${detail.task.publicKey}`}
+                accessibilityHint={keyCopied ? 'Task identifier copied to the clipboard' : 'Copies the full task identifier'}
+                accessibilityLabel={keyCopied ? 'Task identifier copied' : `Copy task identifier ${detail.task.publicKey}`}
                 accessibilityRole="button"
                 hitSlop={8}
                 onPress={() => {
                   hapticLight();
                   Clipboard.setString(detail.task.publicKey);
                   setKeyCopied(true);
-                  setTimeout(() => setKeyCopied(false), 1500);
+                  AccessibilityInfo.announceForAccessibility('Task identifier copied');
+                  if (keyCopiedTimer.current) clearTimeout(keyCopiedTimer.current);
+                  keyCopiedTimer.current = setTimeout(() => setKeyCopied(false), 1500);
                 }}
                 style={({ pressed }) => [styles.taskKeyButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, borderColor: theme.homeBorder }]}
               >
                 <PlatformIcon color={theme.textTertiary} name={keyCopied ? 'check' : 'content-copy'} size={13} />
                 <ThemedText themeColor="textSecondary" type="mono">
-                  {keyCopied ? 'Copied' : shortTaskKey(detail.task.publicKey)}
+                  {keyCopied ? 'Copied' : `ID · ${shortTaskKey(detail.task.publicKey)}`}
                 </ThemedText>
               </Pressable>
+              {!readOnly ? <Pressable accessibilityLabel="Edit task title" accessibilityRole="button" hitSlop={8} onPress={() => setTitleDraft(detail.task.title)} style={({ pressed }) => [styles.editTitleButton, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>
+                <PlatformIcon color={theme.textSecondary} name="edit" size={16} />
+                <ThemedText themeColor="textSecondary" type="captionBold">Edit</ThemedText>
+              </Pressable> : null}
             </View>
             <Pressable
               accessibilityHint="Opens this task on its Project Board"
-              accessibilityLabel={`Open ${projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project'}${detail.board ? `, ${detail.board.name} Board` : ''}`}
+              accessibilityLabel={`Open ${projectName}${detail.board ? `, ${detail.board.name} Board` : ''}`}
               accessibilityRole="button"
               onPress={() => {
                 hapticLight();
@@ -646,37 +696,47 @@ export default function TaskScreen() {
                 iconKey={projectNavigation?.project?.markIconKey}
                 id={String(project)}
                 kind="project"
-                name={projectNavigation?.project?.name ?? 'Project'}
-                size={40}
+                name={projectName}
+                size={32}
               />
               <View style={styles.projectBoardCopy}>
-                <ThemedText themeColor="textTertiary" type="captionBold">PROJECT</ThemedText>
-                <ThemedText numberOfLines={1} type="smallBold">{projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project'}</ThemedText>
+                <ThemedText numberOfLines={1} type="smallBold">{projectName}</ThemedText>
                 <View style={styles.boardDestination}>
                   <PlatformIcon color={theme.textSecondary} name="view-board" size={14} />
                   <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{detail.board?.name ?? 'Project overview'}</ThemedText>
                 </View>
               </View>
-              <PlatformIcon color={theme.textSecondary} name="chevron-right" size={19} />
             </Pressable>
             <View style={[styles.propertiesCard, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
-              <Pressable
-                accessibilityHint={readOnly ? undefined : 'Changes who owns this task'}
-                accessibilityLabel={`Assignee: ${assigneeName}`}
-                accessibilityRole={readOnly ? 'text' : 'button'}
-                disabled={readOnly}
-                onPress={() => setField('assignee')}
-                style={({ pressed }) => [styles.assigneeRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
-              >
-                {detail.assignee
-                  ? <ColoredAvatar label={assigneeName} seed={assigneeName} size={36} />
-                  : <View style={[styles.unassignedAvatar, { backgroundColor: theme.backgroundElement }]}><PlatformIcon color={theme.textSecondary} name="person" size={17} /></View>}
-                <View style={styles.assigneeCopy}>
-                  <ThemedText themeColor="textSecondary" type="caption">Assignee</ThemedText>
-                  <ThemedText numberOfLines={1} type="smallBold">{assigneeName}</ThemedText>
+              <View style={styles.propertyGrid}>
+                <View style={styles.propertyField}>
+                  <ThemedText themeColor="textSecondary" type="caption">Status</ThemedText>
+                  <TaskStatusPill
+                    category={detail.state?.category}
+                    compact
+                    label={detail.state?.name ?? 'Unknown'}
+                    onPress={readOnly ? undefined : () => setField('status')}
+                  />
                 </View>
-                {readOnly ? null : <PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} />}
-              </Pressable>
+                <View style={[styles.propertyDividerVertical, { backgroundColor: theme.homeBorder }]} />
+                <Pressable
+                  accessibilityHint={readOnly ? undefined : 'Changes who owns this task'}
+                  accessibilityLabel={`Assignee: ${displayedAssigneeName}`}
+                  accessibilityRole={readOnly ? 'text' : 'button'}
+                  disabled={readOnly}
+                  onPress={() => setField('assignee')}
+                  style={({ pressed }) => [styles.assigneeField, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
+                >
+                  <ThemedText themeColor="textSecondary" type="caption">Assignee</ThemedText>
+                  <View style={styles.assigneeValue}>
+                    {detail.assignee
+                      ? <ColoredAvatar label={displayedAssigneeName} seed={displayedAssigneeName} size={28} />
+                      : <View style={[styles.unassignedAvatar, { backgroundColor: theme.backgroundElement }]}><PlatformIcon color={theme.textSecondary} name="person" size={15} /></View>}
+                    <ThemedText numberOfLines={2} style={styles.assigneeCopy} type="captionBold">{displayedAssigneeName}</ThemedText>
+                    {readOnly ? null : <PlatformIcon color={theme.textTertiary} name="chevron-right" size={14} />}
+                  </View>
+                </Pressable>
+              </View>
               <View style={[styles.propertyDivider, { backgroundColor: theme.homeBorder }]} />
               <View style={styles.propertyGrid}>
                 <View style={styles.propertyField}>
@@ -693,6 +753,7 @@ export default function TaskScreen() {
                   <ThemedText themeColor="textSecondary" type="caption">Due date</ThemedText>
                   <TaskDueChip
                     category={detail.state?.category}
+                    compact
                     dueDate={detail.task.dueDate}
                     onPress={readOnly ? undefined : () => setField('dueDate')}
                     showNoDate
@@ -702,47 +763,27 @@ export default function TaskScreen() {
             </View>
           </ScreenEntrance>
 
-          <TaskOverview
-            busy={busy}
-            detail={detail}
-            highlightSubtaskId={highlightSubtaskId ?? undefined}
-            onAddSubtask={addSubtask}
-            onChecklistLayout={(event) => { checklistY.current = event.nativeEvent.layout.y; }}
-            onEditField={(next) => {
-              if (next === 'description') setDescription(detail.task.description ?? '');
-              setField(next);
-            }}
-            onOpenReference={openReference}
-            onOpenSubtask={(item) => router.push(taskDetailHref(project, item.task.publicKey, routeIdentity))}
-            onLoadMoreReferences={referencePage.status === 'CanLoadMore' ? () => referencePage.loadMore(50) : undefined}
-            onSubtaskChange={setSubtask}
-            onToggleSubtask={(item) => void toggleSubtask(item)}
-            readOnly={readOnly}
-            subtask={subtask}
-            subtasks={subtasks}
-            references={references}
-            referencesLoading={referencePage.status === 'LoadingFirstPage'}
-            referencesLoadingMore={referencePage.status === 'LoadingMore'}
-            onLoadMoreSubtasks={childPage.status === 'CanLoadMore' ? () => childPage.loadMore(50) : undefined}
-            subtasksLoadingMore={childPage.status === 'LoadingMore'}
-          />
-
           <View style={styles.updatesSection}>
             <View style={styles.updatesHeading}>
               <View style={styles.updatesTitleGroup}>
                 <ThemedText accessibilityRole="header" type="subtitle">Updates</ThemedText>
                 <ThemedText themeColor="textSecondary" type="caption">Comments and task history</ThemedText>
               </View>
-              {filteredUpdates.length ? <View style={[styles.updatesCount, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText themeColor="textSecondary" type="captionBold">{filteredUpdates.length}{hasMoreFilteredUpdates ? '+' : ''}</ThemedText>
-              </View> : null}
+              {filteredUpdates.length > 1 || hasMoreFilteredUpdates ? <Pressable
+                accessibilityLabel={updatesExpanded ? 'Show latest update only' : 'Show all task updates'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: updatesExpanded }}
+                onPress={() => {
+                  setUpdatesExpanded((expanded) => !expanded);
+                  if (!updatesExpanded && hasMoreFilteredUpdates) loadEarlierUpdates();
+                }}
+                style={styles.updatesToggle}>
+                <ThemedText themeColor="accentStrong" type="captionBold">{updatesExpanded ? 'Show latest' : 'Show all'}</ThemedText>
+                <PlatformIcon color={theme.accentStrong} name={updatesExpanded ? 'chevron-up' : 'chevron-down'} size={15} />
+              </Pressable> : null}
             </View>
             <View accessibilityLabel="Filter task updates" accessibilityRole="tablist" style={styles.updateFilters}>
-              {([
-                ['all', 'All', updates.length],
-                ['comments', 'Comments', updates.filter(({ kind }) => kind === 'comment').length],
-                ['activity', 'Activity', updates.filter(({ kind }) => kind === 'activity').length],
-              ] as const).map(([key, label, count]) => {
+              {updateFilters.map(([key, label, count, hasMore]) => {
                 const selected = updateFilter === key;
                 return <CompactPillButton
                   accessibilityRole="tab"
@@ -752,7 +793,7 @@ export default function TaskScreen() {
                   pillStyle={{ backgroundColor: selected ? theme.accentSoft : theme.homeSurface, borderColor: selected ? 'transparent' : theme.homeBorder }}
                   pressedPillStyle={{ backgroundColor: theme.backgroundSelected, borderColor: 'transparent' }}>
                   <ThemedText style={{ color: selected ? theme.accentStrong : theme.textSecondary }} type="captionBold">{label}</ThemedText>
-                  <ThemedText style={{ color: selected ? theme.accentStrong : theme.textTertiary }} type="caption">{count}{hasMoreFilteredUpdates && selected && count > 0 ? '+' : ''}</ThemedText>
+                  <ThemedText style={{ color: selected ? theme.accentStrong : theme.textTertiary }} type="caption">{count}{hasMore ? '+' : ''}</ThemedText>
                 </CompactPillButton>;
               })}
             </View>
@@ -770,23 +811,40 @@ export default function TaskScreen() {
               updates={visibleUpdates}
               workflowStates={board?.states}
             />
-            {filteredUpdates.length > 1 || hasMoreFilteredUpdates ? <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: updatesExpanded }}
-              onPress={() => {
-                setUpdatesExpanded((expanded) => !expanded);
-                if (!updatesExpanded && hasMoreFilteredUpdates) loadEarlierUpdates();
-              }}
-              style={styles.updatesToggle}>
-              <ThemedText themeColor="accentStrong" type="smallBold">{updatesExpanded ? 'Show latest only' : 'View all updates'}</ThemedText>
-              <PlatformIcon color={theme.accentStrong} name={updatesExpanded ? 'chevron-up' : 'chevron-down'} size={15} />
-            </Pressable> : null}
           </View>
 
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <TaskOverview
+            busy={busy}
+            detail={detail}
+            highlightSubtaskId={highlightSubtaskId ?? undefined}
+            onAddSubtask={addSubtask}
+            onChecklistLayout={(event) => { checklistY.current = event.nativeEvent.layout.y; }}
+            onEditField={(next) => {
+              if (next === 'description') setDescription(detail.task.description ?? '');
+              setField(next);
+            }}
+            onOpenReference={openReference}
+            onOpenSubtask={(item) => {
+              router.push(taskDetailHref(project, item.task.publicKey, routeIdentity));
+            }}
+            onLoadMoreReferences={referencePage.status === 'CanLoadMore' ? () => referencePage.loadMore(50) : undefined}
+            onSubtaskChange={setSubtask}
+            onToggleSubtask={(item) => void toggleSubtask(item)}
+            readOnly={readOnly}
+            subtask={subtask}
+            subtasks={subtasks}
+            references={references}
+            referencesLoading={referencePage.status === 'LoadingFirstPage'}
+            referencesLoadingMore={referencePage.status === 'LoadingMore'}
+            onLoadMoreSubtasks={childPage.status === 'CanLoadMore' ? () => childPage.loadMore(50) : undefined}
+            onSubtaskBlur={blurChecklistInput}
+            subtasksLoadingMore={childPage.status === 'LoadingMore'}
+            onSubtaskFocus={focusChecklistInput}
+          />
 
-      {composerOpen && detail.capabilities.canComment ? <TaskCommentComposer
+      </KeyboardAwareScrollView>
+
+      {composerOpen && canComment ? <TaskCommentComposer
         assignees={assignees}
         busy={busy}
         mentionIds={mentionIds}
@@ -800,7 +858,7 @@ export default function TaskScreen() {
           : [...current, memberId as Id<'projectMembers'>])}
         onSend={() => void addComment()}
         value={comment}
-      /> : !keyboardVisible && (canAdvance || detail.capabilities.canComment) ? <View style={[styles.bottomDock, { backgroundColor: theme.background, borderTopColor: theme.hairline, marginBottom: bottomTabBarInset, paddingBottom: safeAreaInsets.bottom + Spacing.six }]}>
+      /> : !keyboardVisible && (canAdvance || canComment) ? <View style={[styles.bottomDock, { backgroundColor: theme.background, borderTopColor: theme.hairline, marginBottom: bottomDockClearance, paddingBottom: bottomDockClearance ? 0 : safeAreaInsets.bottom }]}>
         {canAdvance ? <ActionButton
           icon={taskDecision.icon}
           label={taskDecision.label}
@@ -809,17 +867,16 @@ export default function TaskScreen() {
             if (decisionState) void saveField({ workflowStateId: decisionState._id });
             else setField('status');
           }}
-          style={styles.decisionButton}
+          style={styles.footerAction}
         /> : null}
-        {detail.capabilities.canComment ? <Pressable
-          accessibilityLabel="Write a task update"
-          accessibilityRole="button"
+        {canComment ? <ActionButton
+          accessibilityHint="Opens the task update composer."
+          icon="message"
+          label="Update"
           onPress={() => setComposerOpen(true)}
-          style={({ pressed }) => [styles.updateButton, !canAdvance && styles.expandedUpdateButton, { backgroundColor: pressed ? theme.backgroundElement : 'transparent' }]}
-        >
-          <PlatformIcon color={theme.textSecondary} name="message" size={18} />
-          <ThemedText themeColor="textSecondary" type="captionBold">Update</ThemedText>
-        </Pressable> : null}
+          style={styles.footerAction}
+          variant="secondary"
+        /> : null}
       </View> : null}
 
       <OptionsSheet
@@ -901,7 +958,7 @@ export default function TaskScreen() {
                   : [...labelIds, label._id])}
                 selected={labelIds.includes(label._id)}
               />
-            )) : <SheetRow icon="tag" label="No labels defined yet" onPress={() => setField(null)} />}
+            )) : <SheetNote>No labels available.</SheetNote>}
           </SheetSection>
         ) : null}
         {field === 'more' ? (
@@ -973,37 +1030,39 @@ export default function TaskScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: Spacing.five, padding: Spacing.four, paddingTop: Spacing.five },
-  decisionButton: { alignSelf: 'stretch', flex: 1 },
+  content: { gap: Spacing.four, padding: Spacing.four, paddingTop: MobileHeaderMetrics.contentTop },
+  footerAction: { alignSelf: 'stretch', flex: 1 },
   assigneeCopy: { flex: 1, gap: 2, minWidth: 0 },
-  assigneeRow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, paddingHorizontal: Spacing.two },
-  bottomDock: { alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
-  editTitleButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.three },
-  expandedUpdateButton: { flex: 1 },
-  identityRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
-  taskKeyButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, minHeight: 36, paddingHorizontal: Spacing.two },
-  projectBoardCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.three, minHeight: 84, padding: Spacing.three },
+  assigneeField: { flex: 1, gap: Spacing.one, justifyContent: 'center', minHeight: 56, minWidth: 0, paddingHorizontal: Spacing.one, paddingVertical: Spacing.one },
+  assigneeValue: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
+  bottomDock: { alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
+  editTitleButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, minWidth: TouchTarget, paddingHorizontal: Spacing.two },
+  identityRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minHeight: TouchTarget },
+  taskKeyButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, minHeight: 36, paddingHorizontal: Spacing.two },
+  projectBoardCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, minHeight: 60, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   projectBoardCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
   boardDestination: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   propertiesCard: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   propertyDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.one },
   propertyGrid: { alignItems: 'stretch', flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.one, paddingVertical: Spacing.two },
   propertyDividerVertical: { width: StyleSheet.hairlineWidth },
-  propertyField: { flex: 1, gap: Spacing.one, justifyContent: 'center', minWidth: 0 },
+  propertyField: { flex: 1, gap: Spacing.one, justifyContent: 'center', minHeight: 56, minWidth: 0, paddingHorizontal: Spacing.one, paddingVertical: Spacing.one },
   unassignedAvatar: { alignItems: 'center', borderRadius: Radius.pill, height: 34, justifyContent: 'center', width: 34 },
-  updateButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, paddingHorizontal: Spacing.three },
-  headerActions: { alignItems: 'center', flexDirection: 'row' },
-  hero: { gap: Spacing.three },
-  titleRow: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.one },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: MobileHeaderMetrics.actionGap },
+  hero: { gap: Spacing.two },
+  titleHeading: { alignSelf: 'stretch', minWidth: 0 },
+  titleEdit: { flex: 1, gap: Spacing.two, minWidth: 0 },
+  titleEditActions: { flexDirection: 'row', gap: Spacing.two },
+  titleEditButton: { flex: 1 },
   screen: { flex: 1 },
-  taskTitle: { ...Typography.display, flex: 1, fontSize: 28, letterSpacing: -0.5, lineHeight: 35, minWidth: 0 },
-  updatesToggle: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: Spacing.one, minHeight: TouchTarget, paddingHorizontal: Spacing.one },
+  taskTitle: { ...Typography.display, fontSize: 22, letterSpacing: -0.35, lineHeight: 27, minWidth: 0 },
+  updatesToggle: { alignItems: 'center', flexDirection: 'row', flexShrink: 0, gap: Spacing.one, minHeight: TouchTarget, paddingHorizontal: Spacing.one },
   updatesHeading: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minHeight: TouchTarget },
   updatesTitleGroup: { flex: 1, gap: Spacing.half, minWidth: 0 },
   updateFilters: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
   updatesSection: { gap: Spacing.two, paddingTop: Spacing.two },
-  updatesCount: { alignItems: 'center', borderRadius: Radius.pill, justifyContent: 'center', minHeight: 24, minWidth: 24, paddingHorizontal: Spacing.two },
   titleInput: {
+    flex: 1,
     borderCurve: 'continuous',
     borderRadius: Radius.medium,
     paddingHorizontal: Spacing.two,

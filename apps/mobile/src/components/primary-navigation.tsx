@@ -13,7 +13,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
-import { AndroidBottomTabHeight, BottomTabInset, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
+import { AndroidBottomTabHeight, BottomTabInset, IconSize, PrimaryCreateActionClearance, PrimaryCreateActionSize, Radius, Spacing, Typography } from '@/constants/theme';
 import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
@@ -77,7 +77,6 @@ export function PrimaryNavigation({ navigation, state }: RouterTabBarProps) {
       { create: !createContext.archive, groupId: createContext.groupId as Id<'groups'> | undefined },
     )
     : '/tasks?create=1';
-
   const selectItem = useCallback((item: NavigationItem | (PrimaryDestination & { href: string })) => {
     const route = visibleRoutes.find((candidate) => candidate.name === item.href);
     if (!route || item.disabled) return false;
@@ -121,7 +120,7 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const isAndroid = Platform.OS === 'android';
-  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two);
+  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, Spacing.one);
   const [reduceTransparency, setReduceTransparency] = useState(false);
   const navigationHeight = isAndroid
     ? primaryNavigationHeight(fontScale, AndroidBottomTabHeight)
@@ -178,11 +177,10 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   return <>
     <Animated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.positioner, isAndroid && styles.androidPositioner, {
       paddingBottom: safeAreaBottom,
-      paddingHorizontal: isAndroid ? 0 : 20,
       paddingTop: isAndroid ? 0 : Spacing.two,
     }, positionStyle]}>
-      <View style={[styles.fabBand, { height: 64 }]}>
-        <CreateButton disabled={createDisabled} onPress={onCreate} style={{ bottom: 4, right: isAndroid ? Spacing.three : 28 }} />
+      <View style={[styles.fabBand, { height: PrimaryCreateActionSize + PrimaryCreateActionClearance + Spacing.two }]}>
+        <CreateButton disabled={createDisabled} onPress={onCreate} style={{ bottom: PrimaryCreateActionClearance, right: isAndroid ? Spacing.three : 28 }} />
       </View>
       <View style={[styles.chrome, isAndroid && styles.androidChrome, {
         backgroundColor: navigationSurface,
@@ -232,10 +230,10 @@ function NavigationTab({ active, item, onPress }: {
     onPress={() => { hapticLight(); onPress(); }}
     style={({ pressed }) => [styles.item, { backgroundColor: 'transparent', opacity: item.disabled ? 0.38 : pressed ? 0.9 : 1 }]}
   >
-    <View style={[styles.iconWell, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
+    <View style={[styles.iconWell, { backgroundColor: active ? theme.accentSoft : 'transparent', borderColor: active ? theme.accentStrong : 'transparent' }]}>
       <PlatformIcon color={active ? activeIconColor : theme.textSecondary} name={item.icon} size={isAndroid ? 24 : IconSize.large + 4} variant={active ? 'filled' : 'outline'} weight={active ? 'semibold' : 'regular'} />
     </View>
-    <ThemedText numberOfLines={1} style={[styles.itemLabel, isAndroid && styles.androidItemLabel, { color: theme.textSecondary }]} type="captionBold">{item.label}</ThemedText>
+    <ThemedText numberOfLines={1} style={[styles.itemLabel, isAndroid && styles.androidItemLabel, { color: active ? activeIconColor : theme.textSecondary }]} type="captionBold">{item.label}</ThemedText>
   </Pressable>;
 }
 
@@ -268,17 +266,17 @@ function safeGlassAvailability() {
 const styles = StyleSheet.create({
   androidChrome: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0, borderLeftWidth: 0, borderRadius: 0, borderRightWidth: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   androidItemLabel: { ...Typography.captionBold, marginTop: 2 },
-  androidPositioner: { left: 0, paddingHorizontal: 0, paddingTop: 0, right: 0 },
+  androidPositioner: { alignSelf: 'stretch', left: 0, maxWidth: '100%', paddingHorizontal: 0, paddingTop: 0, right: 0, width: '100%' },
   chrome: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: BottomTabInset, overflow: 'visible' },
-  createButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, height: 56, justifyContent: 'center', width: 56 },
+  androidSafeArea: { bottom: 0, left: 0, position: 'absolute', right: 0 },
+  createButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, height: PrimaryCreateActionSize, justifyContent: 'center', width: PrimaryCreateActionSize },
   createButtonFill: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
   createSlot: { alignItems: 'center', elevation: 10, position: 'absolute', zIndex: 10 },
-  androidSafeArea: { bottom: 0, left: 0, position: 'absolute', right: 0 },
   fabBand: { overflow: 'visible', position: 'relative', zIndex: 5 },
   iconWell: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 40, justifyContent: 'center', width: 40 },
   materialClip: { borderCurve: 'continuous', borderRadius: Radius.pill, overflow: 'hidden' },
-  item: { alignItems: 'center', alignSelf: 'stretch', borderCurve: 'continuous', borderRadius: Radius.large, flex: 1, justifyContent: 'center', minHeight: 60, minWidth: 0, overflow: 'hidden' },
+  item: { alignItems: 'center', alignSelf: 'stretch', borderCurve: 'continuous', borderRadius: Radius.large, flex: 1, justifyContent: 'center', minHeight: 56, minWidth: 0, overflow: 'hidden' },
   itemLabel: { ...Typography.captionBold, marginTop: 1 },
-  positioner: { bottom: 0, left: 0, overflow: 'visible', paddingHorizontal: 20, paddingTop: Spacing.two, position: 'absolute', right: 0, zIndex: 50 },
+  positioner: { alignSelf: 'center', bottom: 0, maxWidth: 480, overflow: 'visible', paddingTop: Spacing.two, position: 'absolute', width: '88%', zIndex: 50 },
   row: { alignItems: 'center', flexDirection: 'row', height: BottomTabInset, overflow: 'visible' },
 });

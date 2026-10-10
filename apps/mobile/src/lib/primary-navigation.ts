@@ -44,9 +44,15 @@ export function primaryNavigationHeight(fontScale: number, baseHeight: number) {
   return baseHeight + (Number.isFinite(fontScale) && fontScale > 1.2 ? 32 : 0);
 }
 
-/** Uses the measured device inset, with a visual floor only for floating bars. */
-export function primaryNavigationSafeAreaInset(bottomInset: number, minimumInset = 0) {
-  return Math.max(Number.isFinite(bottomInset) ? bottomInset : 0, minimumInset);
+/** Uses the measured device inset and supports a small dock adjustment. */
+export function primaryNavigationSafeAreaInset(bottomInset: number, minimumInset = 0, bottomOffset = 0) {
+  const measuredInset = Number.isFinite(bottomInset) ? bottomInset : 0;
+  return Math.max(Math.max(0, measuredInset - bottomOffset), minimumInset);
+}
+
+/** Keeps scrollable content clear of both the tab bar and its floating action. */
+export function primaryNavigationContentInset(tabBarInset: number, actionHeight: number, actionGap: number, extra = 0) {
+  return tabBarInset + actionHeight + actionGap + extra;
 }
 
 /** Keeps the selection pill and tab content on the same cell centers. */

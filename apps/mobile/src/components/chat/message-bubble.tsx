@@ -1,33 +1,84 @@
+import type { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AttachmentList } from '@/components/chat/attachment-list';
-import { MessageActionShortcut } from '@/components/chat/message-action-shortcut';
+import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
+import { MessageContextMenu } from '@/components/chat/message-context-menu';
 import { MessageText } from '@/components/chat/message-text';
-import type { DetailedMessage } from '@/components/chat/types';
+import { hasReadyAttachmentPreview } from '@/components/chat/types';
+import type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 import { ColoredAvatar } from '@/components/colored-avatar';
+import type { MessageAction } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
-import { isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
+import { Radius, Spacing, TouchTarget } from '@/constants/theme';
+import { isAudioAttachment, isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { displayText } from '@/lib/display-text';
 
 const AVATAR_SIZE = 32;
-/** Media sits nearly edge-to-edge; text sections add the rest of the inset. */
+/** Text beside media uses a small inset while images meet the bubble edge. */
 const MEDIA_PAD = 3;
+
+type BubbleFrameProps = PropsWithChildren<{
+  bareMedia?: boolean;
+  hasMedia?: boolean;
+  highlighted?: boolean;
+  isOwnMessage: boolean;
+  selected?: boolean;
+  onLongPress?: () => void;
+}>;
+
+/** Shared visual shell for confirmed and optimistic outgoing messages. */
+export function MessageBubbleFrame({
+  bareMedia = false,
+  children,
+  hasMedia = false,
+  highlighted = false,
+  isOwnMessage,
+  onLongPress,
+  selected = false,
+}: BubbleFrameProps) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      accessible={false}
+      onLongPress={onLongPress}
+      style={[
+        styles.bubble,
+        hasMedia ? styles.bubbleMedia : styles.bubbleText,
+        {
+          alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+          backgroundColor: bareMedia ? 'transparent' : selected ? theme.backgroundSelected : isOwnMessage ? theme.bubbleOwn : theme.bubbleOther,
+          borderColor: bareMedia ? 'transparent' : selected || highlighted ? theme.accentStrong : theme.messageBubbleBorder,
+          borderWidth: bareMedia ? 0 : selected || highlighted ? 2 : 1,
+          boxShadow: bareMedia ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
+          maxWidth: '84%',
+        },
+        bareMedia && styles.bubbleBare,
+        isOwnMessage ? styles.tailOwn : styles.tailOther,
+      ]}>
+      {children}
+    </Pressable>
+  );
+}
 
 type Props = {
   highlighted?: boolean;
   isFirstInGroup: boolean;
   isOwnMessage: boolean;
   message: DetailedMessage;
+  readReceipt?: { readCount: number; recipientCount: number };
+  selected?: boolean;
+  contextActions?: MessageAction[];
   onOpenForwardSource?: () => void;
-  onLongPress: () => void;
+  onForwardMedia?: () => void;
+  onLongPress?: () => void;
   onOpenThread?: () => void;
   onPressReply?: () => void;
   timeLabel: string;
-  variant?: 'conversation' | 'thread';
 };
 
 export function MessageBubble({
@@ -35,73 +86,82 @@ export function MessageBubble({
   isFirstInGroup,
   isOwnMessage,
   message,
+  readReceipt,
+  selected = false,
+  contextActions,
   onOpenForwardSource,
+  onForwardMedia,
   onLongPress,
   onOpenThread,
   onPressReply,
   timeLabel,
-  variant = 'conversation',
 }: Props) {
   const theme = useTheme();
   const name = message.author?.displayName ?? 'Member';
   const authorId = message.author?._id ?? name;
+  const isDeleted = Boolean(message.message.deletedAt);
   const rawBody = displayText(message.message.body.trim());
   const body = message.attachments.length && isAutoAttachmentBody(rawBody) ? '' : rawBody;
-  const showHeader = isFirstInGroup && !isOwnMessage;
-  const isThreadReply = variant === 'thread';
-  const hasMedia = message.attachments.some(
-    ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
+  const hasImage = message.attachments.some(isRenderableImage);
+  const hasVoiceNote = message.attachments.some(
+    ({ attachment, url }) => url && isAudioAttachment(attachment),
   );
-  // Media-closed bubbles overlay the timestamp on the image, WhatsApp-style.
+  const showHeader = isFirstInGroup && !isOwnMessage && !hasVoiceNote;
+  const hasMedia = hasImage || hasVoiceNote;
   const mediaClosesBubble =
-    hasMedia &&
+    hasImage &&
     !body &&
     !message.channelThread &&
-    message.attachments.every(
-      ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
-    );
+    message.attachments.every(isRenderableImage);
+  const voiceClosesBubble =
+    hasVoiceNote &&
+    !body &&
+    !message.channelThread &&
+    message.attachments.every(({ attachment, url }) => url && isAudioAttachment(attachment));
+  const showMediaForward = hasImage && !isDeleted && !selected && Boolean(onForwardMedia);
+  const imageDeliveryMeta = mediaClosesBubble ? (
+    <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} tone="media" />
+  ) : undefined;
+  const voiceDeliveryMeta = voiceClosesBubble ? (
+    <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} tone="voice" />
+  ) : undefined;
   return (
     <View pointerEvents="box-none" style={[styles.row, isFirstInGroup && styles.rowFirst, isOwnMessage ? styles.rowOwn : styles.rowOther]}>
-      {isOwnMessage ? null : isFirstInGroup ? (
+      {isOwnMessage || hasVoiceNote ? null : isFirstInGroup ? (
         <ColoredAvatar label={name} seed={authorId} size={AVATAR_SIZE} />
       ) : (
         <View style={styles.avatarSpacer} />
       )}
-      <Pressable
-        accessible={false}
-        onLongPress={onLongPress}
-        style={[
-          styles.bubble,
-          isThreadReply && styles.threadBubble,
-          hasMedia ? styles.bubbleMedia : styles.bubbleText,
-          {
-            backgroundColor: isOwnMessage ? theme.bubbleOwn : theme.homeSurface,
-            borderColor: highlighted ? theme.accentStrong : isOwnMessage ? 'transparent' : theme.homeBorder,
-            borderWidth: highlighted ? 2 : StyleSheet.hairlineWidth,
-          },
-          isFirstInGroup && (isOwnMessage ? styles.tailOwn : styles.tailOther),
-        ]}>
-        {showHeader || isThreadReply ? (
+      {showMediaForward && isOwnMessage ? <ForwardMediaButton onPress={onForwardMedia} /> : null}
+      <MessageContextMenu actions={isDeleted ? [] : contextActions ?? []}>
+        <MessageBubbleFrame
+          bareMedia={voiceClosesBubble}
+          hasMedia={hasMedia}
+          highlighted={highlighted}
+          isOwnMessage={isOwnMessage}
+          onLongPress={isDeleted ? undefined : onLongPress}
+          selected={selected}>
+        {showHeader ? (
           <View style={[
             styles.header,
             isOwnMessage && styles.headerOwn,
             hasMedia && styles.inset,
             hasMedia && styles.insetTop,
           ]}>
-            {showHeader ? (
-              <ThemedText numberOfLines={2} style={styles.authorName} type="smallBold">
-                {name}
-              </ThemedText>
-            ) : null}
-            {isThreadReply ? (
-              <View style={styles.timeMeta}>
-                <ThemedText style={styles.threadTime} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
-                <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
-              </View>
-            ) : null}
+            <ThemedText numberOfLines={2} style={styles.authorName} type="smallBold">
+              {name}
+            </ThemedText>
           </View>
         ) : null}
 
+        {isDeleted ? (
+          <View style={styles.deletedRow}>
+            <PlatformIcon color={theme.textTertiary} name="block" size={16} />
+            <ThemedText style={styles.deletedCopy} themeColor="textSecondary" type="small">
+              {isOwnMessage ? 'You deleted this message' : 'This message was deleted'}
+            </ThemedText>
+          </View>
+        ) : <>
         {message.replyTo ? (
           <Pressable
             accessibilityHint={onPressReply ? 'Shows the quoted message' : undefined}
@@ -139,22 +199,23 @@ export function MessageBubble({
         ) : null}
 
         {message.attachments.length ? (
-          <AttachmentList attachments={message.attachments} onLongPress={onLongPress} />
+          <AttachmentList
+            attachments={message.attachments}
+            imageDeliveryMeta={imageDeliveryMeta}
+            isOwnMessage={isOwnMessage}
+            onLongPress={onLongPress}
+            senderAvatarUrl={message.authorAvatarUrl}
+            senderName={name}
+            voiceDeliveryMeta={voiceDeliveryMeta}
+          />
         ) : null}
 
         {body ? (
-          <View style={hasMedia ? styles.inset : null}>
-            <View>
-              <MessageText body={body} />
-              {isThreadReply ? null : (
-              <View style={styles.timeMeta}>
-                <ThemedText style={styles.timeFooter} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
-                <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
-              </View>
-              )}
-            </View>
+          <View style={hasMedia ? styles.inset : undefined}>
+            <MessageText body={body} />
           </View>
         ) : null}
+        </>}
 
         {message.channelThread ? (
           <Pressable
@@ -194,19 +255,41 @@ export function MessageBubble({
           </Pressable>
         ) : null}
 
-        {body || isThreadReply ? null : mediaClosesBubble ? (
-          <View style={[styles.timeOverlay, { backgroundColor: theme.overlay }]}>
-            <ThemedText style={styles.timeOverlayText} type="caption">{timeLabel}</ThemedText>
-            <MessageActionShortcut authorName={name} onPress={onLongPress} overlay timeLabel={timeLabel} />
-          </View>
-        ) : (
-          <View style={[styles.timeMeta, hasMedia && styles.inset]}>
-            <ThemedText style={styles.timeFooter} themeColor="textTertiary" type="caption">{timeLabel}</ThemedText>
-            <MessageActionShortcut authorName={name} onPress={onLongPress} timeLabel={timeLabel} />
-          </View>
-        )}
-      </Pressable>
+        {!mediaClosesBubble && !voiceClosesBubble ? <View style={[styles.timeMeta, hasMedia && styles.mediaFooter]}>
+          <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} />
+        </View> : null}
+        </MessageBubbleFrame>
+      </MessageContextMenu>
+      {showMediaForward && !isOwnMessage ? <ForwardMediaButton onPress={onForwardMedia} /> : null}
     </View>
+  );
+}
+
+function isRenderableImage(entry: AttachmentWithUrl) {
+  return isImageAttachment(entry.attachment.contentType) && (
+    Boolean(entry.url) || (hasReadyAttachmentPreview(entry) && Boolean(entry.previewUrl))
+  );
+}
+
+function ForwardMediaButton({ onPress }: { onPress?: () => void }) {
+  const theme = useTheme();
+  if (!onPress) return null;
+  return (
+    <Pressable
+      accessibilityHint="Opens the Channel picker to forward this message"
+      accessibilityLabel="Forward image message"
+      accessibilityRole="button"
+      hitSlop={4}
+      onPress={() => {
+        onPress();
+      }}
+      style={({ pressed }) => [styles.forwardMedia, {
+        backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElevated,
+        borderColor: theme.homeBorder,
+      }]}
+    >
+      <PlatformIcon color={theme.textSecondary} name="forward" size={17} />
+    </Pressable>
   );
 }
 
@@ -267,15 +350,31 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
   },
   forwardedLabel: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
-  bubble: {
+  forwardMedia: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.large,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  deletedCopy: { flexShrink: 1, fontStyle: 'italic' },
+  deletedRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minHeight: 24, paddingVertical: Spacing.one },
+  bubble: {
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xlarge,
     flexShrink: 1,
     gap: Spacing.one,
     maxWidth: '84%',
   },
   bubbleMedia: {
-    padding: MEDIA_PAD,
+    overflow: 'hidden',
+  },
+  bubbleBare: {
+    borderRadius: 0,
+    overflow: 'visible',
   },
   bubbleText: {
     paddingHorizontal: Spacing.two,
@@ -299,7 +398,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: Spacing.one,
+    gap: Spacing.two,
     minWidth: 0,
   },
   headerOwn: {
@@ -343,16 +442,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   tailOther: {
-    borderTopLeftRadius: Radius.small,
+    borderBottomLeftRadius: 0,
   },
   tailOwn: {
-    borderTopRightRadius: Radius.small,
+    borderBottomRightRadius: 0,
   },
   threadBubble: {
     maxWidth: '84%',
-  },
-  threadTime: {
-    marginLeft: 'auto',
   },
   threadBody: {
     flexShrink: 1,
@@ -366,32 +462,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     gap: Spacing.two,
-    marginTop: Spacing.one,
+    marginTop: Spacing.half,
     minHeight: TouchTarget,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
-  },
-  timeFooter: {
-    alignSelf: 'center',
   },
   timeMeta: {
     alignItems: 'center',
     alignSelf: 'flex-end',
     flexDirection: 'row',
-    gap: 1,
+    gap: 0,
+    marginTop: Spacing.half,
   },
-  timeOverlay: {
-    alignItems: 'center',
-    borderRadius: Radius.pill,
-    bottom: MEDIA_PAD + 6,
-    flexDirection: 'row',
-    gap: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    position: 'absolute',
-    right: MEDIA_PAD + 6,
-  },
-  timeOverlayText: {
-    color: Colors.dark.text,
-  },
+  mediaFooter: { alignSelf: 'stretch', marginHorizontal: MEDIA_PAD },
 });

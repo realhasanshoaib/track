@@ -36,12 +36,11 @@ function explainDenied(subject: string, canAskAgain: boolean) {
   Alert.alert(
     `Track needs ${subject} access`,
     canAskAgain
-      ? `Allow ${subject} access to attach it to this conversation. You can try again now.`
+      ? `Allow ${subject} access, then choose Camera again to attach a photo.`
       : `Allow ${subject} access in device settings to attach it to this conversation.`,
     canAskAgain
       ? [
-        { style: 'cancel', text: 'Not now' },
-        { onPress: () => void capturePhoto(), text: 'Try again' },
+        { text: 'OK' },
       ]
       : [
         { style: 'cancel', text: 'Not now' },
@@ -56,10 +55,12 @@ function assetToFile(asset: ImagePicker.ImagePickerAsset): UploadableFile {
   return {
     contentType,
     filename: asset.fileName ?? `photo-${Date.now()}.${extension}`,
+    height: asset.height,
     id: nextId(),
     kind: 'file',
     size: asset.fileSize,
     uri: asset.uri,
+    width: asset.width,
   };
 }
 

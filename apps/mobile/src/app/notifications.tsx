@@ -151,11 +151,6 @@ export default function NotificationSettingsScreen() {
             ))}
           </SheetSection>
 
-          <SheetSection title="Inbox coverage">
-            <SheetRow detail="Thread activity follows the conversation setting above." icon="thread" label="Thread activity" />
-            <SheetRow detail="Company and Project invitations can send a push alert when they arrive." icon="account-group" label="Invitations" />
-          </SheetSection>
-
           <SheetSection title="Privacy">
             <SheetRow disabled={savingPreferences} label="Show message and task previews" selected={global.previewMode === 'full'} onPress={() => void update({ previewMode: 'full' })} />
             <SheetRow disabled={savingPreferences} label="Show sender and work context" selected={global.previewMode === 'context'} onPress={() => void update({ previewMode: 'context' })} />

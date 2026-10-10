@@ -1,7 +1,7 @@
 import { parseMentions } from '@track/shared';
 import type { FunctionReturnType } from 'convex/server';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -11,11 +11,12 @@ import type { Doc, Id } from '../../../../convex/_generated/dataModel';
 import { AssistantMessage } from '@/components/chat/assistant-message';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import type { DetailedMessage } from '@/components/chat/types';
+import type { MessageAction } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { messageSwipeCancelIntent, messageSwipeContentWidth, messageSwipeIntent } from '@/lib/message-swipe';
+import { messageSwipeCancelIntent, messageSwipeIntent } from '@/lib/message-swipe';
 import { hapticLight } from '@/lib/haptics';
 
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
@@ -34,11 +35,11 @@ export type ProjectMemberRow = FunctionReturnType<typeof api.mobile.listProjectM
 const SWIPE_LIMIT = 72;
 const SWIPE_THRESHOLD = 56;
 const SWIPE_ACTION_WIDTH = TouchTarget;
-const SWIPE_MESSAGE_OFFSET = 28;
 const SWIPE_ACTION_ENTER_OFFSET = 24;
 
 type Props = {
   highlighted?: boolean;
+  contextActions?: MessageAction[];
   item: Exclude<GroupedThreadItem, { kind: 'date-sep' }>;
   isFirstInGroup: boolean;
   isOwnMessage?: boolean;
@@ -52,10 +53,13 @@ type Props = {
   onSwipeReply?: () => void;
   onSwipeForward?: () => void;
   onSwipeReport?: () => void;
+  readReceipts?: { recipientCount: number; readThroughSequences: number[] };
+  selected?: boolean;
   variant?: 'conversation' | 'thread';
 };
 
 export function ThreadRow({
+  contextActions,
   highlighted = false,
   item,
   isFirstInGroup,
@@ -67,16 +71,47 @@ export function ThreadRow({
   onSwipeReply,
   onSwipeForward,
   onSwipeReport,
+  readReceipts,
+  selected = false,
   variant = 'conversation',
 }: Props) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const [actionsExposed, setActionsExposed] = useState(false);
   const actionWidth = useSharedValue(0);
-  const containerWidth = useSharedValue(0);
   const replyProgress = useSharedValue(0);
   const trayOpenAtStart = useSharedValue(false);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
+  const readReceipt = item.kind === 'message' && isOwnMessage
+    ? {
+        readCount: readReceipts?.readThroughSequences.filter((sequence) =>
+          sequence >= (item.item.message.channelSequence ?? Number.MAX_SAFE_INTEGER),
+        ).length ?? 0,
+        recipientCount: readReceipts?.recipientCount ?? 0,
+      }
+    : undefined;
+  const messageBubble = item.kind === 'message' ? <MessageBubble
+    highlighted={highlighted}
+    isFirstInGroup={isFirstInGroup}
+    isOwnMessage={Boolean(isOwnMessage)}
+    message={item.item}
+    readReceipt={readReceipt}
+    selected={selected}
+    contextActions={contextActions}
+    onLongPress={Platform.OS === 'ios' && contextActions?.length ? undefined : onLongPress}
+    onOpenForwardSource={onOpenForwardSource}
+    onForwardMedia={onSwipeForward}
+    onOpenThread={onOpenThread}
+    onPressReply={onPressReply}
+    timeLabel={fmtTime(item.item.message.createdAt)}
+  /> : null;
+  const assistantBubble = item.kind === 'assistant' ? <AssistantMessage
+    isFirstInGroup={isFirstInGroup}
+    onLongPress={onLongPress}
+    stream={item.stream}
+    timeLabel={fmtTime(item.stream.createdAt)}
+  /> : null;
+  const messageContent = messageBubble ?? assistantBubble;
 
   const gesture = Gesture.Pan()
     .enabled(Boolean(onSwipeReply || hasSwipeActions))
@@ -102,7 +137,11 @@ export function ThreadRow({
     })
     .onEnd((e) => {
       const intent = messageSwipeIntent(e.translationX, Boolean(onSwipeReply), hasSwipeActions, trayOpenAtStart.value);
-      if (intent === 'actions') {
+      if (intent === 'open-menu') {
+        scheduleOnRN(setActionsExposed, false);
+        actionWidth.value = reducedMotion ? 0 : withSpring(0, { damping: 20 });
+        scheduleOnRN(onLongPress);
+      } else if (intent === 'actions') {
         scheduleOnRN(hapticLight);
         scheduleOnRN(setActionsExposed, true);
         actionWidth.value = reducedMotion ? SWIPE_ACTION_WIDTH : withSpring(SWIPE_ACTION_WIDTH, { damping: 22, stiffness: 240 });
@@ -116,8 +155,10 @@ export function ThreadRow({
       }
       replyProgress.value = reducedMotion ? 0 : withSpring(0, { damping: 20 });
     })
-    .onFinalize((_, success) => {
-      if (success) return;
+    .onFinalize((event, success) => {
+      // A tap fails the pan recognizer. Keep an exposed tray available so its
+      // button can receive the tap instead of closing before onPress runs.
+      if (success || Math.abs(event.translationX) < 10) return;
       const intent = messageSwipeCancelIntent(trayOpenAtStart.value);
       const shouldKeepActionsOpen = intent === 'actions';
       scheduleOnRN(setActionsExposed, shouldKeepActionsOpen);
@@ -134,11 +175,9 @@ export function ThreadRow({
   const actionsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, 1], 'clamp'),
     transform: [{ translateX: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [SWIPE_ACTION_ENTER_OFFSET, 0], 'clamp') }],
-    width: actionWidth.value,
   }));
   const messageSwipeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: reducedMotion ? 0 : interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_MESSAGE_OFFSET], 'clamp') }],
-    width: messageSwipeContentWidth(containerWidth.value, actionWidth.value),
+    transform: [{ translateX: -actionWidth.value }],
   }));
   const actionTray = hasSwipeActions ? <Animated.View
     accessibilityElementsHidden={!actionsExposed}
@@ -164,34 +203,14 @@ export function ThreadRow({
             <PlatformIcon color={theme.textSecondary} name="reply" size={16} />
           </View>
         </Animated.View>
-        <View onLayout={(event) => { containerWidth.value = event.nativeEvent.layout.width; }} style={styles.messageAndActions}>
+        <View style={styles.messageAndActions}>
           {actionTray}
           <Animated.View pointerEvents="box-none" style={[
           styles.messageContent,
           messageSwipeStyle,
           isFirstInGroup ? (variant === 'thread' ? styles.threadGroupStart : styles.groupStart) : styles.grouped,
         ]}>
-          {item.kind === 'assistant' ? (
-            <AssistantMessage
-              isFirstInGroup={isFirstInGroup}
-              onLongPress={onLongPress}
-              stream={item.stream}
-              timeLabel={fmtTime(item.stream.createdAt)}
-            />
-          ) : (
-            <MessageBubble
-              highlighted={highlighted}
-              isFirstInGroup={isFirstInGroup}
-              isOwnMessage={Boolean(isOwnMessage)}
-              message={item.item}
-              onLongPress={onLongPress}
-              onOpenForwardSource={onOpenForwardSource}
-              onOpenThread={onOpenThread}
-              onPressReply={onPressReply}
-              timeLabel={fmtTime(item.item.message.createdAt)}
-              variant={variant}
-            />
-          )}
+          {messageContent}
           </Animated.View>
         </View>
       </View>
@@ -212,7 +231,7 @@ export function DateSeparator({ label }: { label: string }) {
 }
 
 export function fmtTime(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', hourCycle: 'h23', minute: '2-digit' }).format(ts);
 }
 
 export function resolveMentionIds(body: string, members: ProjectMemberRow[]) {
@@ -293,10 +312,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
+    width: SWIPE_ACTION_WIDTH,
     elevation: 2,
     zIndex: 2,
   },
-  messageAndActions: { alignItems: 'stretch', flexDirection: 'row', overflow: 'hidden', position: 'relative', width: '100%' },
+  messageAndActions: { alignItems: 'stretch', flexDirection: 'row', overflow: 'hidden', paddingBottom: Spacing.half, position: 'relative', width: '100%' },
   messageContent: { minWidth: 0, width: '100%', zIndex: 1 },
   swipeAction: {
     alignItems: 'center',

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { FileAttachment } from '@/components/chat/file-attachment';
@@ -5,7 +6,7 @@ import { ImageAttachments } from '@/components/chat/image-attachment';
 import { hasReadyAttachmentPreview } from '@/components/chat/types';
 import type { AttachmentWithUrl, ViewableImage } from '@/components/chat/types';
 import { VoiceNotePlayer } from '@/components/chat/voice-note-player';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { isAudioAttachment, isImageAttachment } from '@/lib/attachment-presentation';
 
 import type { Doc } from '../../../../../convex/_generated/dataModel';
@@ -19,10 +20,20 @@ type PlayableVoiceNote = { attachment: Doc<'attachments'>; url: string };
  */
 export function AttachmentList({
   attachments,
+  imageDeliveryMeta,
+  isOwnMessage,
   onLongPress,
+  senderAvatarUrl,
+  senderName,
+  voiceDeliveryMeta,
 }: {
   attachments: AttachmentWithUrl[];
+  imageDeliveryMeta?: ReactNode;
+  isOwnMessage: boolean;
   onLongPress?: () => void;
+  senderAvatarUrl?: string | null;
+  senderName: string;
+  voiceDeliveryMeta?: ReactNode;
 }) {
   const images: ViewableImage[] = [];
   const voiceNotes: PlayableVoiceNote[] = [];
@@ -69,9 +80,18 @@ export function AttachmentList({
 
   return (
     <View style={styles.stack}>
-      {images.length ? <ImageAttachments images={images} onLongPress={onLongPress} /> : null}
-      {voiceNotes.map(({ attachment, url }) => (
-        <VoiceNotePlayer attachment={attachment} key={attachment._id} url={url} />
+      {images.length ? <ImageAttachments deliveryMeta={imageDeliveryMeta} images={images} onLongPress={onLongPress} /> : null}
+      {voiceNotes.map(({ attachment, url }, index) => (
+        <View key={attachment._id} style={[styles.voiceNoteClip, isOwnMessage ? styles.voiceNoteOwn : styles.voiceNoteOther]}>
+          <VoiceNotePlayer
+            attachment={attachment}
+            deliveryMeta={index === voiceNotes.length - 1 ? voiceDeliveryMeta : undefined}
+            isOwnMessage={isOwnMessage}
+            senderAvatarUrl={senderAvatarUrl}
+            senderName={senderName}
+            url={url}
+          />
+        </View>
       ))}
       {files.map(({ attachment, url }) => (
         <FileAttachment
@@ -86,6 +106,16 @@ export function AttachmentList({
 }
 
 const styles = StyleSheet.create({
+  voiceNoteClip: {
+    borderRadius: Radius.large,
+    overflow: 'hidden',
+  },
+  voiceNoteOther: {
+    borderBottomLeftRadius: 0,
+  },
+  voiceNoteOwn: {
+    borderBottomRightRadius: 0,
+  },
   stack: {
     gap: Spacing.two,
   },

@@ -37,7 +37,7 @@ import {
 } from '@/components/tasks-dashboard';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Radius, Spacing, TouchTarget } from '@/constants/theme';
+import { PrimaryCreateActionClearance, PrimaryCreateActionSize, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { useCompany } from '@/contexts/company-context';
 import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
@@ -791,6 +791,9 @@ export default function TasksScreen() {
     <TaskCollection
       activeBoardStateId={activeBoardStateId}
       assigneeName={assigneeName}
+      bottomPadding={viewMode === 'board'
+        ? PrimaryCreateActionSize + PrimaryCreateActionClearance
+        : bottomContentInset}
       columns={columns}
       focusedTaskId={focusedTaskId}
       onActiveBoardStateChange={setActiveBoardStateId}
@@ -817,13 +820,15 @@ export default function TasksScreen() {
       }} />
 
       {tab === 'board' && viewMode === 'board' ? (
-        <ScreenEntrance style={styles.screenContent}><View style={[styles.boardScreen, { paddingBottom: bottomContentInset + TouchTarget + Spacing.four }]}>
-          {heading}
-          {collection}
-        </View></ScreenEntrance>
+        <View style={styles.screenContent}>
+          <View style={[styles.boardScreen, { paddingBottom: bottomContentInset + TouchTarget + Spacing.four }]}>
+            {heading}
+            {collection}
+          </View>
+        </View>
       ) : tab === 'inbox' ? (
         <ScreenEntrance style={styles.screenContent}><ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset + TouchTarget + Spacing.four }]}
+          contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]}
           contentInsetAdjustmentBehavior="automatic"
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled">
@@ -960,8 +965,8 @@ export default function TasksScreen() {
           <SheetRow icon="view-column" label="All statuses" selected={!statusFilterId} onPress={() => setStatusFilterId('')} />
           {selectedBoard?.states.map((state) => (
             <SheetRow
-              icon={state.category === 'completed' ? 'check-circle' : 'circle-outline'}
               key={state._id}
+              icon={state.category === 'completed' ? 'check-circle' : 'circle-outline'}
               label={state.name}
               onPress={() => setStatusFilterId(state._id)}
               selected={statusFilterId === state._id}

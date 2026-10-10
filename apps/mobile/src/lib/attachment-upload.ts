@@ -3,8 +3,8 @@
  *
  * The helpers here never touch Convex directly: the screen injects the three
  * mutation callers it already owns, so this module stays testable and free of
- * hooks. Files upload one at a time against a single message, which keeps a
- * failed file retryable without producing a duplicate message.
+ * hooks. New messages attach all uploaded files atomically; retry sends add
+ * only the files that failed the first time.
  */
 
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -15,10 +15,12 @@ export type UploadableFile = {
   contentType: string;
   durationMs?: number;
   filename: string;
+  height?: number;
   id: string;
   kind?: AttachmentKind;
   size?: number;
   uri: string;
+  width?: number;
 };
 
 export type AttachmentUploadTarget = {
@@ -44,6 +46,14 @@ export type AttachmentUploadTarget = {
     size: number;
   }) => Promise<UploadIntentResponse>;
   sendMessage: (input: {
+    attachments?: Array<{
+      contentType: string;
+      durationMs?: number;
+      filename: string;
+      kind?: AttachmentKind;
+      size: number;
+      uploadIntentId: Id<'messageUploadIntents'>;
+    }>;
     body: string;
     idempotencyKey?: string;
     replyToMessageId?: Id<'messages'>;
@@ -73,15 +83,46 @@ export type ComposerSubmissionResult = {
   messageId: Id<'messages'> | null;
 };
 
+type PreparedAttachment = {
+  contentType: string;
+  durationMs?: number;
+  file: UploadableFile;
+  kind: AttachmentKind;
+  size: number;
+  storageId: Id<'_storage'>;
+  uploadIntentId: Id<'messageUploadIntents'>;
+};
+
 /** Progress updates land in React state, so only report meaningful steps. */
 const ProgressStep = 0.05;
 const UploadTimeoutMs = 120_000;
+const MaxConcurrentUploads = 3;
 
-function fallbackBody(attachments: UploadableFile[]) {
+async function mapConcurrent<Result>(
+  count: number,
+  task: (index: number) => Promise<Result>,
+): Promise<Result[]> {
+  const results: Result[] = [];
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < count) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await task(index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(count, MaxConcurrentUploads) }, worker));
+  return results;
+}
+
+function fallbackBody(attachments: PreparedAttachment[]) {
   const [first] = attachments;
   if (first?.kind === 'voice_note') return 'Voice note';
-  if (attachments.length === 1 && first) return `Attached ${first.filename}`;
-  return `Attached ${attachments.length} files`;
+  if (attachments.length > 0 && attachments.every(({ contentType }) => contentType.startsWith('image/'))) {
+    return `Attached ${attachments.length} image${attachments.length === 1 ? '' : 's'}`;
+  }
+  return attachments.length === 1 ? 'Attached file' : `Attached ${attachments.length} files`;
 }
 
 function putBlob(input: {
@@ -132,10 +173,9 @@ function isStoragePayload(value: unknown): value is { storageId: string } {
 async function uploadOne(input: {
   file: UploadableFile;
   intentKey: string;
-  messageId: Id<'messages'>;
   onProgress: (fraction: number) => void;
   target: AttachmentUploadTarget;
-}) {
+}): Promise<PreparedAttachment> {
   const blob = await (await fetch(input.file.uri)).blob();
   const contentType = input.file.contentType || blob.type || 'application/octet-stream';
   const intent = await input.target.generateUploadUrl({
@@ -162,25 +202,24 @@ async function uploadOne(input: {
     if (!claimed.storageId) throw new Error('upload_intent_unavailable');
     storageId = claimed.storageId;
   }
-  await input.target.attachFile({
+  return {
     contentType,
     durationMs: input.file.durationMs,
-    filename: input.file.filename,
+    file: input.file,
     kind: input.file.kind ?? 'file',
-    messageId: input.messageId,
     size: blob.size,
     storageId,
     uploadIntentId: intent.intentId,
-  });
+  };
 }
 
-/**
- * Sends the composer payload: one message, then every attachment in order.
- * Returns the ids that failed so the composer can keep them for a retry, along
- * with the message they belong to.
- */
+/** Upload files first, then create one message with every successful upload. */
 export async function sendComposerMessage(
-  input: ComposerSubmission & { replyToMessageId?: Id<'messages'>; target: AttachmentUploadTarget },
+  input: ComposerSubmission & {
+    onMessageCreated?: (messageId: Id<'messages'>) => void;
+    replyToMessageId?: Id<'messages'>;
+    target: AttachmentUploadTarget;
+  },
 ): Promise<ComposerSubmissionResult> {
   const { attachments, body, replyToMessageId, reportProgress, target } = input;
 
@@ -190,33 +229,72 @@ export async function sendComposerMessage(
       idempotencyKey: input.idempotencyKey,
       replyToMessageId,
     });
+    input.onMessageCreated?.(messageId);
     return { failedIds: [], messageId };
   }
 
-  const messageId =
-    input.messageId ??
-    (await target.sendMessage({
-      body: body || fallbackBody(attachments),
-      idempotencyKey: input.idempotencyKey,
-      replyToMessageId,
-    }));
-
-  const failedIds: string[] = [];
-  for (const file of attachments) {
+  const uploadResults = await mapConcurrent(attachments.length, async (index) => {
+    const file = attachments[index];
+    if (!file) return { failedId: null, prepared: null };
     try {
       reportProgress(file.id, 0);
-      await uploadOne({
+      const prepared = await uploadOne({
         file,
-        intentKey: `${input.idempotencyKey ?? messageId}:attachment:${file.id}`,
-        messageId,
+        intentKey: `${input.idempotencyKey ?? 'attachment'}:attachment:${file.id}`,
         onProgress: (fraction) => reportProgress(file.id, fraction),
         target,
       });
-      reportProgress(file.id, 1);
+      return { failedId: null, prepared };
     } catch {
-      failedIds.push(file.id);
       reportProgress(file.id, 0);
+      return { failedId: file.id, prepared: null };
     }
+  });
+  const prepared = uploadResults.flatMap(({ prepared }) => prepared ? [prepared] : []);
+  const failedIds = uploadResults.flatMap(({ failedId }) => failedId ? [failedId] : []);
+
+  let messageId = input.messageId ?? null;
+  if (!messageId && (body || prepared.length > 0)) {
+    messageId = await target.sendMessage({
+      attachments: prepared.map(({ contentType, durationMs, file, kind, size, uploadIntentId }) => ({
+        contentType,
+        durationMs,
+        filename: file.filename,
+        kind,
+        size,
+        uploadIntentId,
+      })),
+      body: body || fallbackBody(prepared),
+      idempotencyKey: input.idempotencyKey,
+      replyToMessageId,
+    });
+    input.onMessageCreated?.(messageId);
+    for (const attachment of prepared) reportProgress(attachment.file.id, 1);
+  } else if (messageId) {
+    const retryMessageId = messageId;
+    input.onMessageCreated?.(retryMessageId);
+    const attachmentFailures = await mapConcurrent(prepared.length, async (index) => {
+      const attachment = prepared[index];
+      if (!attachment) return null;
+      try {
+        await target.attachFile({
+          contentType: attachment.contentType,
+          durationMs: attachment.durationMs,
+          filename: attachment.file.filename,
+          kind: attachment.kind,
+          messageId: retryMessageId,
+          size: attachment.size,
+          storageId: attachment.storageId,
+          uploadIntentId: attachment.uploadIntentId,
+        });
+        reportProgress(attachment.file.id, 1);
+        return null;
+      } catch {
+        reportProgress(attachment.file.id, 0);
+        return attachment.file.id;
+      }
+    });
+    failedIds.push(...attachmentFailures.filter((id): id is string => id !== null));
   }
 
   return { failedIds, messageId };

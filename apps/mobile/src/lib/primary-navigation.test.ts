@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   primaryDestinationForRoute,
+  primaryNavigationContentInset,
   primaryNavigationHeight,
   primaryNavigationSafeAreaInset,
   primaryNavigationVisibleForPath,
@@ -36,10 +37,10 @@ describe('primaryNavigationVisibleForPath', () => {
 
 describe('primaryNavigationHeight', () => {
   it('grows for accessibility text without changing the standard shell', () => {
-    expect(primaryNavigationHeight(1, 76)).toBe(76);
-    expect(primaryNavigationHeight(1.2, 76)).toBe(76);
-    expect(primaryNavigationHeight(1.3, 76)).toBe(108);
-    expect(primaryNavigationHeight(2, 76)).toBe(108);
+    expect(primaryNavigationHeight(1, 70)).toBe(70);
+    expect(primaryNavigationHeight(1.2, 60)).toBe(60);
+    expect(primaryNavigationHeight(1.3, 70)).toBe(102);
+    expect(primaryNavigationHeight(2, 60)).toBe(92);
   });
 });
 
@@ -52,6 +53,13 @@ describe('primaryNavigationSafeAreaInset', () => {
   it('keeps the small visual floor where the platform uses a floating bar', () => {
     expect(primaryNavigationSafeAreaInset(0, 8)).toBe(8);
     expect(primaryNavigationSafeAreaInset(28, 8)).toBe(28);
+    expect(primaryNavigationSafeAreaInset(28, 8, 4)).toBe(24);
+  });
+});
+
+describe('primaryNavigationContentInset', () => {
+  it('reserves space for the tab bar, floating action, action gap, and content breathing room', () => {
+    expect(primaryNavigationContentInset(88, 56, 12, 8)).toBe(164);
   });
 });
 

@@ -2,14 +2,12 @@ import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/reac
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import { BlurView } from 'expo-blur';
-import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { KeyboardEvents } from 'react-native-keyboard-controller';
-import Animated, { FadeIn, FadeInDown, FadeInRight, FadeInUp, FadeOutDown, FadeOutLeft, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
-import { parseMentions } from '@track/shared';
+import Animated, { FadeIn, FadeInRight, FadeInUp, FadeOutDown, FadeOutLeft, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import { parseMentions, resolveDistinctChannelIconKeys } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
 import { ActionButton } from '@/components/action-button';
@@ -18,6 +16,7 @@ import { useAppToast } from '@/components/app-toast';
 import { Composer } from '@/components/composer';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
+import { PendingMessageBubble } from '@/components/chat/pending-attachment-message';
 import { EntityMark } from '@/components/entity-mark';
 import { IconButton } from '@/components/icon-button';
 import { MessageActions } from '@/components/message-actions';
@@ -48,13 +47,11 @@ import { setActivePushContext } from '@/lib/push-presentation';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
-import { reconcilePendingMessages, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '@/lib/pending-messages';
 import { archivePresentation } from '@/lib/archive-presentation';
 
 /** WhatsApp-style grouping gap: a longer pause re-states who is speaking. */
 const FIVE_MINUTES = 5 * 60 * 1000;
-const SearchPanelEntering = FadeInDown.duration(180);
-const SearchPanelExiting = FadeOutUp.duration(120);
 const MessageListLayout = LinearTransition.duration(210);
 const PendingMessageEntering = FadeInUp.duration(170);
 const PendingMessageExiting = FadeOutUp.duration(120);
@@ -72,22 +69,13 @@ function dateSepLabel(ts: number) {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function safeGlassAvailable() {
-  if (Platform.OS !== 'ios') return false;
-  try {
-    return isGlassEffectAPIAvailable();
-  } catch {
-    return false;
-  }
-}
-
 export default function ConversationScreen() {
   const theme = useTheme();
+  const conversationHeaderTint = 'transparent';
   const { animatedStyle: channelHeaderPressStyle, onPressIn: channelHeaderPressIn, onPressOut: channelHeaderPressOut } = usePressFeedback({ pressedScale: 0.985 });
   const { animatedStyle: jumpButtonPressStyle, onPressIn: jumpButtonPressIn, onPressOut: jumpButtonPressOut } = usePressFeedback({ pressedScale: 0.96 });
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const hasLiquidGlass = safeGlassAvailable();
   const { showToast } = useAppToast();
   const network = useNetworkState();
   const router = useRouter();
@@ -122,8 +110,6 @@ export default function ConversationScreen() {
   const navigation = useQuery(api.mobile.resolveNavigation, trackUserId && pid && gid ? { userId: trackUserId, projectId: pid, groupId: gid, actingCompanyId: cid, projectMemberId: pmid } : 'skip');
   const archiveContext = archive === '1' || navigation?.readStateImmutable === true || navigation?.project?.status === 'archived';
   const readOnly = archiveContext || navigation?.archived === true;
-  const currentCompany = navigation?.company ?? null;
-  const currentProject = navigation?.project ?? null;
   const archiveBanner = readOnly ? archivePresentation(navigation?.archiveDetails ?? null) : null;
   const channelContext = useMemo(() => cid && pmid ? { archived: archiveContext, companyId: cid, membershipId: pmid } : null, [archiveContext, cid, pmid]);
   // Memoised so composing a message does not rebuild every row's identity props.
@@ -167,6 +153,12 @@ export default function ConversationScreen() {
       : 'skip',
     { initialNumItems: 120 },
   );
+  const readReceipts = useQuery(
+    api.messages.readReceiptSequences,
+    trackUserId && gid && navigation?.available && !readOnly
+      ? { userId: trackUserId, groupId: gid, actingCompanyId: cid, projectMemberId: pmid }
+      : 'skip',
+  );
   const messages = messagePage.status === 'LoadingFirstPage' ? undefined : messagePage.results;
   const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results;
   const notifSettings = useQuery(api.notifications.getSettings, trackUserId ? { userId: trackUserId, projectMemberId: pmid } : 'skip');
@@ -184,7 +176,7 @@ export default function ConversationScreen() {
   const [channelSearchText, setChannelSearchText] = useState('');
   const channelSearchQuery = channelSearchText.trim();
   const channelSearch = useQuery(api.search.project,
-    trackUserId && pid && gid && channelSearchOpen && channelSearchQuery.length >= 2
+    trackUserId && pid && gid && navigation?.available && channelSearchOpen && channelSearchQuery.length >= 2
       ? {
           actingCompanyId: cid,
           filter: 'messages',
@@ -209,6 +201,7 @@ export default function ConversationScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
+  const scrollToLatestAfterSendRef = useRef(false);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
@@ -231,10 +224,29 @@ export default function ConversationScreen() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
+  const [androidSelectionMode, setAndroidSelectionMode] = useState(false);
   const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
   const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
+  const exitMessageSelection = useCallback(() => {
+    setAndroidSelectionMode(false);
+    setActionSheetOpen(false);
+    setActionTarget(null);
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'android' || (!androidSelectionMode && !channelSearchOpen)) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (androidSelectionMode) {
+        exitMessageSelection();
+      } else {
+        setChannelSearchOpen(false);
+        setChannelSearchText('');
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, [androidSelectionMode, channelSearchOpen, exitMessageSelection]);
   const [editBusy, setEditBusy] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<DetailedMessage | null>(null);
   const [forwardBusyGroupId, setForwardBusyGroupId] = useState<Id<'groups'> | null>(null);
@@ -269,15 +281,29 @@ export default function ConversationScreen() {
   }, []);
 
   const groupItems = useMemo(() => (groups ?? []) as { group: Doc<'groups'>; membership: Doc<'groupMembers'>; lastMessage: Doc<'messages'> | null; unreadCount: number }[], [groups]);
+  const channelIconKeys = useMemo(() => resolveDistinctChannelIconKeys(groupItems.map(({ group }) => ({
+    id: String(group._id),
+    iconKey: group.markIconKey,
+    name: group.name,
+  }))), [groupItems]);
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
   const activeGroupMark = groupItems.find((g) => g.group._id === gid)?.group;
   const activeGroup = activeGroupMark ?? navigation?.channel ?? null;
+  const activeGroupIconKey = channelIconKeys.get(String(activeGroup?._id ?? gid)) ?? activeGroupMark?.markIconKey;
   const globalMode = notifSettings?.global?.globalMode ?? 'all';
   const groupMode = notifSettings?.groups?.find((g) => g.groupId === gid)?.mode ?? 'inherit';
 
+  const pendingMessageIdsSignature = pendingMessageAcknowledgementKey(pendingMessages);
+  const pendingMessageIds = useMemo(
+    () => new Set(pendingMessageIdsSignature ? pendingMessageIdsSignature.split('\0') : []),
+    [pendingMessageIdsSignature],
+  );
+
   const threadItems = useMemo<GroupedThreadItem[]>(() => {
     const uniqueMessages = [...new Map(
-      ((messages ?? []) as DetailedMessage[]).map((item) => [item.message._id, item] as const),
+      ((messages ?? []) as DetailedMessage[])
+        .filter((item) => !pendingMessageIds.has(item.message._id))
+        .map((item) => [item.message._id, item] as const),
     ).values()];
     const msgs = uniqueMessages.reverse().map((item) => ({
       kind: 'message' as const, key: item.message._id, at: item.message.createdAt, item, isFirstInGroup: true,
@@ -319,7 +345,7 @@ export default function ConversationScreen() {
     }
 
     return result;
-  }, [assistantStreams, cardRowIds, messages]);
+  }, [assistantStreams, cardRowIds, messages, pendingMessageIds]);
   const draftReply = useMemo(() => {
     const pendingReplyId = composerDraft.draft.replyToMessageId;
     if (!pendingReplyId) return null;
@@ -357,8 +383,10 @@ export default function ConversationScreen() {
   const scrollToLatest = useCallback(() => {
     atBottomRef.current = true;
     setNewMessageCount(0);
-    listRef.current?.scrollToEnd({ animated: true });
-  }, []);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: !reducedMotion });
+    }));
+  }, [reducedMotion]);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
@@ -465,8 +493,9 @@ export default function ConversationScreen() {
     requestTrackResponse(prompt.item.message._id, prompt.item.message.body);
   }, [requestTrackResponse, showToast, threadItems]);
 
-  const messageActions = useMemo(() => {
-    if (!actionTarget || actionTarget.kind === 'date-sep') return [];
+  const buildMessageActions = useCallback((actionTarget: GroupedThreadItem) => {
+    if (actionTarget.kind === 'date-sep') return [];
+    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return [];
     const existingThread = actionTarget.kind === 'message' ? actionTarget.item.channelThread : null;
     const copyText = actionTarget.kind === 'message'
       ? actionTarget.item.message.body.trim()
@@ -495,7 +524,7 @@ export default function ConversationScreen() {
       }] : []),
       ...(!readOnly ? [{
         label: 'Reply',
-        icon: 'arrow-up' as const,
+        icon: 'reply' as const,
         onPress: () => {
           if (actionTarget.kind === 'message') setReplyTo(actionTarget.item);
         },
@@ -542,17 +571,17 @@ export default function ConversationScreen() {
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
-        label: 'Delete message',
+        label: 'Delete for everyone',
         icon: 'trash-can-outline' as const,
         destructive: true,
         onPress: () => {
           Alert.alert(
-            'Delete message?',
-            'This can’t be undone.',
+            'Delete for everyone?',
+            "You can't undo deleting this message.",
             [
               { text: 'Cancel', style: 'cancel' },
               {
-                text: 'Delete',
+                text: 'Delete for everyone',
                 style: 'destructive',
                 onPress: () => {
                   setBusy(`delete-${actionTarget.item.message._id}`);
@@ -578,7 +607,8 @@ export default function ConversationScreen() {
         onPress: () => { setReportError(null); setReportTarget(actionTarget); },
       },
     ];
-  }, [actionTarget, archiveContext, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, requestTrackResponse, retryAssistantAnswer, router, setReplyTo, trackUserId]);
+  }, [archiveContext, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, requestTrackResponse, retryAssistantAnswer, router, setReplyTo, showToast, trackUserId]);
+  const messageActions = useMemo(() => actionTarget ? buildMessageActions(actionTarget) : [], [actionTarget, buildMessageActions]);
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -604,8 +634,9 @@ export default function ConversationScreen() {
   // Reconcile optimistic rows by message ID, so duplicate message text cannot hide a new send.
   useEffect(() => {
     if (!pendingMessages.length || !messages) return;
-    const receivedIds = new Set((messages as DetailedMessage[]).map((item) => item.message._id));
-    setPendingMessages((prev) => reconcilePendingMessages(prev, receivedIds));
+    const messageItems = messages as DetailedMessage[];
+    const receivedIds = new Set(messageItems.map((item) => item.message._id));
+    setPendingMessages((prev) => reconcilePendingMessages(prev, receivedIds, receivedMessageAttachmentStates(messageItems)));
   }, [messages, pendingMessages]);
 
   useEffect(() => {
@@ -729,19 +760,36 @@ export default function ConversationScreen() {
       sendKey.current = idempotencyKey();
       sendSignatureRef.current = sendSignature;
     }
-    // Only text-only sends get an optimistic row; attachment sends show their own progress.
-    const pendingId = body && payload.attachments.length === 0 ? `pending-${sendKey.current}` : null;
+    const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
+    atBottomRef.current = true;
     if (pendingId) {
-      setPendingMessages((prev) => [...prev, { id: pendingId, body, at: Date.now() }]);
-      scrollToLatest();
+      scrollToLatestAfterSendRef.current = true;
+      setPendingMessages((prev) => [...prev, {
+        attachments: payload.attachments,
+        at: Date.now(),
+        body,
+        id: pendingId,
+      }]);
     }
-
     setBusy('send');
     try {
       const result = await sendComposerMessage({
         ...payload,
         body,
         idempotencyKey: sendKey.current,
+        onMessageCreated: (messageId) => {
+          if (!pendingId) return;
+          setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId
+            ? { ...pending, messageId: String(messageId) }
+            : pending));
+        },
+        reportProgress: (attachmentId, progress) => {
+          payload.reportProgress(attachmentId, progress);
+          if (!pendingId) return;
+          setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId
+            ? { ...pending, attachments: pending.attachments?.map((file) => file.id === attachmentId ? { ...file, progress } : file) }
+            : pending));
+        },
         replyToMessageId,
         target: {
           attachFile: (input) => attachFile({
@@ -770,6 +818,7 @@ export default function ConversationScreen() {
           sendMessage: (input) => sendMessage({
             projectId: pid, groupId: gid, authorId: trackUserId,
             actingCompanyId: cid, projectMemberId: pmid,
+            attachments: input.attachments,
             idempotencyKey: input.idempotencyKey,
             body: input.body, mentions: resolveMentionIds(input.body, memberItems),
             replyToMessageId: input.replyToMessageId,
@@ -779,11 +828,20 @@ export default function ConversationScreen() {
       });
 
       const sentMessageId = result.messageId;
-      if (sentMessageId) {
-        if (pendingId) setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId ? { ...pending, messageId: sentMessageId } : pending));
-        scrollToLatest();
+      if (pendingId) {
+        if (sentMessageId) {
+          const failedIds = new Set(result.failedIds);
+          setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId
+            ? {
+                ...pending,
+                attachments: pending.attachments?.filter((file) => !failedIds.has(file.id)),
+                messageId: String(sentMessageId),
+              }
+            : pending));
+        } else {
+          setPendingMessages((prev) => prev.filter((pending) => pending.id !== pendingId));
+        }
       }
-
       if (result.messageId && parseMentions(body).includes('track')) {
         requestTrackResponse(result.messageId, body);
       }
@@ -892,19 +950,28 @@ export default function ConversationScreen() {
       <View>
         <ThreadRow
           highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
+          contextActions={Platform.OS === 'ios' && item.kind === 'message' && !item.item.message.deletedAt ? buildMessageActions(item) : undefined}
           item={item}
           isFirstInGroup={item.isFirstInGroup}
           isOwnMessage={isOwnMessage}
+          selected={Platform.OS === 'android' && androidSelectionMode && actionTarget?.key === item.key}
+          readReceipts={readReceipts}
           onLongPress={() => {
+            if (item.kind === 'message' && item.item.message.deletedAt) return;
             hapticLight();
             setActionTarget(item);
-            setActionSheetOpen(true);
+            if (Platform.OS === 'android' && item.kind === 'message') {
+              setAndroidSelectionMode(true);
+              setActionSheetOpen(false);
+            } else {
+              setActionSheetOpen(true);
+            }
           }}
           onSwipeReply={readOnly ? undefined : () => {
             hapticLight();
             if (item.kind === 'message') setReplyTo(item.item);
           }}
-          onSwipeForward={!readOnly && item.kind === 'message' ? () => {
+          onSwipeForward={!readOnly && item.kind === 'message' && !item.item.message.deletedAt ? () => {
             hapticLight();
             setForwardError(null);
             setForwardTarget(item.item);
@@ -932,7 +999,7 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [archiveContext, channelContext, cid, gid, highlightedMessageId, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, scrollToMessage, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
+  }, [actionTarget, androidSelectionMode, archiveContext, buildMessageActions, channelContext, cid, gid, highlightedMessageId, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, scrollToMessage, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
@@ -942,6 +1009,9 @@ export default function ConversationScreen() {
 
   const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
   const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
+  const headerSelectionActions = messageActions.filter((action) =>
+    ['Reply', 'Forward', 'Delete for everyone'].includes(action.label),
+  );
 
   return (
     <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface }]}>
@@ -954,28 +1024,77 @@ export default function ConversationScreen() {
           headerBackTitle: '',
           headerBackButtonDisplayMode: 'minimal',
           headerBlurEffect: 'none',
-          headerBackground: () => <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.homeSurface }]} />,
-          headerLeft: () => <Pressable
-            accessibilityLabel="Back to conversations"
+          headerBackground: () => <View pointerEvents="none" style={StyleSheet.absoluteFill} />,
+          headerLeft: () => androidSelectionMode ? <IconButton
+            accessibilityLabel="Cancel message selection"
+            appearance="plain"
+            icon="close"
+            onPress={exitMessageSelection}
+          /> : <Pressable
+            accessibilityLabel={channelSearchOpen ? 'Close message search' : 'Back to conversations'}
             accessibilityRole="button"
             onPress={() => {
               hapticLight();
+              if (channelSearchOpen) {
+                setChannelSearchOpen(false);
+                setChannelSearchText('');
+                return;
+              }
               if (router.canGoBack()) router.back();
               else router.replace(pid ? projectChannelsHref(pid, channelContext) as never : '/conversations' as never);
             }}
-            style={({ pressed }) => [styles.headerCircle, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
+            style={({ pressed }) => [styles.headerCircle, { backgroundColor: pressed ? theme.backgroundSelected : conversationHeaderTint, borderColor: theme.homeBorder }]}
           >
             <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
           </Pressable>,
-          headerRight: () => (!readOnly ? (
-            <IconButton
-              accessibilityLabel="Channel options"
-              appearance="plain"
-              icon="dots-horizontal"
-              onPress={() => { hapticLight(); setToolsOpen(true); }}
-            />
-          ) : null),
-          headerTitle: () => (
+          headerRight: () => androidSelectionMode ? (
+            <View style={styles.headerActions}>
+              {headerSelectionActions.map((action) => action.icon ? <IconButton
+                accessibilityLabel={action.label}
+                appearance="plain"
+                icon={action.icon}
+                key={action.label}
+                onPress={() => {
+                  exitMessageSelection();
+                  action.onPress();
+                }}
+              /> : null)}
+              <IconButton
+                accessibilityLabel="More message actions"
+                appearance="plain"
+                icon="dots-horizontal"
+                onPress={() => setActionSheetOpen(true)}
+              />
+            </View>
+          ) : channelSearchOpen ? null : (
+            <View style={styles.headerActions}>
+              <IconButton
+                accessibilityLabel="Search messages in this Channel"
+                appearance="plain"
+                icon="search"
+                onPress={() => {
+                  hapticLight();
+                  setChannelSearchOpen(true);
+                  setChannelSearchText('');
+                }}
+              />
+              {!readOnly ? <IconButton
+                accessibilityLabel="Channel options"
+                appearance="plain"
+                icon="dots-horizontal"
+                onPress={() => { hapticLight(); setToolsOpen(true); }}
+              /> : null}
+            </View>
+          ),
+          headerTitle: () => androidSelectionMode ? (
+            <ThemedText accessibilityLabel="1 message selected" type="title">1</ThemedText>
+          ) : channelSearchOpen ? (
+            <View style={[styles.androidSearchField, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }]}>
+              <PlatformIcon color={theme.textSecondary} name="search" size={18} />
+              <ThemedTextInput accessibilityLabel="Search messages in this Channel" autoCapitalize="none" autoCorrect={false} autoFocus maxLength={200} onChangeText={setChannelSearchText} placeholder="Search messages" returnKeyType="search" style={[styles.searchTextInput, { color: theme.text }]} value={channelSearchText} />
+              {channelSearchText ? <Pressable accessibilityLabel="Clear message search" accessibilityRole="button" hitSlop={8} onPress={() => setChannelSearchText('')}><PlatformIcon color={theme.textSecondary} name="close" size={17} /></Pressable> : null}
+            </View>
+          ) : (
             <AnimatedPressable
               accessibilityHint="Opens the Channel picker"
               accessibilityLabel={`Choose Channel. Current Channel: ${activeGroup?.name ?? 'Conversation'}`}
@@ -984,12 +1103,12 @@ export default function ConversationScreen() {
               onPressIn={channelHeaderPressIn}
               onPressOut={channelHeaderPressOut}
               onPress={() => { hapticLight(); setGroupSwitchOpen(true); }}
-              style={[styles.channelHeaderButton, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }, channelHeaderPressStyle]}
+              style={[styles.channelHeaderButton, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }, channelHeaderPressStyle]}
             >
               <ChannelHeaderIdentity
                 colorKey={activeGroupMark?.markColorKey}
                 groupId={String(activeGroup?._id ?? gid)}
-                iconKey={activeGroupMark?.markIconKey}
+                iconKey={activeGroupIconKey}
                 key={String(activeGroup?._id ?? gid)}
                 name={activeGroup?.name ?? 'Conversation'}
               />
@@ -999,8 +1118,17 @@ export default function ConversationScreen() {
         }}
       />
 
-      {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: theme.homeSurface, paddingTop: insets.top }]}>
-        <View style={styles.iosHeaderRow}>
+      {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: conversationHeaderTint, paddingTop: insets.top }]}>
+        {channelSearchOpen ? <View style={styles.iosHeaderRow}>
+          <Pressable accessibilityLabel="Close message search" accessibilityRole="button" onPress={() => { setChannelSearchOpen(false); setChannelSearchText(''); }} style={styles.searchBackButton}>
+            <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
+          </Pressable>
+          <View style={[styles.iosSearchField, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }]}>
+            <PlatformIcon color={theme.textSecondary} name="search" size={17} />
+            <ThemedTextInput accessibilityLabel="Search messages in this Channel" autoCapitalize="none" autoCorrect={false} autoFocus maxLength={200} onChangeText={setChannelSearchText} placeholder="Search messages" returnKeyType="search" style={[styles.searchTextInput, { color: theme.text }]} value={channelSearchText} />
+            {channelSearchText ? <Pressable accessibilityLabel="Clear message search" accessibilityRole="button" hitSlop={8} onPress={() => setChannelSearchText('')}><PlatformIcon color={theme.textSecondary} name="close" size={17} /></Pressable> : null}
+          </View>
+        </View> : <View style={styles.iosHeaderRow}>
           <Pressable
             accessibilityLabel="Back to conversations"
             accessibilityRole="button"
@@ -1009,21 +1137,8 @@ export default function ConversationScreen() {
               if (router.canGoBack()) router.back();
               else router.replace(pid ? projectChannelsHref(pid, channelContext) as never : '/conversations' as never);
             }}
-            style={({ pressed }) => [styles.headerCircle, { backgroundColor: 'transparent', borderColor: 'transparent', opacity: pressed ? 0.76 : 1 }]}
+            style={({ pressed }) => [styles.headerCircle, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder, opacity: pressed ? 0.76 : 1 }]}
           >
-            {hasLiquidGlass ? <GlassView
-              colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'}
-              glassEffectStyle="regular"
-              isInteractive={false}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
-              tintColor={theme.navigationGlass}
-            /> : <BlurView
-              intensity={52}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, styles.headerGlassMaterial]}
-              tint={theme.background === '#1b1917' ? 'dark' : 'light'}
-            />}
             <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
           </Pressable>
           <View style={styles.iosHeaderTitle}>
@@ -1035,100 +1150,94 @@ export default function ConversationScreen() {
               onPressIn={channelHeaderPressIn}
               onPressOut={channelHeaderPressOut}
               onPress={() => { hapticLight(); setGroupSwitchOpen(true); }}
-              style={[styles.channelHeaderButton, { backgroundColor: 'transparent', borderColor: theme.homeBorder }, channelHeaderPressStyle]}
+              style={[styles.channelHeaderButton, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }, channelHeaderPressStyle]}
             >
-              {hasLiquidGlass ? <GlassView colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive={false} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.channelHeaderGlass]} tintColor={theme.navigationGlass} /> : <BlurView intensity={44} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.channelHeaderGlass]} tint={theme.background === '#1b1917' ? 'dark' : 'light'} />}
               <ChannelHeaderIdentity
                 colorKey={activeGroupMark?.markColorKey}
                 groupId={String(activeGroup?._id ?? gid)}
-                iconKey={activeGroupMark?.markIconKey}
+                iconKey={activeGroupIconKey}
                 key={String(activeGroup?._id ?? gid)}
                 name={activeGroup?.name ?? 'Conversation'}
               />
               <PlatformIcon color={theme.textSecondary} name="chevron-down" size={15} />
             </AnimatedPressable>
           </View>
-          {!readOnly ? <IconButton
+          <View style={styles.iosHeaderActions}>
+            <IconButton
+              accessibilityLabel="Search messages in this Channel"
+              appearance="plain"
+              icon="search"
+              onPress={() => {
+                hapticLight();
+                setChannelSearchOpen(true);
+                setChannelSearchText('');
+              }}
+            />
+            {!readOnly ? <IconButton
               accessibilityLabel="Channel options"
               appearance="plain"
               icon="dots-horizontal"
               onPress={() => { hapticLight(); setToolsOpen(true); }}
-            /> : <View style={styles.iosHeaderActionSpacer} />}
-        </View>
+            /> : null}
+          </View>
+        </View>}
       </View> : null}
 
       <ConnectivityBanner message="You’re offline. Cached messages stay available; sending will retry when you reconnect." style={styles.connection} />
       <View style={styles.flex}>
-      <View style={[styles.contextRow, { borderBottomColor: theme.homeBorder }]}>
-        <View accessibilityLabel={`${currentCompany?.displayName ?? 'Personal workspace'}, Project ${currentProject?.name ?? 'Project'}`} accessible style={styles.contextIdentity}>
-          {currentCompany ? <EntityMark
-            id={String(currentCompany._id)}
-            imageUrl={currentCompany.logoUrl}
-            kind="company"
-            name={currentCompany.displayName}
-            size={22}
-          /> : null}
-          <ThemedText numberOfLines={1} style={styles.contextCompany} themeColor="textSecondary" type="captionBold">
-            {currentCompany?.displayName ?? 'Personal workspace'}
-          </ThemedText>
-          <PlatformIcon color={theme.textTertiary} name="chevron-right" size={14} />
-          {currentProject ? <EntityMark
-            colorKey={currentProject.markColorKey}
-            iconKey={currentProject.markIconKey}
-            id={String(currentProject._id)}
-            kind="project"
-            name={currentProject.name}
-            size={22}
-          /> : <PlatformIcon color={theme.accentStrong} name="project" size={18} />}
-          <ThemedText numberOfLines={1} style={styles.contextProject} type="captionBold">
-            {currentProject?.name ?? 'Project'}
-          </ThemedText>
-        </View>
-        <IconButton
-          accessibilityLabel={channelSearchOpen ? 'Close Channel search' : 'Search this Channel'}
-          appearance="plain"
-          icon={channelSearchOpen ? 'close' : 'search'}
-          onPress={() => {
-            setChannelSearchOpen((open) => !open);
-            setChannelSearchText('');
+      {channelSearchOpen ? (
+        <FlatList
+          contentContainerStyle={[styles.searchResultsList, { paddingBottom: composerOverlayHeight + Spacing.four }]}
+          data={channelSearch?.messages ?? []}
+          keyExtractor={(hit) => String(hit.messageId)}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View style={styles.searchResultsEmpty}>
+              <ThemedText themeColor="textSecondary" type="small">
+                {channelSearchQuery.length < 2
+                  ? 'Enter at least two characters to search this Channel.'
+                  : channelSearch === undefined
+                    ? 'Searching messages…'
+                    : 'No messages match in this Channel.'}
+              </ThemedText>
+            </View>
+          }
+          renderItem={({ item: hit }) => {
+            const isOwnHit = hit.authorId === trackUserId;
+            return (
+              <Pressable
+                accessibilityLabel={`Message from ${hit.title}. ${hit.preview}. Open message.`}
+                accessibilityRole="button"
+                onPress={() => {
+                  hapticLight();
+                  setChannelSearchOpen(false);
+                  if (!pid || !gid) return;
+                  if (hit.threadId) router.push(threadConversationHref(pid, gid, hit.threadId, channelContext, hit.messageId) as never);
+                  else router.replace(channelHref(pid, gid, channelContext, hit.messageId) as never);
+                }}
+                style={({ pressed }) => [
+                  styles.channelSearchResult,
+                  isOwnHit ? styles.channelSearchResultOwn : styles.channelSearchResultOther,
+                  {
+                    backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface,
+                    borderColor: theme.homeBorder,
+                  },
+                ]}
+              >
+                <View style={styles.channelSearchResultMeta}>
+                  <ThemedText numberOfLines={1} style={styles.channelSearchAuthor} type="smallBold">{hit.title}</ThemedText>
+                  <ThemedText style={styles.channelSearchTime} themeColor="textTertiary" type="caption">
+                    {new Date(hit.createdAt).toLocaleTimeString([], { hour: '2-digit', hourCycle: 'h23', minute: '2-digit' })}
+                  </ThemedText>
+                </View>
+                <ThemedText numberOfLines={4} themeColor="textSecondary" type="small">{hit.preview}</ThemedText>
+                <ThemedText numberOfLines={1} style={styles.channelSearchSubtitle} themeColor="textTertiary" type="caption">{hit.subtitle}</ThemedText>
+              </Pressable>
+            );
           }}
-          selected={channelSearchOpen}
+          style={styles.searchResultsScroll}
         />
-      </View>
-      {channelSearchOpen ? <Animated.View
-        entering={reducedMotion ? undefined : SearchPanelEntering}
-        exiting={reducedMotion ? undefined : SearchPanelExiting}
-        style={[styles.channelSearchPanel, { borderBottomColor: theme.homeBorder }]}
-      >
-        <ThemedTextInput
-          accessibilityLabel="Search messages in this Channel"
-          autoFocus
-          onChangeText={setChannelSearchText}
-          placeholder="Search messages"
-          returnKeyType="search"
-          style={[styles.channelSearchInput, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder, color: theme.text }]}
-          value={channelSearchText}
-        />
-        {channelSearchQuery.length < 2 ? <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">Enter at least two characters to search this Channel.</ThemedText>
-          : channelSearch === undefined ? <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">Searching messages…</ThemedText>
-            : channelSearch.messages.length ? channelSearch.messages.map((hit) => <Pressable
-              accessibilityLabel={`Message from ${hit.title}. ${hit.preview}. Open message.`}
-              accessibilityRole="button"
-              key={String(hit.messageId)}
-              onPress={() => {
-                hapticLight();
-                setChannelSearchOpen(false);
-                if (!pid || !gid) return;
-                if (hit.threadId) router.push(threadConversationHref(pid, gid, hit.threadId, channelContext, hit.messageId) as never);
-                else router.replace(channelHref(pid, gid, channelContext, hit.messageId) as never);
-              }}
-              style={({ pressed }) => [styles.channelSearchResult, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface }]}
-            >
-              <ThemedText numberOfLines={1} type="captionBold">{hit.title}</ThemedText>
-              <ThemedText numberOfLines={2} themeColor="textSecondary" type="small">{hit.preview}</ThemedText>
-            </Pressable>)
-              : <ThemedText style={styles.channelSearchHint} themeColor="textSecondary" type="caption">No messages match in this Channel.</ThemedText>}
-      </Animated.View> : null}
+      ) : (
       <Animated.View layout={reducedMotion ? undefined : MessageListLayout} style={styles.flex}>
       <TaskLinkBatchProvider
         assistantStreamIds={taskLinkAssistantStreamIds}
@@ -1140,6 +1249,7 @@ export default function ConversationScreen() {
           ref={listRef}
           contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + TouchTarget + Spacing.four }]}
           contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
           data={threadItems}
           stickyHeaderIndices={stickyDateHeaderIndices(threadItems, hasMoreMessages)}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -1171,7 +1281,12 @@ export default function ConversationScreen() {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
             updateJumpToLatest();
-            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) listRef.current?.scrollToEnd({ animated: true });
+            if (scrollToLatestAfterSendRef.current) {
+              scrollToLatestAfterSendRef.current = false;
+              requestAnimationFrame(scrollToLatest);
+            } else if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
+              listRef.current?.scrollToEnd({ animated: !reducedMotion });
+            }
           }}
           removeClippedSubviews={false}
           renderItem={renderItem}
@@ -1208,15 +1323,8 @@ export default function ConversationScreen() {
                     exiting={reducedMotion ? undefined : PendingMessageExiting}
                     key={m.id}
                     layout={reducedMotion ? undefined : PendingMessageLayout}
-                    style={styles.pendingRow}
                   >
-                    <View style={[styles.pendingBody, { backgroundColor: theme.accentSoft, borderColor: theme.accent }]}>
-                      <PlatformIcon color={theme.accentStrong} name="clock-outline" size={14} />
-                      <View style={styles.pendingCopy}>
-                        <ThemedText themeColor="accentStrong" type="captionBold">Sending</ThemedText>
-                        <ThemedText style={styles.pendingText} type="small">{m.body}</ThemedText>
-                      </View>
-                    </View>
+                  <PendingMessageBubble attachments={m.attachments} body={m.body} />
                   </Animated.View>
                 ))}
               </Animated.View>
@@ -1225,7 +1333,8 @@ export default function ConversationScreen() {
         />
       </TaskLinkBatchProvider>
       </Animated.View>
-      {showJumpToLatest ? (
+      )}
+      {showJumpToLatest && !channelSearchOpen ? (
         <AnimatedPressable
           accessibilityLabel={`Jump to latest messages${newMessageCount ? `, ${newMessageCount} new messages` : ''}`}
           accessibilityRole="button"
@@ -1251,9 +1360,11 @@ export default function ConversationScreen() {
           setComposerOverlayHeight((current) => current === height ? current : height);
         }}
         style={[styles.composerOverlay, composerExpanded && { backgroundColor: theme.homeSurface }, composerExpanded && styles.composerExpandedOverlay]}>
+        {/* Keep the message list visible above the keyboard while typing. */}
         <Composer
           activeGroupName={activeGroup?.name ?? null}
           busy={busy === 'send'}
+          expandOnKeyboard={false}
           mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
           mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
           mentionCandidates={mentionCandidates}
@@ -1274,6 +1385,7 @@ export default function ConversationScreen() {
         <SheetSection>
           {groupItems.map((item) => (
             <SheetRow
+              leading={<EntityMark colorKey={item.group.markColorKey} iconKey={channelIconKeys.get(String(item.group._id)) ?? item.group.markIconKey} id={String(item.group._id)} kind="channel" name={item.group.name} size={36} />}
               key={item.group._id}
               label={item.group.name}
               selected={item.group._id === gid}
@@ -1393,14 +1505,21 @@ const styles = StyleSheet.create({
   archiveBanner: { alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   archiveDescription: { maxWidth: 420, textAlign: 'center' },
   archiveTitle: { textAlign: 'center' },
-  contextCompany: { flexShrink: 1, maxWidth: 128, minWidth: 0 },
-  contextIdentity: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
-  contextProject: { flex: 1, minWidth: 0 },
-  contextRow: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
-  channelSearchHint: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  channelSearchInput: { borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, minHeight: TouchTarget, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  channelSearchPanel: { borderBottomWidth: StyleSheet.hairlineWidth, gap: Spacing.one, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two, paddingTop: Spacing.one },
-  channelSearchResult: { borderRadius: Radius.medium, gap: Spacing.one, minHeight: TouchTarget, justifyContent: 'center', paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  androidSearchField: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, height: 40, paddingHorizontal: Spacing.three, width: '100%' },
+  channelSearchResult: { borderCurve: 'continuous', borderRadius: Radius.xlarge, borderWidth: StyleSheet.hairlineWidth, elevation: 1, gap: Spacing.one, maxWidth: '84%', minHeight: TouchTarget, justifyContent: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, shadowColor: '#000', shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  channelSearchResultMeta: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
+  channelSearchAuthor: { flex: 1, minWidth: 0 },
+  channelSearchTime: { fontSize: 10, fontVariant: ['tabular-nums'], lineHeight: 12 },
+  channelSearchSubtitle: { marginTop: Spacing.half },
+  channelSearchResultOwn: { alignSelf: 'flex-end', borderBottomRightRadius: Radius.small },
+  channelSearchResultOther: { alignSelf: 'flex-start', borderBottomLeftRadius: Radius.small },
+  searchBackButton: { alignItems: 'center', borderRadius: Radius.pill, height: TouchTarget, justifyContent: 'center', width: TouchTarget },
+  iosSearchField: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flex: 1, flexDirection: 'row', gap: Spacing.two, height: 42, overflow: 'hidden', paddingHorizontal: Spacing.three },
+  searchTextInput: { flex: 1, fontSize: 16, minWidth: 0, paddingHorizontal: 0, paddingVertical: 0 },
+  searchResultsEmpty: { alignItems: 'center', flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.six, paddingVertical: Spacing.four },
+  searchResultsList: { flexGrow: 1, gap: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
+  searchResultsScroll: { flex: 1 },
   editAction: { flex: 1 },
   editActions: { flexDirection: 'row', gap: Spacing.two },
   empty: { alignItems: 'center', padding: Spacing.six },
@@ -1425,19 +1544,13 @@ const styles = StyleSheet.create({
   jumpToLatestCount: { textAlign: 'center' },
   loadMore: { alignItems: 'center', minHeight: TouchTarget, justifyContent: 'center', padding: Spacing.two },
   headerCircle: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, justifyContent: 'center', overflow: 'hidden', width: TouchTarget },
-  headerGlassMaterial: { borderRadius: Radius.pill },
-  iosHeaderActionSpacer: { width: TouchTarget },
+  iosHeaderActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.half },
   iosHeader: { flexShrink: 0 },
   iosHeaderRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, height: TouchTarget, paddingHorizontal: Spacing.three },
   iosHeaderTitle: { alignItems: 'center', flex: 1, minWidth: 0 },
-  channelHeaderButton: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: 280, minHeight: TouchTarget, overflow: 'hidden', paddingHorizontal: Spacing.three },
-  channelHeaderGlass: { borderRadius: Radius.pill },
+  channelHeaderButton: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: 280, minHeight: TouchTarget, paddingHorizontal: Spacing.three },
   channelIdentity: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: Spacing.two, minWidth: 0 },
   channelTitle: { flexShrink: 1, minWidth: 0 },
-  pendingBody: { alignItems: 'flex-start', alignSelf: 'flex-end', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '84%', minWidth: 0, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  pendingCopy: { flexShrink: 1, gap: 2, minWidth: 0 },
-  pendingRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  pendingText: { flex: 1 },
   retry: { alignItems: 'center', borderRadius: Radius.medium, justifyContent: 'center', minHeight: TouchTarget, marginTop: Spacing.three, paddingHorizontal: Spacing.four },
   screen: { flex: 1 },
   thread: { paddingBottom: Spacing.two, paddingTop: Spacing.two },

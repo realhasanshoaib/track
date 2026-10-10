@@ -57,22 +57,20 @@ export function ForwardMessageSheet({
 
   return (
     <OptionsSheet onClose={onClose} title="Forward message" visible={Boolean(message)}>
-      <SheetSection title="Message preview">
-        <View style={[styles.preview, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
-          <ThemedText themeColor="textSecondary" type="captionBold">
-            {message?.author?.displayName ?? 'Member'}
-          </ThemedText>
-          <ThemedText numberOfLines={4} type="small">{sourceText}</ThemedText>
-          {message?.attachments.length ? (
-            <View style={styles.attachmentMeta}>
-              <PlatformIcon color={theme.textSecondary} name="paperclip" size={15} />
-              <ThemedText themeColor="textSecondary" type="caption">
-                {message.attachments.length} {message.attachments.length === 1 ? 'attachment' : 'attachments'} will be copied
-              </ThemedText>
-            </View>
-          ) : null}
-        </View>
-      </SheetSection>
+      <View style={[styles.preview, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
+        <ThemedText themeColor="textSecondary" type="captionBold">
+          {message?.author?.displayName ?? 'Member'}
+        </ThemedText>
+        <ThemedText numberOfLines={3} type="small">{sourceText}</ThemedText>
+        {message?.attachments.length ? (
+          <View style={styles.attachmentMeta}>
+            <PlatformIcon color={theme.textSecondary} name="paperclip" size={15} />
+            <ThemedText themeColor="textSecondary" type="caption">
+              {message.attachments.length} {message.attachments.length === 1 ? 'attachment' : 'attachments'} will be copied
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
       <SheetInput
         label="Optional note"
         maxLength={10_000}
@@ -81,18 +79,20 @@ export function ForwardMessageSheet({
         placeholder="Add context for the destination Channel"
         value={note}
       />
-      <SheetInput
+      {targets.length > 6 || query ? <SheetInput
         label="Search Channels"
         maxLength={100}
         onChangeText={setQuery}
         placeholder="Search accessible Channels"
         value={query}
-      />
+      /> : null}
       <SheetSection title="Forward to">
         {groups === undefined ? (
-          <ThemedText themeColor="textSecondary" type="small">
-            Loading accessible Channels…
-          </ThemedText>
+          <View style={styles.targetState}>
+            <ThemedText themeColor="textSecondary" type="small">
+              Loading accessible Channels…
+            </ThemedText>
+          </View>
         ) : targets.length ? targets.map((target) => (
           <SheetRow
             detail={target.group.kind.replaceAll('_', ' ')}
@@ -104,11 +104,13 @@ export function ForwardMessageSheet({
             onPress={() => onForward(target, note)}
           />
         )) : (
-          <ThemedText themeColor="textSecondary" type="small">
-            {query.trim()
-              ? 'No accessible Channel matches that search.'
-              : 'You need access to another active Channel in this Project.'}
-          </ThemedText>
+          <View style={styles.targetState}>
+            <ThemedText themeColor="textSecondary" type="small">
+              {query.trim()
+                ? 'No accessible Channel matches that search.'
+                : 'You need access to another active Channel in this Project.'}
+            </ThemedText>
+          </View>
         )}
       </SheetSection>
       {error ? (
@@ -124,4 +126,5 @@ const styles = StyleSheet.create({
   attachmentMeta: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   error: { paddingHorizontal: Spacing.four },
   preview: { borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.two, padding: Spacing.three },
+  targetState: { padding: Spacing.three },
 });

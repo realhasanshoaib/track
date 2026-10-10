@@ -1,7 +1,9 @@
 import type { FunctionReturnType } from 'convex/server';
+import { useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 
+import { resolveDistinctChannelIconKeys, type EntityMarkIconKey } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -95,6 +97,13 @@ export function ProjectDirectoryCard({
 }) {
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
+  const previousChannelIconKeys = useRef(new Map<string, EntityMarkIconKey>());
+  const channelIconKeys = useMemo(() => resolveDistinctChannelIconKeys(channels.map(({ group }) => ({
+    id: String(group._id),
+    iconKey: group.markIconKey,
+    name: group.name,
+  })), previousChannelIconKeys.current), [channels]);
+  previousChannelIconKeys.current = channelIconKeys;
   const archived = item.membership.status === 'archived';
   const role = archived ? 'Read-only archive' : projectRoleLabel(item.membership.role);
   return (
@@ -139,7 +148,7 @@ export function ProjectDirectoryCard({
           layout={reduceMotion ? undefined : LinearTransition.duration(180)}
           style={[styles.channelList, { borderTopColor: theme.hairline }]}>
           {loadingChannels ? <View accessibilityLabel="Loading Channels" style={[styles.channelSkeleton, { backgroundColor: theme.skeleton }]} /> : channels.length ? channels.map((channel) => (
-            <ChannelRow channel={channel} key={channel.group._id} onPress={() => onOpenChannel(channel)} />
+            <ChannelRow channel={channel} iconKey={channelIconKeys.get(String(channel.group._id)) ?? channel.group.markIconKey} key={channel.group._id} onPress={() => onOpenChannel(channel)} />
           )) : <ThemedText style={styles.emptyChannels} themeColor="textSecondary" type="caption">No Channels are visible for this membership.</ThemedText>}
           <Pressable accessibilityRole="button" onPress={onOpenProject} style={styles.openProject}>
             <ThemedText style={{ color: theme.accentStrong }} type="captionBold">Open Project</ThemedText>
@@ -151,11 +160,11 @@ export function ProjectDirectoryCard({
   );
 }
 
-function ChannelRow({ channel, onPress }: { channel: DirectoryChannel; onPress: () => void }) {
+function ChannelRow({ channel, iconKey, onPress }: { channel: DirectoryChannel; iconKey?: string | null; onPress: () => void }) {
   const theme = useTheme();
   return (
     <Pressable accessibilityLabel={`${channel.group.name}.${channel.unreadCount ? ` ${channel.unreadCount} unread.` : ''}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} onPress={() => { hapticLight(); onPress(); }} style={({ pressed }) => [styles.channel, pressed && { backgroundColor: theme.backgroundElement }]}>
-      <EntityMark colorKey={channel.group.markColorKey} iconKey={channel.group.markIconKey} id={String(channel.group._id)} kind="channel" name={channel.group.name} size={32} />
+      <EntityMark colorKey={channel.group.markColorKey} iconKey={iconKey} id={String(channel.group._id)} kind="channel" name={channel.group.name} size={32} />
       <View style={styles.flex}>
         <View style={styles.channelTitle}><ThemedText numberOfLines={1} style={styles.flex} type="title">{channel.group.name}</ThemedText>{channel.unreadCount > 0 ? <ThemedText themeColor="accentStrong" type="captionBold">{compact(channel.unreadCount)}</ThemedText> : null}</View>
         <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{channel.lastMessage?.body || 'No messages yet'}</ThemedText>

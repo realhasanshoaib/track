@@ -69,7 +69,22 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     plugins: [
       'expo-router',
+      [
+        'expo-dev-client',
+        {
+          android: {
+            defaultLaunchURL: 'http://localhost:8081',
+          },
+        },
+      ],
       'expo-image',
+      [
+        'expo-image-picker',
+        {
+          cameraPermission: 'Track uses the camera only when you choose to attach a photo to a conversation.',
+          photosPermission: 'Track lets you choose photos to attach to a conversation.',
+        },
+      ],
       'expo-sharing',
       'expo-status-bar',
       [

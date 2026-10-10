@@ -52,6 +52,7 @@ export function hasReadyAttachmentPreview(
 export type DetailedMessage = {
   message: Doc<'messages'>;
   author: Doc<'users'> | null;
+  authorAvatarUrl?: string | null;
   authorRole?: Doc<'projectMembers'>['role'] | null;
   authorCompany?: { companyId: Id<'companies'>; displayName: string } | null;
   attachments: AttachmentWithUrl[];

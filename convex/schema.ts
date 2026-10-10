@@ -206,6 +206,9 @@ export default defineSchema({
     proposingCompanyId: v.optional(v.id('companies')),
     origin: v.optional(projectOrigin),
     status: v.optional(projectStatus),
+    deliveryHealth: v.optional(v.union(v.literal('on_track'), v.literal('at_risk'), v.literal('off_track'))),
+    deliveryHealthUpdatedBy: v.optional(v.id('users')),
+    deliveryHealthUpdatedAt: v.optional(v.number()),
     participantRevision: v.optional(v.number()),
     revision: v.optional(v.number()),
     archiveReason: v.optional(v.string()),
@@ -327,6 +330,8 @@ export default defineSchema({
     notificationPreview: v.optional(v.string()),
     revision: v.optional(v.number()),
     editedAt: v.optional(v.number()),
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id('users')),
     trackInvocationId: v.optional(v.id('assistantStreams')),
     createdAt: v.number(),
   })

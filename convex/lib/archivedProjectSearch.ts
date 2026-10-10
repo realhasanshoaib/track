@@ -135,6 +135,7 @@ export async function searchNormalizedProjectArchive(
     if (!group || (message.channelThreadId && !focusedThread)) return null
     const authorName = author?.user.displayName ?? 'Former member'
     return {
+      authorId: message.authorId,
       createdAt: message.createdAt, groupId: group._id, groupName: group.name,
       id: message._id,
       isUnread: !unreadOnly

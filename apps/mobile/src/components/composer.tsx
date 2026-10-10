@@ -77,6 +77,7 @@ export type ComposerProps = {
   mentionCandidatesHasMore?: boolean;
   mentionCandidatesLoading?: boolean;
   mentionCandidates?: MentionCandidate[];
+  expandOnKeyboard?: boolean;
   onLoadMoreMentionCandidates?: () => void;
   onCancelReply: () => void;
   onChangeText: (value: string) => void;
@@ -143,6 +144,7 @@ export function Composer({
   mentionCandidatesHasMore = false,
   mentionCandidatesLoading = false,
   mentionCandidates = [],
+  expandOnKeyboard = true,
   onCancelReply,
   onChangeText,
   onExpandedChange,
@@ -180,8 +182,8 @@ export function Composer({
   // iOS needs the focused TextInput to keep its layout while the native
   // keyboard is presenting. Expanding the composer during that transition can
   // make UIKit drop focus before the person can type.
-  const inputExpanded = !isIOS && keyboardReady;
-  const iosInputHeight = Math.min(120, Math.max(36, measuredInputHeight));
+  const inputExpanded = expandOnKeyboard && !isIOS && keyboardReady;
+  const iosInputHeight = Math.min(120, Math.max(Typography.message.lineHeight, measuredInputHeight));
   const iosPillHeight = Math.min(120, Math.max(56, measuredInputHeight + 16));
 
   useEffect(() => {
@@ -450,7 +452,7 @@ export function Composer({
 
       <PendingAttachmentStrip
         disabled={sending || Boolean(failedSubmission)}
-        items={attachments}
+        items={sending ? [] : attachments}
         onRemove={(id) => {
           if (attachments.length === 1 && retryMessageId) setRetryMessageId(null);
           setAttachments((prev) => prev.filter((item) => item.id !== id));
@@ -743,7 +745,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     textAlignVertical: 'center',
   },
-  iosCenteredInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0 },
+  iosCenteredInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
   inlineVoiceOverlay: { bottom: 0, justifyContent: 'center', position: 'absolute', right: Spacing.one, top: 0, zIndex: 2 },
   placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: TouchTarget + Spacing.two, top: 0 },
   expandedPlaceholderContainer: { justifyContent: 'flex-start', paddingTop: Spacing.three },

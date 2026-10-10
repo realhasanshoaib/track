@@ -25,6 +25,8 @@ export type IconName =
   | 'bell-outline'
   | 'bell-off-outline'
   | 'bookmark'
+  | 'block'
+  | 'bug'
   | 'calendar'
   | 'calendar-clock'
   | 'calendar-remove'
@@ -44,6 +46,7 @@ export type IconName =
   | 'clock-outline'
   | 'close'
   | 'cloud-off'
+  | 'code'
   | 'content-copy'
   | 'dots-horizontal'
   | 'dots-vertical'
@@ -91,18 +94,21 @@ export type IconName =
   | 'send'
   | 'shield-check'
   | 'shield-lock-outline'
+  | 'smartphone'
   | 'sort'
   | 'star'
   | 'stop'
   | 'subtask'
   | 'tag'
   | 'task'
+  | 'target'
   | 'theme-light-dark'
   | 'thread'
   | 'trash-can-outline'
   | 'tune'
   | 'view-board'
   | 'view-column'
+  | 'video'
   | 'waveform'
   | 'white-balance-sunny';
 
@@ -129,12 +135,14 @@ const SYMBOLS: Record<IconName, SymbolDefinition> = {
   'bell-outline': { android: 'notifications', ios: 'bell', iosFilled: 'bell.fill' },
   'bell-off-outline': { android: 'notifications_off', ios: 'bell.slash', iosFilled: 'bell.slash.fill' },
   bookmark: { android: 'bookmark_border', androidFilled: 'bookmark', ios: 'bookmark', iosFilled: 'bookmark.fill' },
+  block: { android: 'block', ios: 'nosign' },
+  bug: { android: 'bug_report', ios: 'ladybug', iosFilled: 'ladybug.fill' },
   calendar: { android: 'calendar_month', ios: 'calendar' },
   'calendar-clock': { android: 'event_upcoming', ios: 'calendar.badge.clock' },
   'calendar-remove': { android: 'event_busy', ios: 'calendar.badge.minus' },
   'calendar-today': { android: 'today', ios: 'calendar' },
   camera: { android: 'photo_camera', ios: 'camera', iosFilled: 'camera.fill' },
-  channel: { android: 'tag', ios: 'number' },
+  channel: { android: 'chat_bubble_outline', ios: 'bubble.left' },
   check: { android: 'check', ios: 'checkmark' },
   'check-all': { android: 'done_all', ios: 'checkmark.circle', iosFilled: 'checkmark.circle.fill' },
   'check-box': { android: 'check_box', ios: 'checkmark.square.fill' },
@@ -148,6 +156,7 @@ const SYMBOLS: Record<IconName, SymbolDefinition> = {
   'clock-outline': { android: 'schedule', ios: 'clock', iosFilled: 'clock.fill' },
   close: { android: 'close', ios: 'xmark' },
   'cloud-off': { android: 'cloud_off', ios: 'icloud.slash' },
+  code: { android: 'code', ios: 'chevron.left.forwardslash.chevron.right' },
   'content-copy': { android: 'content_copy', ios: 'doc.on.doc' },
   'dots-horizontal': { android: 'more_horiz', ios: 'ellipsis' },
   'dots-vertical': { android: 'more_vert', ios: 'ellipsis' },
@@ -195,18 +204,21 @@ const SYMBOLS: Record<IconName, SymbolDefinition> = {
   send: { android: 'send', ios: 'paperplane', iosFilled: 'paperplane.fill' },
   'shield-check': { android: 'verified_user', ios: 'checkmark.shield', iosFilled: 'checkmark.shield.fill' },
   'shield-lock-outline': { android: 'admin_panel_settings', ios: 'lock.shield', iosFilled: 'lock.shield.fill' },
+  smartphone: { android: 'smartphone', ios: 'iphone' },
   sort: { android: 'sort', ios: 'arrow.up.arrow.down' },
   star: { android: 'star', ios: 'star', iosFilled: 'star.fill' },
   stop: { android: 'stop', ios: 'stop.fill' },
   subtask: { android: 'subdirectory_arrow_right', ios: 'arrow.turn.down.right' },
   tag: { android: 'sell', ios: 'tag', iosFilled: 'tag.fill' },
   task: { android: 'checklist', ios: 'checklist', iosFilled: 'checklist.checked' },
+  target: { android: 'track_changes', ios: 'scope' },
   'theme-light-dark': { android: 'contrast', ios: 'circle.lefthalf.filled' },
   thread: { android: 'forum', ios: 'bubble.left.and.bubble.right', iosFilled: 'bubble.left.and.bubble.right.fill' },
   'trash-can-outline': { android: 'delete', ios: 'trash', iosFilled: 'trash.fill' },
   tune: { android: 'tune', ios: 'slider.horizontal.3' },
   'view-board': { android: 'view_kanban', ios: 'rectangle.3.group', iosFilled: 'rectangle.3.group.fill' },
   'view-column': { android: 'view_column', ios: 'rectangle.split.3x1' },
+  video: { android: 'videocam', ios: 'video', iosFilled: 'video.fill' },
   waveform: { android: 'graphic_eq', ios: 'waveform' },
   'white-balance-sunny': { android: 'light_mode', ios: 'sun.max', iosFilled: 'sun.max.fill' },
 };

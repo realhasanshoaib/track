@@ -7,9 +7,11 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 const icons: Record<EntityMarkIconKey, IconName> = {
-  analytics: 'analytics', board: 'view-board', book: 'file-document-outline', building: 'office-building', calendar: 'calendar',
-  channel: 'channel', code: 'lightbulb-outline', conversation: 'message', design: 'image',
-  launch: 'flag', people: 'account-group', project: 'project', shield: 'shield-lock-outline',
+  analytics: 'analytics', archive: 'archive', board: 'view-board', bookmark: 'bookmark', book: 'file-document-outline', building: 'office-building',
+  bug: 'bug', calendar: 'calendar', channel: 'channel', checklist: 'task', code: 'code', conversation: 'thread', design: 'image',
+  files: 'file-archive', globe: 'earth', idea: 'lightbulb-outline', inbox: 'inbox', integration: 'link', launch: 'flag',
+  media: 'image-multiple', milestone: 'star', mobile: 'smartphone', people: 'account-group', project: 'project', question: 'information-outline',
+  shield: 'shield-lock-outline', support: 'email-outline', target: 'target', timeline: 'calendar-clock', video: 'video',
 };
 
 export function EntityMarkPicker({
@@ -36,7 +38,7 @@ export function EntityMarkPicker({
         <Choice label="Auto" selected={!colorKey} onPress={() => onColorChange('')} />
         {entityMarkColorKeys.map((key) => <Choice key={key} label={key} selected={colorKey === key} onPress={() => onColorChange(key)} leading={<View style={[styles.swatch, { backgroundColor: entityMarkPalette[key].background }]} />} />)}
       </ScrollView>
-      <ThemedText themeColor="textSecondary" type="caption">Automatic keeps the background stable and chooses an icon from the name.</ThemedText>
+      <ThemedText themeColor="textSecondary" type="caption">Automatic keeps the background stable and picks a useful icon from the name. Channel lists vary repeated icons so each visible Channel stays easy to recognize.</ThemedText>
     </View>
   );
 }

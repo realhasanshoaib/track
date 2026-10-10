@@ -76,6 +76,9 @@ describe('sendComposerMessage recovery', () => {
 
     expect(first).toEqual({ failedIds: ['retry'], messageId: 'message-1' });
     expect(target.sendMessage).toHaveBeenCalledTimes(1);
+    expect(target.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [expect.objectContaining({ filename: 'ok.txt', uploadIntentId: 'intent-ok.txt' })],
+    }));
 
     shouldFail = false;
     const retried = await sendComposerMessage({
@@ -89,6 +92,6 @@ describe('sendComposerMessage recovery', () => {
 
     expect(retried).toEqual({ failedIds: [], messageId: 'message-1' });
     expect(target.sendMessage).toHaveBeenCalledTimes(1);
-    expect(target.attachFile).toHaveBeenCalledTimes(2);
+    expect(target.attachFile).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,24 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { hasConversationMatches } from './conversation-search'
+import { channelSearchMessages, hasChannelMessageMatches } from './conversation-search'
 
-describe('conversation search empty-state matching', () => {
-  it('counts only channels and channel messages for the Channels filter', () => {
-    expect(hasConversationMatches({ groups: [], messages: [{ threadId: 'thread' }], threads: [] }, 'channels')).toBe(false)
-    expect(hasConversationMatches({ groups: [], messages: [{ threadId: undefined }], threads: [] }, 'channels')).toBe(true)
-    expect(hasConversationMatches({ groups: [{}], messages: [], threads: [{}] }, 'channels')).toBe(true)
+describe('Chats message search', () => {
+  it('keeps channel messages while excluding thread replies', () => {
+    const messages = [
+      { id: 'channel-message', threadId: undefined },
+      { id: 'thread-message', threadId: 'thread' },
+    ]
+    expect(channelSearchMessages(messages)).toEqual([{ id: 'channel-message', threadId: undefined }])
+    expect(hasChannelMessageMatches(messages)).toBe(true)
   })
 
-  it('counts only threads and thread messages for the Threads filter', () => {
-    expect(hasConversationMatches({ groups: [{}], messages: [{ threadId: undefined }], threads: [] }, 'threads')).toBe(false)
-    expect(hasConversationMatches({ groups: [], messages: [{ threadId: 'thread' }], threads: [] }, 'threads')).toBe(true)
-    expect(hasConversationMatches({ groups: [], messages: [], threads: [{}] }, 'threads')).toBe(true)
-  })
-
-  it('counts every conversation result for All and Unread filters', () => {
-    for (const filter of ['all', 'unread'] as const) {
-      expect(hasConversationMatches({ groups: [], messages: [{ threadId: undefined }], threads: [] }, filter)).toBe(true)
-      expect(hasConversationMatches({ groups: [], messages: [], threads: [{}] }, filter)).toBe(true)
-    }
+  it('does not treat Channel-only or thread-only search results as a message match', () => {
+    expect(hasChannelMessageMatches([])).toBe(false)
+    expect(hasChannelMessageMatches([{ threadId: 'thread' }])).toBe(false)
   })
 })

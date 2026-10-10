@@ -9,6 +9,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { hapticLight } from '@/lib/haptics';
 import {
+  formatTaskDate,
   shortTaskKey,
   taskDueDisplay,
   taskPriorityLabel,
@@ -63,11 +64,13 @@ function stateGlyph(category?: TaskStateCategory) {
 export function TaskStatusPill({
   appearance = 'soft',
   category,
+  compact = false,
   label,
   onPress,
 }: {
   appearance?: 'plain' | 'soft';
   category?: TaskStateCategory;
+  compact?: boolean;
   label: string;
   onPress?: () => void;
 }) {
@@ -83,22 +86,22 @@ export function TaskStatusPill({
       <ThemedText numberOfLines={1} style={[styles.pillLabel, { color: palette.foreground }]} type="captionBold">
         {label}
       </ThemedText>
-      {onPress ? <PlatformIcon color={palette.foreground} name="selector" size={13} /> : null}
+      {onPress ? <PlatformIcon color={palette.foreground} name="chevron-down" size={13} /> : null}
     </>
   );
   const backgroundColor = appearance === 'plain' ? 'transparent' : palette.background;
-  if (!onPress) return <View style={[styles.pill, { backgroundColor }]}>{body}</View>;
+  if (!onPress) return <View style={[styles.pill, compact && styles.compactPill, { backgroundColor }]}>{body}</View>;
   return (
     <Pressable
-      accessibilityHint="Opens the move menu"
-      accessibilityLabel={`Status: ${label}`}
+      accessibilityHint="Opens status options so you can choose a new status"
+      accessibilityLabel={`Change status: ${label}`}
       accessibilityRole="button"
       hitSlop={12}
       onPress={() => {
         hapticLight();
         onPress();
       }}
-      style={({ pressed }) => [styles.pill, { backgroundColor }, pressed && styles.pressedControl]}>
+      style={({ pressed }) => [styles.pill, compact && styles.compactPill, { backgroundColor }, pressed && styles.pressedControl]}>
       {body}
     </Pressable>
   );
@@ -127,7 +130,7 @@ export function TaskPriorityBadge({
   );
   if (!onPress) {
     return (
-      <View accessibilityLabel={`${taskPriorityLabel(priority)} priority`} style={[styles.priority, compact && styles.priorityBadge, compact && { backgroundColor }]}>
+      <View accessibilityLabel={`${taskPriorityLabel(priority)} priority`} style={[styles.priority, compact && styles.priorityBadge, compact && { alignSelf: 'flex-start', backgroundColor }]}>
         {body}
       </View>
     );
@@ -142,7 +145,7 @@ export function TaskPriorityBadge({
         hapticLight();
         onPress();
       }}
-      style={({ pressed }) => [styles.priority, compact && styles.priorityBadge, compact && { backgroundColor }, pressed && styles.pressedControl]}>
+      style={({ pressed }) => [styles.priority, compact && styles.priorityBadge, compact && { alignSelf: 'flex-start', backgroundColor }, pressed && styles.pressedControl]}>
       {body}
     </Pressable>
   );
@@ -150,32 +153,36 @@ export function TaskPriorityBadge({
 
 export function TaskDueChip({
   category,
+  compact = false,
   dueDate,
   onPress,
   showNoDate = false,
 }: {
   category?: TaskStateCategory;
+  compact?: boolean;
   dueDate?: string;
   onPress?: () => void;
   showNoDate?: boolean;
 }) {
   const theme = useTheme();
   const due = taskDueDisplay(dueDate, undefined, category);
+  const dueLabel = due?.overdue && compact && dueDate
+    ? `Overdue · ${formatTaskDate(dueDate)}`
+    : due?.label;
   if (!due && !onPress && !showNoDate) return null;
   const color = due?.overdue ? theme.warning : theme.textSecondary;
   const body = (
     <>
-      <PlatformIcon color={color} name={due?.overdue ? 'alert-circle' : 'calendar'} size={14} />
+      <PlatformIcon color={color} name="calendar" size={14} />
       <ThemedText numberOfLines={1} style={{ color }} type={due?.overdue ? 'captionBold' : 'caption'}>
-        {due?.label ?? (showNoDate ? 'No due date' : 'Add due date')}
+        {dueLabel ?? (showNoDate ? 'No due date' : 'Add due date')}
       </ThemedText>
-      {onPress ? <PlatformIcon color={color} name="selector" size={13} /> : null}
     </>
   );
   if (!onPress) return <View style={styles.inlineMeta}>{body}</View>;
   return (
     <Pressable
-      accessibilityHint="Changes the due date"
+      accessibilityHint="Opens the calendar to change the due date"
       accessibilityLabel={`Due date: ${due?.label ?? 'none'}`}
       accessibilityRole="button"
       hitSlop={12}
@@ -297,7 +304,7 @@ export function TaskCard({
       .join(' · ');
     const due = taskDueDisplay(dueDate, undefined, category);
     return (
-      <View style={[styles.listRow, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
+      <View style={[styles.listRow, { backgroundColor: theme.homeSurface, borderColor: theme.hairline }]}>
         <View style={styles.listRowContent}>
           <AnimatedPressable
             accessibilityHint="Opens the task"
@@ -545,16 +552,17 @@ const styles = StyleSheet.create({
   listCopy: { flex: 1, gap: Spacing.two, minWidth: 0 },
   listLeading: { alignItems: 'center', borderRadius: Radius.medium, height: 40, justifyContent: 'center', width: 40 },
   listRow: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  listRowContent: { alignItems: 'stretch', flexDirection: 'row', minHeight: 96 },
-  listRowPressable: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: Spacing.three, minWidth: 0, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
-  listTrailing: { alignItems: 'flex-end', gap: Spacing.one, justifyContent: 'center', maxWidth: 116, minHeight: 96, minWidth: 88, paddingRight: Spacing.three, paddingVertical: Spacing.three },
-  listTrailingLine: { alignItems: 'flex-end', justifyContent: 'center', minHeight: 18, maxWidth: '100%' },
+  listRowContent: { minHeight: 96 },
+  listRowPressable: { alignItems: 'center', flexDirection: 'row', gap: Spacing.three, minWidth: 0, paddingHorizontal: Spacing.three, paddingTop: Spacing.three, paddingBottom: Spacing.one },
+  listTrailing: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'space-between', minHeight: 36, paddingHorizontal: Spacing.three, paddingBottom: Spacing.three },
+  listTrailingLine: { alignItems: 'center', justifyContent: 'center', minHeight: 28, maxWidth: '100%' },
   originDot: { borderRadius: Radius.pill, borderWidth: 2, height: 8, width: 8 },
   pill: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: 5, maxWidth: 168, minHeight: 28, paddingHorizontal: Spacing.two, paddingVertical: 5 },
+  compactPill: { gap: 4, maxWidth: 142, minHeight: 24, paddingHorizontal: Spacing.one, paddingVertical: 2 },
   pillDot: { borderRadius: Radius.pill, height: 8, width: 8 },
   pillLabel: { flexShrink: 1 },
   priority: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
-  priorityBadge: { borderRadius: Radius.pill, paddingHorizontal: Spacing.two, paddingVertical: 2 },
+  priorityBadge: { borderRadius: Radius.pill, paddingHorizontal: Spacing.one, paddingVertical: 2 },
   segment: { alignItems: 'center', borderRadius: Radius.pill, flexGrow: 0, justifyContent: 'center', minHeight: TouchTarget, minWidth: 104, paddingHorizontal: Spacing.three },
   segmented: { borderCurve: 'continuous', borderRadius: Radius.pill, flexGrow: 0 },
   segmentedContent: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, padding: Spacing.one },

@@ -41,7 +41,6 @@ export function MessageReportSheet({
   const valid = !needsNote || Boolean(note.trim());
 
   return <OptionsSheet onClose={onClose} title="Report" visible={visible}>
-    <SheetNote>Choose the reason that best describes the concern. Reports go to the Track review queue.</SheetNote>
     <SheetSection title="Reason">
       {reportReasons.map((item) => <SheetRow
         accessibilityRole="radio"
@@ -53,7 +52,6 @@ export function MessageReportSheet({
       />)}
     </SheetSection>
     {needsNote ? <>
-      <SheetNote>Briefly describe the issue so the review team knows what to check.</SheetNote>
       <SheetInput
         label="What happened?"
         maxLength={1000}

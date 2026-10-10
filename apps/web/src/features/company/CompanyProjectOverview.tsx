@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   AlertTriangle, ArrowRight, CalendarDays, Check, CircleAlert, Clock3,
@@ -48,10 +48,9 @@ function relativeTime(timestamp: number) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function projectHealthTone(health: string) {
-  if (health === "At risk") return "risk";
-  if (health === "Completed") return "complete";
-  return "track";
+function projectLifecycleLabel(status: string) {
+  if (status === "archive_pending") return "Archive approval pending";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function taskSearch(context: CompanyProjectLinkContext, extra: Record<string, string> = {}) {
@@ -126,9 +125,11 @@ function ActivityList({ items, currentUser, linkContext }: { items: OverviewData
 
 export function CompanyProjectOverview({ actingCompanyId, actingCompanyName, channelItems, currentUser, item, projectId, projectMemberId, projectMembers, tasksEnabled, threadUnreadByChannel }: Props) {
   const [range, setRange] = useState<7 | 30 | 90>(30); const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [healthSaveState, setHealthSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const threadSearchInputId = `project-thread-search-${projectId}`;
   const linkContext = useMemo<CompanyProjectLinkContext>(() => ({ actingCompanyId, projectId, projectMemberId }), [actingCompanyId, projectId, projectMemberId]);
   const overview = useQuery(api.companyOverview.getProject, tasksEnabled ? { actingCompanyId, days: range, projectId, projectMemberId } : "skip");
+  const updateDeliveryHealth = useMutation(api.sharedProjects.updateDeliveryHealth);
   const taskBoards = useQuery(api.taskBoards.list, tasksEnabled ? { actingCompanyId, projectId, projectMemberId } : "skip");
   const activeChannels = channelItems.filter((channel) => channel.status !== "archived"); const latestChannel = activeChannels[0] ?? channelItems[0];
   const completedState = overview?.distribution.find((state) => state.category === "completed"); const blockedState = overview?.distribution.find((state) => state.name.toLocaleLowerCase() === "blocked");
@@ -139,11 +140,53 @@ export function CompanyProjectOverview({ actingCompanyId, actingCompanyName, cha
     { key: "overdue", label: "Overdue", value: overview?.stats.overdue ?? 0, icon: <Clock3 />, search: { due: "overdue", view: "all" }, foot: "Review" },
     { key: "due", label: "Due this week", value: overview?.stats.dueThisWeek ?? 0, icon: <CalendarDays />, search: { due: "upcoming", view: "all" }, foot: "View tasks" },
   ];
+  const canEditDeliveryHealth = Boolean(
+    overview?.permissions.canManageProject &&
+    (item.project.status === "active" || item.project.status === "proposed"),
+  );
+
+  async function saveDeliveryHealth(value: string) {
+    if (value !== "on_track" && value !== "at_risk" && value !== "off_track") return;
+    setHealthSaveState("saving");
+    try {
+      await updateDeliveryHealth({ actingCompanyId, health: value, projectId, projectMemberId });
+      setHealthSaveState("saved");
+    } catch {
+      setHealthSaveState("error");
+    }
+  }
   return <>
     <CompanyProjectNavigation actingCompanyId={actingCompanyId} activeArea="overview" activeProject={{ projectId, projectMemberId }} tasksEnabled={tasksEnabled} secondaryNavigation={channelItems.length ? <nav aria-label="Project Channels"><span className="company-project-nav-label">Channels</span><div className="company-project-nav-channel-list">{channelItems.map((channel) => { const { Icon, tone } = getGroupAvatar(channel); const unread = threadUnreadByChannel.get(channel._id) ?? 0; return <Link aria-label={`Open ${channel.name} Channel`} className="company-project-nav-channel" key={channel._id} params={{ projectId }} search={getCompanyProjectConversationSearch({ ...linkContext, groupId: channel._id })} to="/workspace/company-projects/$projectId"><span className={`company-project-nav-channel-icon ${tone}`}><Icon aria-hidden="true" size={14} /></span>{unread ? <span aria-label={`${unread} unread threads`} className="company-project-nav-count">{unread}</span> : null}<span className="company-project-nav-copy"><strong>{channel.name}</strong><small>{channel.status === "archived" ? "Archived Channel" : "Channel"}</small></span></Link>; })}</div></nav> : null} />
     <section className="company-project-overview"><div className="company-project-overview-inner">
       <nav aria-label="Breadcrumb" className="company-project-breadcrumb"><Link search={{ view: "overview", taskFilter: undefined }} to="/workspace/company">Company workspace</Link><span>/</span><Link search={{ view: "projects", taskFilter: undefined }} to="/workspace/company">Projects</Link><span>/</span><b>{item.project.name}</b></nav>
-      <header className="company-project-hero"><div className="company-project-hero-mark"><FolderKanban aria-hidden="true" /></div><div className="company-project-hero-copy"><div className="project-title-row"><h1>{item.project.name}</h1><span className={`project-health is-${projectHealthTone(overview?.project.health ?? "On track")}`}><i />{overview?.project.health ?? "Loading"}</span></div><p>{item.project.description?.trim() || "No project description has been added."}</p><div className="project-hero-meta"><div className="project-member-stack">{overview?.members.slice(0, 4).map((member) => <span aria-label={member.name} key={member.id} title={member.name}>{member.avatarUrl ? <img alt="" height="22" src={member.avatarUrl} width="22" /> : member.name.slice(0, 1)}</span>)}{overview && overview.memberCount > 4 ? <span>+{overview.memberCount - 4}</span> : null}</div><span><UsersRound aria-hidden="true" />{overview?.memberCount ?? projectMembers?.length ?? "…"} members</span><span>·</span><span>Updated {dateFormatter.format(item.project.updatedAt)}</span></div></div><div className="company-project-hero-actions">{tasksEnabled && overview?.permissions.canWriteProject ? <button className="company-project-primary-action" onClick={() => setCreateTaskOpen(true)} type="button"><Plus aria-hidden="true" />Create task</button> : null}{overview?.permissions.canManageProject ? <Link className="company-project-settings-action" params={{ projectId }} search={getCompanyProjectMembersSearch(linkContext)} to="/workspace/company-projects/$projectId"><Settings2 aria-hidden="true" />Project settings</Link> : null}</div></header>
+      <header className="company-project-hero">
+        <div className="company-project-hero-mark"><FolderKanban aria-hidden="true" /></div>
+        <div className="company-project-hero-copy">
+          <div className="project-title-row"><h1>{item.project.name}</h1></div>
+          <p>{item.project.description?.trim() || "No project description has been added."}</p>
+          <div className="project-hero-meta"><div className="project-member-stack">{overview?.members.slice(0, 4).map((member) => <span aria-label={member.name} key={member.id} title={member.name}>{member.avatarUrl ? <img alt="" height="22" src={member.avatarUrl} width="22" /> : member.name.slice(0, 1)}</span>)}{overview && overview.memberCount > 4 ? <span>+{overview.memberCount - 4}</span> : null}</div><span><UsersRound aria-hidden="true" />{overview?.memberCount ?? projectMembers?.length ?? "…"} members</span><span>·</span><span>Updated {dateFormatter.format(item.project.updatedAt)}</span></div>
+          <section aria-label="Project status" className="project-status-area">
+            <div className="project-status-value">
+              <span>Lifecycle</span>
+              <strong>{projectLifecycleLabel(item.project.status ?? "active")}</strong>
+              <small>Archive and recovery follow the Company approval process.</small>
+              {overview?.permissions.canManageProject ? <Link params={{ projectId }} search={getCompanyProjectMembersSearch(linkContext)} to="/workspace/company-projects/$projectId">Manage lifecycle <ArrowRight aria-hidden="true" size={13} /></Link> : null}
+            </div>
+            <div className="project-status-value">
+              <label htmlFor="project-delivery-health">Delivery health</label>
+              <select aria-describedby="project-delivery-health-help" disabled={!canEditDeliveryHealth || healthSaveState === "saving"} id="project-delivery-health" onChange={(event) => { setHealthSaveState("idle"); void saveDeliveryHealth(event.currentTarget.value); }} value={overview?.project.deliveryHealth ?? ""}>
+                <option value="">Not set</option>
+                <option value="on_track">On track</option>
+                <option value="at_risk">At risk</option>
+                <option value="off_track">Off track</option>
+              </select>
+              <small id="project-delivery-health-help">{canEditDeliveryHealth ? overview?.project.deliveryHealthUpdatedAt ? `Updated ${dateFormatter.format(overview.project.deliveryHealthUpdatedAt)}. Task signals remain visible below.` : "Set an owner assessment. Task signals remain visible below." : "Ask a Project manager to update this assessment."}</small>
+            </div>
+          </section>
+          {healthSaveState === "error" ? <p className="project-status-feedback" role="alert">Could not update delivery health. Try again.</p> : healthSaveState !== "idle" ? <p aria-live="polite" className="project-status-feedback" role="status">{healthSaveState === "saving" ? "Saving delivery health…" : "Delivery health updated."}</p> : null}
+        </div>
+        <div className="company-project-hero-actions">{tasksEnabled && overview?.permissions.canWriteProject ? <button className="company-project-primary-action" onClick={() => setCreateTaskOpen(true)} type="button"><Plus aria-hidden="true" />Create task</button> : null}{overview?.permissions.canManageProject ? <Link className="company-project-settings-action" params={{ projectId }} search={getCompanyProjectMembersSearch(linkContext)} to="/workspace/company-projects/$projectId"><Settings2 aria-hidden="true" />Project settings</Link> : null}</div>
+      </header>
       <section aria-label="Project health statistics" className="project-stats-grid">{stats.map((stat) => <Link className={`project-stat-card is-${stat.key}`} key={stat.key} params={{ projectId }} search={taskSearch(linkContext, stat.search)} to="/workspace/projects/$projectId/tasks"><span className="project-stat-icon">{stat.icon}</span><span className="project-stat-value">{overview ? stat.value : "—"}</span><span className="project-stat-label">{stat.label}</span><small>{stat.foot}<ArrowRight aria-hidden="true" /></small></Link>)}</section>
       <div className="project-chart-grid"><ProjectProgressChart data={overview} onRangeChange={setRange} range={range} /><WorkloadByOwner data={overview} linkContext={linkContext} /></div>
       <section className="project-overview-panel project-attention-panel"><header className="project-attention-header"><span><AlertTriangle aria-hidden="true" /></span><div><h2>Attention needed</h2><p>Tasks that require your attention</p></div>{overview?.attentionCount ? <Link params={{ projectId }} search={taskSearch(linkContext, { view: "all" })} to="/workspace/projects/$projectId/tasks">View all ({overview.attentionCount}) <ArrowRight aria-hidden="true" /></Link> : null}</header>{!overview ? <div className="project-attention-skeleton" role="status">Loading attention items…</div> : overview.attention.length ? <div className="project-attention-table" role="table" aria-label="Tasks that require attention"><div className="project-attention-columns" role="row"><span role="columnheader">Task</span><span role="columnheader">Status</span><span role="columnheader">Assignee</span><span role="columnheader">Due date</span><span role="columnheader">Reason</span><span /></div>{overview.attention.map((task) => <Link key={task.id} params={{ projectId }} role="row" search={taskSearch(linkContext, { task: task.publicKey, view: "all" })} to="/workspace/projects/$projectId/tasks"><span role="cell"><ClipboardList aria-hidden="true" />{task.title}</span><span className={`project-status-pill is-${taskStatusTone(task.status)}`} role="cell"><i />{task.status}</span><span role="cell">{task.assignee ?? "Unassigned"}</span><span role="cell">{task.dueDate ? dateFormatter.format(new Date(`${task.dueDate}T00:00:00`)) : "No due date"}</span><span role="cell">{task.reason}</span><ChevronRight aria-hidden="true" className="project-attention-open-icon" /></Link>)}</div> : <div className="project-panel-empty compact"><strong>No attention needed</strong><span>Everything requiring immediate attention is clear.</span></div>}</section>

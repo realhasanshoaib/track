@@ -606,6 +606,46 @@ export const get = query({
   },
 })
 
+/** Returns aggregate read positions for replies in this thread. */
+export const readReceiptSequences = query({
+  args: {
+    threadId: v.id('channelThreads'),
+    userId: v.id('users'),
+    actingCompanyId: v.optional(v.id('companies')),
+    projectMemberId: v.optional(v.id('projectMembers')),
+  },
+  handler: async (ctx, args) => {
+    if (!threadsEnabled()) return { recipientCount: 0, readThroughSequences: [] }
+    const { cutoff, projectMember, thread } = await authorizeThread(ctx, args)
+    if (cutoff || thread.status !== 'active') return { recipientCount: 0, readThroughSequences: [] }
+
+    const [followers, memberships, states] = await Promise.all([
+      ctx.db.query('channelThreadFollowers').withIndex('by_thread_project_member', (q) =>
+        q.eq('channelThreadId', thread._id),
+      ).collect(),
+      ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', thread.groupId)).collect(),
+      ctx.db.query('channelThreadReadStates').withIndex('by_thread_project_member', (q) =>
+        q.eq('channelThreadId', thread._id),
+      ).collect(),
+    ])
+    const activeMemberIds = new Set(memberships
+      .filter((membership) => !membership.status || membership.status === 'active')
+      .map((membership) => String(membership.projectMemberId)))
+    const recipients = new Set(followers
+      .filter((follower) =>
+        follower.projectMemberId !== projectMember._id &&
+        activeMemberIds.has(String(follower.projectMemberId)),
+      )
+      .map((follower) => String(follower.projectMemberId)))
+    return {
+      recipientCount: recipients.size,
+      readThroughSequences: states
+        .filter((state) => recipients.has(String(state.projectMemberId)))
+        .map((state) => state.lastReadChannelSequence),
+    }
+  },
+})
+
 export const listMessages = query({
   args: {
     threadId: v.id('channelThreads'),

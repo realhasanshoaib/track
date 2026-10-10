@@ -66,6 +66,7 @@ import "./company-overview-reference.css";
 import "./company-collaboration.css";
 import "./company-global-work.css";
 import "./company-experience.css";
+import "./company-owner-overview.css";
 
 function getInitials(name: string) {
   return name
@@ -124,6 +125,7 @@ export function CompanyHubPage({
   const actingCompany = companies?.find(
     (item) => item.company?._id === actingCompanyId,
   );
+  const isCompanyOwner = actingCompany?.membership.role === "owner";
   const canAdministerActingCompany =
     actingCompany?.membership.role === "owner" ||
     actingCompany?.membership.role === "admin";
@@ -167,7 +169,9 @@ export function CompanyHubPage({
   );
   const companyOverview = useQuery(
     api.companyOverview.get,
-    activeActingCompanyId ? { companyId: activeActingCompanyId, days: 7 } : "skip",
+    activeActingCompanyId && isCompanyOwner
+      ? { companyId: activeActingCompanyId, days: 7 }
+      : "skip",
   );
   const companyTasks = useQuery(
     api.companyOverview.listTasks,
@@ -228,7 +232,6 @@ export function CompanyHubPage({
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [notificationFilter, setNotificationFilter] = useState<"all" | "task" | "message" | "suggestion" | "invitation">("all");
   const [projectCreatorRequested, setProjectCreatorRequested] = useState(false);
-  const [overviewProjectCreatorRequest, setOverviewProjectCreatorRequest] = useState(0);
   const overviewSearchRef = useRef<HTMLInputElement>(null);
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const notificationContainerRef = useRef<HTMLDivElement>(null);
@@ -336,7 +339,8 @@ export function CompanyHubPage({
   };
 
   const showOverviewProjectCreator = () => {
-    setOverviewProjectCreatorRequest((request) => request + 1);
+    setProjectCreatorRequested(true);
+    selectView("projects");
   };
 
   async function run(action: () => Promise<unknown>) {
@@ -382,10 +386,12 @@ export function CompanyHubPage({
 
   const isCompanyAdmin = canAdministerActingCompany;
   const visibleView =
-    (activeView === "relationships" || activeView === "settings") &&
-    !isCompanyAdmin
-      ? "overview"
-      : activeView;
+    activeView === "overview" && !isCompanyOwner
+      ? "projects"
+      : (activeView === "relationships" || activeView === "settings") &&
+          !isCompanyAdmin
+        ? isCompanyOwner ? "overview" : "projects"
+        : activeView;
   const activeMembers =
     administration?.members.filter(
       ({ membership }) => membership.status === "active",
@@ -421,7 +427,7 @@ export function CompanyHubPage({
   const viewCopy: Record<CompanyHubView, { title: string; description: string }> = {
     overview: {
       title: "Company overview",
-      description: "Shared work, partners, and people in one place.",
+      description: "Project progress, task signals, and recent work across this Company.",
     },
     tasks: {
       title: "Global tasks",
@@ -451,7 +457,7 @@ export function CompanyHubPage({
   const currentViewCopy = viewCopy[visibleView];
 
   return (
-    <main aria-busy={busy} className="company-hub-shell company-unified-shell company-reference-shell">
+    <main aria-busy={busy} className={`company-hub-shell company-unified-shell company-reference-shell${visibleView === "overview" ? " is-company-overview" : ""}`}>
       <CompanyProjectNavigation
         actingCompanyId={actingCompanyId}
         activeArea="company"
@@ -460,19 +466,21 @@ export function CompanyHubPage({
         companyNavigation={
           <nav aria-label="Company workspace">
             <span className="company-project-nav-label">Workspace</span>
-          <Link
-            aria-current={visibleView === "overview" ? "page" : undefined}
-            className={
-              visibleView === "overview"
-                ? "company-project-nav-item active"
-                : "company-project-nav-item"
-            }
-            search={{ view: "overview", taskFilter: undefined }}
-            to="/workspace/company"
-          >
-            <LayoutGrid aria-hidden="true" size={14} />
-            Overview
-          </Link>
+          {isCompanyOwner ? (
+            <Link
+              aria-current={visibleView === "overview" ? "page" : undefined}
+              className={
+                visibleView === "overview"
+                  ? "company-project-nav-item active"
+                  : "company-project-nav-item"
+              }
+              search={{ view: "overview", taskFilter: undefined }}
+              to="/workspace/company"
+            >
+              <LayoutGrid aria-hidden="true" size={14} />
+              Overview
+            </Link>
+          ) : null}
           {activeActingCompanyId && currentUser ? (
             <Link
               aria-current={visibleView === "projects" ? "page" : undefined}
@@ -560,12 +568,12 @@ export function CompanyHubPage({
             <div className="company-overview-header-tools">
               <label className="company-overview-search">
                 <Search aria-hidden="true" size={18} />
-                <span className="sr-only">Search projects, tasks, or people</span>
+                <span className="sr-only">Search Projects and activity</span>
                 <input
                   autoComplete="off"
                   name="companySearch"
                   onChange={(event) => setOverviewSearch(event.target.value)}
-                  placeholder="Search projects, tasks, or people…"
+                  placeholder="Search Projects and activity…"
                   ref={overviewSearchRef}
                   type="search"
                   value={overviewSearch}
@@ -846,15 +854,9 @@ export function CompanyHubPage({
             <CompanyOverviewDashboard
               activeCompanyId={activeActingCompanyId}
               companyName={actingCompany.company.displayName}
-              createProjectRequest={overviewProjectCreatorRequest}
-              currentUserId={currentUser._id}
-              isAdmin={isCompanyAdmin}
-              onCreateProjectRequestHandled={() => setOverviewProjectCreatorRequest(0)}
-              onCreateTaskRequest={() => setCreateTaskOpen(true)}
               overview={companyOverview}
               projects={projects}
               searchQuery={overviewSearch}
-              run={run}
             />
           ) : null}
 

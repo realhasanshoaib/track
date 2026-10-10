@@ -9,15 +9,15 @@ export function isAudioAttachment(input: { contentType: string; kind?: string })
 }
 
 /**
- * The three shapes the composer writes: a voice note, one named file, or a
- * count. A named file must end in an extension, so a written sentence that
- * happens to start with "Attached" is kept and shown.
+ * The composer writes a short machine caption for an attachment-only message.
+ * The extension fallback keeps an older named-file caption from rendering
+ * beside its attachment.
  */
 const AUTO_ATTACHMENT_BODY =
-  /^(Voice note|Sent a voice note\.?|Attached \d+ files|Attached .+\.[a-z0-9]{1,6})$/i;
+  /^(Voice note|Sent a voice note\.?|Attached \d+ (?:files|images?)|Attached file|Attached .+\.[a-z0-9]{1,6})$/i;
 
 /**
- * The composer stores a machine caption ("Voice note", "Attached x.jpg") when a
+ * The composer stores a machine caption ("Voice note", "Attached 1 image") when a
  * message is only attachments, so previews and notifications have text. The
  * bubble itself renders the attachment, so that caption must never show there.
  */

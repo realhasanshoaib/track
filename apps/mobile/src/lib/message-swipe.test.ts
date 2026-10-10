@@ -13,12 +13,21 @@ describe('message swipe actions', () => {
     expect(messageSwipeIntent(-72, true, true)).toBe('actions');
   });
 
+  it('opens the message menu after a longer left swipe', () => {
+    expect(messageSwipeIntent(-112, true, true)).toBe('open-menu');
+    expect(messageSwipeIntent(-72, true, true)).toBe('actions');
+  });
+
   it('keeps the existing right-swipe reply gesture', () => {
     expect(messageSwipeIntent(72, true, true)).toBe('reply');
   });
 
   it('opens the message menu on a right swipe on Android', () => {
     expect(messageSwipeIntent(72, true, true, false, 'right')).toBe('actions');
+  });
+
+  it('opens the message menu after a longer right swipe on Android', () => {
+    expect(messageSwipeIntent(112, true, true, false, 'right')).toBe('open-menu');
   });
 
   it('keeps reply on the opposite swipe direction on Android', () => {

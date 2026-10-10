@@ -27,7 +27,6 @@ export function MessageTaskReviewSheet({
 }) {
   const theme = useTheme();
   return <OptionsSheet onClose={onClose} title="Review task" visible={visible}>
-    <SheetNote>The source stays linked to the Task, so its conversation context is kept.</SheetNote>
     <View style={styles.sourceBlock}>
       <ThemedText themeColor="textSecondary" type="captionBold">From this conversation</ThemedText>
       <View style={[styles.sourceQuote, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
@@ -36,16 +35,11 @@ export function MessageTaskReviewSheet({
     </View>
     <SheetInput autoFocus label="Task title" maxLength={180} onChangeText={onChangeTitle} value={title} />
     {error ? <SheetNote state="error">{error}</SheetNote> : null}
-    <View style={styles.actions}>
-      <ActionButton disabled={busy} label="Cancel" onPress={onClose} style={styles.action} variant="secondary" />
-      <ActionButton disabled={busy || !title.trim()} label="Create task" loading={busy} onPress={onCreate} style={styles.action} />
-    </View>
+    <ActionButton disabled={busy || !title.trim()} label="Create task" loading={busy} onPress={onCreate} />
   </OptionsSheet>;
 }
 
 const styles = StyleSheet.create({
-  action: { flex: 1 },
-  actions: { flexDirection: 'row', gap: Spacing.two },
   sourceBlock: { gap: Spacing.one },
   sourceQuote: { borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.three },
 });

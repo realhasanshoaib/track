@@ -1,6 +1,6 @@
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 
 import { api } from '../../../../convex/_generated/api';
@@ -22,7 +22,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useCompany } from '@/contexts/company-context';
 import { useTrackUser } from '@/contexts/track-user-context';
-import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { useTheme } from '@/hooks/use-theme';
@@ -34,7 +33,6 @@ export default function ProjectsScreen() {
   const bottomContentInset = useBottomTabContentInset();
   const router = useRouter();
   const { trackUserId } = useTrackUser();
-  const { setCreateContext } = usePrimaryNavigationVisibility();
   const params = useLocalSearchParams<{ create?: string }>();
   const { actingCompanyId, actingCompany, companies, companyModelEnabled, setActingCompanyId } = useCompany();
   const [companySheetOpen, setCompanySheetOpen] = useState(false);
@@ -46,10 +44,6 @@ export default function ProjectsScreen() {
   const [createCompanyId, setCreateCompanyId] = useState<Id<'companies'> | null>(null);
   const [expandedMembershipId, setExpandedMembershipId] = useState<Id<'projectMembers'> | null>(null);
 
-  useFocusEffect(useCallback(() => {
-    setCreateContext(null);
-    return () => setCreateContext(null);
-  }, [setCreateContext]));
   const createLegacyProject = useMutation(api.projects.create);
   const createCompanyProject = useMutation(api.sharedProjects.createInternal);
   const projectCompanies = useMemo(() => (companies ?? []).filter(({ company, membership }) =>
@@ -256,7 +250,6 @@ export default function ProjectsScreen() {
       </OptionsSheet>
 
       <OptionsSheet onClose={closeCreateSheet} title="New Project" visible={createOpen}>
-        <SheetNote>Create a Project to keep its Channels, tasks, and evidence together.</SheetNote>
         {companyModelEnabled ? <SheetSection title="Company">
           {projectCompanies.length ? projectCompanies.map(({ company }) => company ? <SheetRow
             detail={`@${company.normalizedHandle}`}
@@ -269,7 +262,7 @@ export default function ProjectsScreen() {
         </SheetSection> : null}
         <SheetInput label="Project name" maxLength={120} onChangeText={setProjectName} placeholder="e.g. Website launch" value={projectName} />
         <SheetInput label={companyModelEnabled ? 'Description (optional)' : 'Client label (optional)'} maxLength={120} onChangeText={setClientLabel} placeholder="Optional" value={clientLabel} />
-        {createError ? <SheetNote>{createError}</SheetNote> : null}
+        {createError ? <SheetNote state="error">{createError}</SheetNote> : null}
         <Pressable
           accessibilityRole="button"
           disabled={creating || !projectName.trim() || (companyModelEnabled && (!createCompanyId || projectCompanies.length === 0))}

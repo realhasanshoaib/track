@@ -2,7 +2,7 @@
 
 Status: required project standard
 Owner: Track web
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-08
 
 ## Scope and authority
 
@@ -12,6 +12,13 @@ from those routes. This includes public pages, sign-in, onboarding, Company and
 Project workspaces, Channels, threads, tasks, Evidence, Memory, settings,
 profile, search, dialogs, sheets, popovers, menus, and notifications.
 
+The [Track web revamp Design Contract](design/track-web-revamp-contract.md)
+is the source of truth for revamp visual rules, components, route composition,
+and interaction specifications. This document retains the required route
+coverage, quality gates, and migration rules. If an older visual value below
+differs from the revamp contract, use the revamp contract as the target and
+verify the change with the gates here.
+
 The generated TanStack route tree is the route inventory. A new route or view
 adds a row to the coverage record. A shared-component change must be checked on
 each affected route family. Public and account pages use the same visual,
@@ -20,7 +27,7 @@ the workspace shell.
 
 Product behavior and access boundaries come from the root `AGENTS.md` and
 [`DESIGN.md`](DESIGN.md). This contract defines how web screens must present
-and prove that behavior. The six supplied Dribbble shots are visual references
+and prove that behavior. The earlier six Dribbble shots are visual references
 only: borrow restraint, hierarchy, and useful project navigation; do not copy
 their brands, layouts, text, direct messages, or dashboard metrics as product
 requirements.

@@ -1,5 +1,6 @@
-export type MessageSwipeIntent = 'actions' | 'reply' | 'close';
+export type MessageSwipeIntent = 'actions' | 'open-menu' | 'reply' | 'close';
 export type MessageActionsSwipeDirection = 'left' | 'right';
+const OPEN_MENU_DISTANCE = 112;
 
 /** Keeps a translated message row inside the viewport as its action tray opens. */
 export function messageSwipeContentWidth(containerWidth: number, actionWidth: number) {
@@ -25,6 +26,7 @@ export function messageSwipeIntent(
   const direction = actionsDirection === 'right' ? 1 : -1;
   const actionDistance = translationX * direction;
   if (trayAlreadyOpen) return actionDistance <= -56 ? 'close' : 'actions';
+  if (actionDistance >= OPEN_MENU_DISTANCE && canOpenActions) return 'open-menu';
   if (actionDistance >= 56 && canOpenActions) return 'actions';
   if (actionDistance <= -56 && canReply) return 'reply';
   return 'close';

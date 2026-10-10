@@ -1,8 +1,9 @@
 import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useNetworkState } from 'expo-network';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import { parseMentions } from '@track/shared';
@@ -14,13 +15,14 @@ import { Composer } from '@/components/composer';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
 import { EmptyState } from '@/components/empty-state';
+import { PendingMessageBubble } from '@/components/chat/pending-attachment-message';
 import { ForwardMessageSheet } from '@/components/forward-message-sheet';
 import { IconButton } from '@/components/icon-button';
 import { MessageActions } from '@/components/message-actions';
 import { MessageReportSheet, type ReportReason } from '@/components/message-report-sheet';
 import { MessageTaskReviewSheet } from '@/components/message-task-review-sheet';
 import { OptionsSheet, SheetInput, SheetRow, SheetSection } from '@/components/options-sheet';
-import { PlatformIcon } from '@/components/platform-icon';
+import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { TaskInlineCards } from '@/components/task-inline-cards';
 import { ThreadRow, DateSeparator, type DetailedMessage, type GroupedThreadItem, resolveMentionIds, resolveMentionProjectMemberIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
@@ -33,7 +35,7 @@ import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
-import { reconcilePendingMessages, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '@/lib/pending-messages';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfig } from '@/lib/release-config';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
@@ -51,6 +53,15 @@ const PendingMessageEntering = FadeInUp.duration(170);
 const PendingMessageExiting = FadeOutUp.duration(120);
 const PendingMessageLayout = LinearTransition.duration(150);
 
+function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
+  const theme = useTheme();
+  if (Platform.OS !== 'ios') return <IconButton accessibilityLabel={accessibilityLabel} icon={icon} onPress={onPress} />;
+
+  return <View style={[styles.headerButton, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
+    <IconButton accessibilityLabel={accessibilityLabel} appearance="plain" icon={icon} onPress={onPress} />
+  </View>;
+}
+
 function dateSepLabel(timestamp: number) {
   const date = new Date(timestamp);
   const today = new Date();
@@ -63,6 +74,7 @@ function dateSepLabel(timestamp: number) {
 
 export default function ThreadScreen() {
   const theme = useTheme();
+  const safeAreaInsets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { showToast } = useAppToast();
   const router = useRouter();
@@ -158,6 +170,7 @@ export default function ThreadScreen() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
+  const [androidSelectionMode, setAndroidSelectionMode] = useState(false);
   const [reportTarget, setReportTarget] = useState<GroupedThreadItem | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -167,6 +180,19 @@ export default function ThreadScreen() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
+  const exitMessageSelection = useCallback(() => {
+    setAndroidSelectionMode(false);
+    setActionsOpen(false);
+    setActionTarget(null);
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !androidSelectionMode) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      exitMessageSelection();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [androidSelectionMode, exitMessageSelection]);
   const [editBusy, setEditBusy] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<DetailedMessage | null>(null);
   const [forwardBusyGroupId, setForwardBusyGroupId] = useState<string | null>(null);
@@ -201,11 +227,17 @@ export default function ThreadScreen() {
     ? { kind: 'thread' as const, cutoffAt: thread.thread.archivedAt ?? null, reason: null }
     : null);
   const archiveBanner = readOnly ? archivePresentation(threadArchiveDetails) : null;
+  const readReceipts = useQuery(
+    api.channelThreads.readReceiptSequences,
+    queryArgs && !readOnly ? queryArgs : 'skip',
+  );
   const scrollToLatest = useCallback(() => {
     atBottomRef.current = true;
     setNewReplyCount(0);
-    listRef.current?.scrollToEnd({ animated: true });
-  }, []);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: !reducedMotion });
+    }));
+  }, [reducedMotion]);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
@@ -261,9 +293,17 @@ export default function ThreadScreen() {
   }, [acknowledgeViewedMessage]);
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 60 }), []);
 
+  const pendingMessageIdsSignature = pendingMessageAcknowledgementKey(pendingMessages);
+  const pendingMessageIds = useMemo(
+    () => new Set(pendingMessageIdsSignature ? pendingMessageIdsSignature.split('\0') : []),
+    [pendingMessageIdsSignature],
+  );
+
   const threadItems = useMemo<GroupedThreadItem[]>(() => {
     const uniqueMessages = [...new Map(
-      ((messages ?? []) as DetailedMessage[]).map((item) => [item.message._id, item] as const),
+      ((messages ?? []) as DetailedMessage[])
+        .filter((item) => !pendingMessageIds.has(item.message._id))
+        .map((item) => [item.message._id, item] as const),
     ).values()];
     // eslint-disable-next-line unicorn/no-array-reverse -- reason: Reverse a newly copied array for the existing message ordering while supporting the web ES2022 target.
     const messageItems = uniqueMessages.reverse().map((item) => ({
@@ -303,7 +343,7 @@ export default function ThreadScreen() {
       interrupted = false;
     }
     return result;
-  }, [assistantStreams, messages]);
+  }, [assistantStreams, messages, pendingMessageIds]);
   useEffect(() => {
     if (!messages || !assistantStreams) return;
     const messageItems = messages as DetailedMessage[];
@@ -345,9 +385,10 @@ export default function ThreadScreen() {
   }, [assistantStreams, messages, trackUserId]);
   useEffect(() => {
     if (!messages) return;
-    const receivedIds = new Set((messages as DetailedMessage[]).map(({ message }) => message._id));
-    setPendingMessages((pending) => reconcilePendingMessages(pending, receivedIds));
-  }, [messages]);
+    const messageItems = messages as DetailedMessage[];
+    const receivedIds = new Set(messageItems.map(({ message }) => message._id));
+    setPendingMessages((pending) => reconcilePendingMessages(pending, receivedIds, receivedMessageAttachmentStates(messageItems)));
+  }, [messages, pendingMessages]);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -428,12 +469,13 @@ export default function ThreadScreen() {
       sendKey.current = idempotencyKey();
       sendSignatureRef.current = sendSignature;
     }
-    const pendingId = body && payload.attachments.length === 0 ? `pending-${sendKey.current}` : null;
+    const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
+    atBottomRef.current = true;
     if (pendingId) {
+      scrollToLatestAfterSendRef.current = true;
       setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
         ? pending
-        : [...pending, { id: pendingId, body, at: Date.now() }]);
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+        : [...pending, { attachments: payload.attachments, id: pendingId, body, at: Date.now() }]);
     }
     setBusy(true);
     setError(null);
@@ -442,6 +484,19 @@ export default function ThreadScreen() {
         ...payload,
         body,
         idempotencyKey: sendKey.current,
+        onMessageCreated: (messageId) => {
+          if (!pendingId) return;
+          setPendingMessages((pending) => pending.map((message) => message.id === pendingId
+            ? { ...message, messageId: String(messageId) }
+            : message));
+        },
+        reportProgress: (attachmentId, progress) => {
+          payload.reportProgress(attachmentId, progress);
+          if (!pendingId) return;
+          setPendingMessages((pending) => pending.map((message) => message.id === pendingId
+            ? { ...message, attachments: message.attachments?.map((file) => file.id === attachmentId ? { ...file, progress } : file) }
+            : message));
+        },
         replyToMessageId,
         target: {
           attachFile: (input) => attachFile({
@@ -475,6 +530,7 @@ export default function ThreadScreen() {
             authorId: trackUserId,
             actingCompanyId: cid,
             projectMemberId: pmid,
+            attachments: input.attachments,
             idempotencyKey: input.idempotencyKey,
             body: input.body,
             mentions: resolveMentionIds(input.body, memberItems),
@@ -486,18 +542,19 @@ export default function ThreadScreen() {
       });
 
       const sentMessageId = result.messageId;
-      if (sentMessageId) {
-        if (pendingId) {
-          if (knownMessageIdsRef.current?.has(sentMessageId)) {
-            setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
-          } else {
-            setPendingMessages((pending) => pending.map((message) => message.id === pendingId
-              ? { ...message, messageId: sentMessageId }
-              : message));
-          }
+      if (pendingId) {
+        if (sentMessageId) {
+          const failedIds = new Set(result.failedIds);
+          setPendingMessages((pending) => pending.map((message) => message.id === pendingId
+            ? {
+                ...message,
+                attachments: message.attachments?.filter((file) => !failedIds.has(file.id)),
+                messageId: String(sentMessageId),
+              }
+            : message));
+        } else {
+          setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
         }
-        scrollToLatestAfterSendRef.current = true;
-        requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
       }
       if (sentMessageId && parseMentions(body).includes('track')) {
         requestTrackResponse(sentMessageId, body);
@@ -605,8 +662,9 @@ export default function ThreadScreen() {
     requestTrackResponse(prompt.item.message._id, prompt.item.message.body);
   }, [requestTrackResponse, showToast, threadItems]);
 
-  const messageActions = useMemo(() => {
-    if (!actionTarget || actionTarget.kind === 'date-sep') return [];
+  const buildMessageActions = useCallback((actionTarget: GroupedThreadItem) => {
+    if (actionTarget.kind === 'date-sep') return [];
+    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return [];
     const copyText = actionTarget.kind === 'message'
       ? actionTarget.item.message.body.trim()
       : actionTarget.stream.status === 'failed' ? '' : actionTarget.stream.answer.trim();
@@ -631,7 +689,7 @@ export default function ThreadScreen() {
         icon: 'refresh' as const,
         onPress: () => retryAssistantAnswer(actionTarget.stream),
       }] : []),
-      ...(!readOnly && actionTarget.kind === 'message' ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
+      ...(!readOnly && actionTarget.kind === 'message' ? [{ label: 'Reply', icon: 'reply' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
         label: 'Create task',
         icon: 'plus' as const,
@@ -661,17 +719,17 @@ export default function ThreadScreen() {
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
-        label: 'Delete message',
+        label: 'Delete for everyone',
         icon: 'trash-can-outline' as const,
         destructive: true,
         onPress: () => {
           Alert.alert(
-            'Delete message?',
-            'This can’t be undone.',
+            'Delete for everyone?',
+            "You can't undo deleting this message.",
             [
               { text: 'Cancel', style: 'cancel' },
               {
-                text: 'Delete',
+                text: 'Delete for everyone',
                 style: 'destructive',
                 onPress: () => {
                   setBusy(true);
@@ -683,7 +741,7 @@ export default function ThreadScreen() {
                     projectMemberId: pmid,
                   }).then(() => {
                     if (replyMessageId === actionTarget.item.message._id) setReplyTo(null);
-                    setNotice('Message deleted.');
+                    setNotice('Message deleted for everyone.');
                   }).catch((caught) => {
                     setError(communicationErrorMessage(caught, 'delete this message'));
                   }).finally(() => setBusy(false));
@@ -695,7 +753,8 @@ export default function ThreadScreen() {
       }] : []),
       { label: 'Report', icon: 'flag' as const, onPress: () => { setReportError(null); setReportTarget(actionTarget); } },
     ];
-  }, [actionTarget, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
+  }, [cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
+  const messageActions = useMemo(() => actionTarget ? buildMessageActions(actionTarget) : [], [actionTarget, buildMessageActions]);
 
   async function submitReport(reason: ReportReason, note: string) {
     const target = reportTarget;
@@ -774,12 +833,25 @@ export default function ThreadScreen() {
     return <>
       <ThreadRow
         highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
+        contextActions={Platform.OS === 'ios' && item.kind === 'message' && !item.item.message.deletedAt ? buildMessageActions(item) : undefined}
         isFirstInGroup={item.isFirstInGroup}
         isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
         item={item}
-        onLongPress={() => { hapticLight(); setActionTarget(item); setActionsOpen(true); }}
+        selected={Platform.OS === 'android' && androidSelectionMode && actionTarget?.key === item.key}
+        readReceipts={readReceipts}
+        onLongPress={() => {
+          if (item.kind === 'message' && item.item.message.deletedAt) return;
+          hapticLight();
+          setActionTarget(item);
+          if (Platform.OS === 'android' && item.kind === 'message') {
+            setAndroidSelectionMode(true);
+            setActionsOpen(false);
+          } else {
+            setActionsOpen(true);
+          }
+        }}
         onSwipeReply={readOnly || item.kind !== 'message' ? undefined : () => setReplyTo(item.item)}
-        onSwipeForward={!readOnly && item.kind === 'message' ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
+        onSwipeForward={!readOnly && item.kind === 'message' && !item.item.message.deletedAt ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
         onSwipeReport={() => { void submitSwipeReport(item); }}
         onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
           const quotedId = item.item.replyTo?.messageId;
@@ -795,7 +867,7 @@ export default function ThreadScreen() {
         readOnly={readOnly}
       /> : null}
     </>;
-  }, [highlightedMessageId, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, trackUserId]);
+  }, [actionTarget, androidSelectionMode, buildMessageActions, highlightedMessageId, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -899,32 +971,61 @@ export default function ThreadScreen() {
     </View> : null}
   </Pressable> : null;
 
+  const goBackToChannel = () => {
+    if (router.canGoBack()) router.back();
+    else if (pid && gid) router.replace(channelHref(pid, gid, context) as never);
+  };
+  const hasThreadTools = !navigation.archived
+    || Boolean(source && !('unavailable' in source) && pid && gid)
+    || Boolean(firstLinkedTask && pid);
+  const headerSelectionActions = messageActions.filter((action) =>
+    ['Reply', 'Forward', 'Delete for everyone'].includes(action.label),
+  );
+
   return (
     <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface }]}>
       <Stack.Screen options={{
-        headerTransparent: true,
+        headerShown: Platform.OS !== 'ios',
+        headerTransparent: Platform.OS === 'ios',
         headerBlurEffect: 'none',
         headerBackground: () => <View pointerEvents="none" style={StyleSheet.absoluteFill} />,
-        headerTitle: () => <View style={[styles.headerIdentity, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+        headerTitle: () => androidSelectionMode ? (
+          <ThemedText accessibilityLabel="1 message selected" type="title">1</ThemedText>
+        ) : <View style={[styles.headerIdentity, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
           <View style={[styles.headerMark, { backgroundColor: Platform.OS === 'ios' ? 'transparent' : theme.accentSoft }]}><PlatformIcon color={theme.accentStrong} name="thread" size={18} /></View>
           <View style={styles.headerTitle}>
             <ThemedText numberOfLines={2} type="title">{thread.thread.name}</ThemedText>
             <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">#{channelName}</ThemedText>
           </View>
         </View>,
-        headerLeft: () => <IconButton
-          accessibilityLabel="Back to Channel"
-          icon="arrow-left"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else if (pid && gid) {
-              router.replace(channelHref(pid, gid, context) as never);
-            }
-          }}
-        />,
-        headerRight: () => <IconButton accessibilityLabel="Thread options" icon="dots-horizontal" onPress={() => setToolsOpen(true)} />,
+        headerLeft: () => androidSelectionMode
+          ? <IconButton accessibilityLabel="Cancel message selection" appearance="plain" icon="close" onPress={exitMessageSelection} />
+          : <IconButton accessibilityLabel="Back to Channel" appearance="plain" icon="arrow-left" onPress={goBackToChannel} />,
+        headerRight: androidSelectionMode ? () => <View style={styles.headerActions}>
+          {headerSelectionActions.map((action) => action.icon ? <IconButton
+            accessibilityLabel={action.label}
+            appearance="plain"
+            icon={action.icon}
+            key={action.label}
+            onPress={() => {
+              exitMessageSelection();
+              action.onPress();
+            }}
+          /> : null)}
+          <IconButton accessibilityLabel="More message actions" appearance="plain" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
+        </View> : hasThreadTools ? () => <IconButton accessibilityLabel="Thread options" appearance="plain" icon="dots-horizontal" onPress={() => setToolsOpen(true)} /> : undefined,
       }} />
+      {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: 'transparent', paddingTop: safeAreaInsets.top + Spacing.one }]}>
+        <ThreadHeaderButton accessibilityLabel="Back to Channel" icon="arrow-left" onPress={goBackToChannel} />
+        <View style={[styles.headerIdentity, styles.iosHeaderIdentity, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
+          <View style={[styles.headerMark, { backgroundColor: 'transparent' }]}><PlatformIcon color={theme.accentStrong} name="thread" size={18} /></View>
+          <View style={styles.headerTitle}>
+            <ThemedText numberOfLines={2} type="title">{thread.thread.name}</ThemedText>
+            <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">#{channelName}</ThemedText>
+          </View>
+        </View>
+        {hasThreadTools ? <ThreadHeaderButton accessibilityLabel="Thread options" icon="dots-horizontal" onPress={() => setToolsOpen(true)} /> : <View style={styles.headerButtonSpacer} />}
+      </View> : null}
       <ConnectivityBanner message="You’re offline. Cached replies stay available; sending will retry when you reconnect." style={styles.connection} />
       {notice ? <ThemedText accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.success }]} type="small">{notice}</ThemedText> : null}
       {error ? <ThemedText accessibilityLiveRegion="assertive" style={[styles.error, { color: theme.danger }]} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
@@ -937,7 +1038,8 @@ export default function ThreadScreen() {
       >
       <FlatList
           contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + TouchTarget + Spacing.four }]}
-          contentInsetAdjustmentBehavior="automatic"
+          contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'never' : 'automatic'}
+          showsVerticalScrollIndicator={false}
           style={styles.flex}
           data={threadItems}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -971,15 +1073,8 @@ export default function ThreadScreen() {
                   exiting={reducedMotion ? undefined : PendingMessageExiting}
                   key={message.id}
                   layout={reducedMotion ? undefined : PendingMessageLayout}
-                  style={styles.pendingRow}
                 >
-                  <View style={[styles.pendingBody, { backgroundColor: theme.accentSoft, borderColor: theme.accent }]}>
-                    <PlatformIcon color={theme.accentStrong} name="clock-outline" size={14} />
-                    <View style={styles.pendingCopy}>
-                      <ThemedText themeColor="accentStrong" type="captionBold">Sending</ThemedText>
-                      <ThemedText style={styles.pendingText} type="small">{message.body}</ThemedText>
-                    </View>
-                  </View>
+                  <PendingMessageBubble attachments={message.attachments} body={message.body} />
                 </Animated.View>
               ))}
             </Animated.View>
@@ -1011,7 +1106,7 @@ export default function ThreadScreen() {
               scrollToLatestAfterSendRef.current = false;
               requestAnimationFrame(scrollToLatest);
             } else if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
-              listRef.current?.scrollToEnd({ animated: true });
+              listRef.current?.scrollToEnd({ animated: !reducedMotion });
             }
           }}
           ref={listRef}
@@ -1125,10 +1220,11 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
-  pendingBody: { alignItems: 'flex-start', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '86%', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  pendingCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
-  pendingRow: { alignItems: 'flex-end', paddingHorizontal: Spacing.four, paddingVertical: Spacing.one },
-  pendingText: { flexShrink: 1 },
+  headerButton: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, width: TouchTarget },
+  headerActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  headerButtonSpacer: { width: TouchTarget },
+  iosHeader: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, paddingBottom: Spacing.two, paddingHorizontal: Spacing.three },
+  iosHeaderIdentity: { flex: 1, minWidth: 0 },
   jumpToLatest: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0 3px 10px rgba(0,0,0,0.14)', flexDirection: 'row', gap: Spacing.one, height: TouchTarget, justifyContent: 'center', minWidth: TouchTarget, paddingHorizontal: Spacing.two, position: 'absolute', right: Spacing.three },
   jumpToLatestCount: { textAlign: 'center' },
   headerIdentity: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, maxWidth: 230, minHeight: TouchTarget, paddingHorizontal: Spacing.two },

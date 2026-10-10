@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
-import { InteractionManager, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { OptionsSheet, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { attachmentIcon, formatFileSize, isImageAttachment } from '@/lib/attachment-presentation';
 import type { UploadableFile } from '@/lib/attachment-upload';
@@ -22,30 +23,26 @@ type MenuProps = {
   visible: boolean;
 };
 
-/** Native pickers cannot be presented while the sheet modal is still on screen. */
-function afterSheetCloses(
-  run: () => Promise<UploadableFile[]>,
-  onPicked: (files: UploadableFile[]) => void,
-  onError: (message: string) => void,
-  failureMessage: string,
-) {
-  InteractionManager.runAfterInteractions(() => {
-    void run().then((files) => {
-      if (files.length) onPicked(files);
-    }).catch(() => {
-      onError(failureMessage);
-    });
-  });
-}
-
 export function ChatAttachMenu({ onClose, onError, onPicked, visible }: MenuProps) {
+  const pendingPicker = useRef<{ run: () => Promise<UploadableFile[]>; failureMessage: string } | null>(null);
   const choose = (run: () => Promise<UploadableFile[]>, failureMessage: string) => {
+    pendingPicker.current = { run, failureMessage };
     onClose();
-    afterSheetCloses(run, onPicked, onError, failureMessage);
   };
 
   return (
-    <OptionsSheet onClose={onClose} title="Add to message" visible={visible}>
+    <OptionsSheet
+      onClose={onClose}
+      onClosed={() => {
+        const picker = pendingPicker.current;
+        pendingPicker.current = null;
+        if (!picker) return;
+        void picker.run().then((files) => {
+          if (files.length) onPicked(files);
+        }).catch(() => onError(picker.failureMessage));
+      }}
+      title="Add to message"
+      visible={visible}>
       <SheetSection>
         <SheetRow icon="camera" label="Camera" onPress={() => choose(capturePhoto, 'Could not open the camera. Try again or choose a photo.')} />
         <SheetRow icon="image-multiple" label="Photo library" onPress={() => choose(pickImages, 'Could not open the photo library. Try again.')} />
@@ -83,8 +80,6 @@ export function PendingAttachmentStrip({ disabled = false, items, onRemove }: St
         const uploading = item.progress !== undefined && item.progress > 0 && item.progress < 1;
         return (
           <View
-            accessibilityLabel={describe(item)}
-            accessible
             key={item.id}
             style={[
               styles.tile,
@@ -94,9 +89,9 @@ export function PendingAttachmentStrip({ disabled = false, items, onRemove }: St
               },
             ]}>
             {isImageAttachment(item.contentType) ? (
-              <Image contentFit="cover" source={{ uri: item.uri }} style={styles.thumb} transition={120} />
+              <Image accessibilityLabel="Selected image" accessible cachePolicy="memory-disk" contentFit="cover" source={{ uri: item.uri }} style={styles.thumb} transition={80} />
             ) : (
-              <View style={styles.fileTile}>
+              <View accessibilityLabel={describe(item)} accessible style={styles.fileTile}>
                 <PlatformIcon
                   color={item.failed ? theme.danger : theme.textSecondary}
                   name={attachmentIcon(item)}
@@ -124,11 +119,11 @@ export function PendingAttachmentStrip({ disabled = false, items, onRemove }: St
             ) : null}
 
             <Pressable
-              accessibilityLabel={`Remove ${item.filename}`}
+              accessibilityLabel={isImageAttachment(item.contentType) ? 'Remove selected image' : `Remove ${item.filename}`}
               accessibilityRole="button"
               accessibilityState={{ disabled }}
               disabled={disabled}
-              hitSlop={12}
+              hitSlop={13}
               onPress={() => onRemove(item.id)}
               style={[styles.remove, { backgroundColor: theme.overlay, opacity: disabled ? 0.5 : 1 }]}>
               <PlatformIcon color={Colors.dark.text} name="close" size={13} />
@@ -170,7 +165,8 @@ const styles = StyleSheet.create({
   },
   strip: {
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingLeft: TouchTarget + Spacing.four,
+    paddingRight: Spacing.three,
     paddingVertical: Spacing.one,
   },
   thumb: {
