@@ -33,6 +33,36 @@ afterEach(async () => {
 })
 
 describe('Company model authorization and lifecycle', () => {
+  it('keeps Company project order and excludes unrelated and denied memberships', async () => {
+    const t = convexTest(schema, modules)
+    const owner = await seedUser(t, 'cost-company-owner')
+    const a = await createCompany(t, owner, 'Cost A', 'cost-a')
+    const b = await createCompany(t, owner, 'Cost B', 'cost-b')
+    const first = await seedCompanyProject(t, owner, a, 'First')
+    const other = await seedCompanyProject(t, owner, b, 'Other')
+    const denied = await seedCompanyProject(t, owner, a, 'Denied')
+    const last = await seedCompanyProject(t, owner, a, 'Last')
+    await seedLegacyProject(t, owner)
+    await t.run(async (ctx) => {
+      const participation = await ctx.db.query('projectCompanies')
+        .withIndex('by_project_company_term', (q) => q.eq('projectId', denied)).first()
+      await ctx.db.patch(participation!._id, { status: 'exited' })
+    })
+    const actor = asUser(t, owner)
+    const listed = await actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: a })
+    expect(listed.map(({ project }) => project._id)).toEqual([first, last])
+    expect(listed.every((row) => row.representedCompanyId === a && row.membership.companyId === a)).toBe(true)
+    expect((await actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: b }))
+      .map(({ project }) => project._id)).toEqual([other])
+    await t.run(async (ctx) => {
+      const member = await ctx.db.query('companyMembers')
+        .withIndex('by_company_user', (q) => q.eq('companyId', a).eq('userId', owner)).unique()
+      await ctx.db.patch(member!._id, { status: 'suspended' })
+    })
+    await expect(actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: a }))
+      .rejects.toThrow('company_unavailable')
+  })
+
   it('enforces Company task scope and suspended assignee authorization', async () => {
     {
       const t = convexTest(schema, modules)
