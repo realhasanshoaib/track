@@ -4,11 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { internal } from './_generated/api'
 import schema from './schema'
 
-const exec = vi.hoisted(() => vi.fn())
+type Exec = (boxId: string, options: { command: string }) => Promise<{ stdout: string }>
+const exec = vi.hoisted(() => vi.fn<Exec>())
 vi.mock('./lib/box', () => ({ createLiveMemoryBoxAdapter: () => ({ exec }) }))
-const modules = (import.meta as ImportMeta & {
-  glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
-}).glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
+declare global {
+  interface ImportMeta {
+    glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
+  }
+}
+const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 describe('memory run-view cleanup', () => {
   it('reads only processable status index ranges', async () => {
@@ -25,10 +29,8 @@ describe('memory run-view cleanup', () => {
       return { collect: async () => [] }
     })
     const query = vi.fn(() => ({ withIndex }))
-    const handler = listMemoryBoxesForCleanup as unknown as {
-      _handler: (ctx: { db: { query: typeof query } }, args: object) => Promise<unknown>
-    }
-    expect(await handler._handler({ db: { query } }, {})).toEqual([])
+    if (!hasHandler(listMemoryBoxesForCleanup)) throw new Error('query_handler_missing')
+    expect(await listMemoryBoxesForCleanup['_handler']({ db: { query } }, {})).toEqual([])
     expect(statuses).toEqual(['creating', 'ready', 'paused'])
     expect(query).toHaveBeenCalledTimes(3)
   })
@@ -76,4 +78,11 @@ async function seedBoxes(t: ReturnType<typeof convexTest>) {
     }
     return { projectId }
   })
+}
+
+function hasHandler(value: unknown): value is {
+  _handler: (ctx: unknown, args: unknown) => Promise<unknown>
+} {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null &&
+    '_handler' in value && typeof value['_handler'] === 'function'
 }

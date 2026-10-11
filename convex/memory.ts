@@ -152,7 +152,7 @@ export const listMemoryBoxesForCleanup = internalQuery({
       ),
     )
     // Keep the table's creation order when combining the status ranges.
-    return boxes.flat().sort((a, b) => a._creationTime - b._creationTime)
+    return boxes.flat().toSorted((a, b) => a._creationTime - b._creationTime)
   },
 })
 
