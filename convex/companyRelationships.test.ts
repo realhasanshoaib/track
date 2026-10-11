@@ -46,7 +46,8 @@ describe('Company model authorization and lifecycle', () => {
     await t.run(async (ctx) => {
       const participation = await ctx.db.query('projectCompanies')
         .withIndex('by_project_company_term', (q) => q.eq('projectId', denied)).first()
-      await ctx.db.patch(participation!._id, { status: 'exited' })
+      if (!participation) throw new Error('fixture_participation_missing')
+      await ctx.db.patch(participation._id, { status: 'exited' })
     })
     const actor = asUser(t, owner)
     const listed = await actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: a })
@@ -57,7 +58,8 @@ describe('Company model authorization and lifecycle', () => {
     await t.run(async (ctx) => {
       const member = await ctx.db.query('companyMembers')
         .withIndex('by_company_user', (q) => q.eq('companyId', a).eq('userId', owner)).unique()
-      await ctx.db.patch(member!._id, { status: 'suspended' })
+      if (!member) throw new Error('fixture_company_member_missing')
+      await ctx.db.patch(member._id, { status: 'suspended' })
     })
     await expect(actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: a }))
       .rejects.toThrow('company_unavailable')
