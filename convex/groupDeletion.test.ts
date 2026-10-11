@@ -4,12 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { api } from './_generated/api'
 import schema from './schema'
 
-declare global {
-  interface ImportMeta {
-    glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
-  }
+const modules = {
+  './_generated/server.js': () => import('./_generated/server'),
+  './groups.ts': () => import('./groups'),
+  './projects.ts': () => import('./projects'),
 }
-const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 describe('group dependent row deletion', () => {
   for (const kind of ['project', 'group'] as const) {
