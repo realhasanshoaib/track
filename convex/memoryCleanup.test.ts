@@ -7,12 +7,11 @@ import schema from './schema'
 type Exec = (boxId: string, options: { command: string }) => Promise<{ stdout: string }>
 const exec = vi.hoisted(() => vi.fn<Exec>())
 vi.mock('./lib/box', () => ({ createLiveMemoryBoxAdapter: () => ({ exec }) }))
-declare global {
-  interface ImportMeta {
-    glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
-  }
+const modules = {
+  './_generated/server.js': () => import('./_generated/server'),
+  './memory.ts': () => import('./memory'),
+  './memoryActions.ts': () => import('./memoryActions'),
 }
-const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 describe('memory run-view cleanup', () => {
   it('reads only processable status index ranges', async () => {
