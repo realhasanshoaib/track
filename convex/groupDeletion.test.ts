@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { api } from './_generated/api'
 import schema from './schema'
 
-const modules = (import.meta as ImportMeta & {
-  glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
-}).glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
+declare global {
+  interface ImportMeta {
+    glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
+  }
+}
+const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 describe('group dependent row deletion', () => {
   for (const kind of ['project', 'group'] as const) {
@@ -64,12 +67,26 @@ async function seed(t: ReturnType<typeof convexTest>) {
       members.push(groupMembers)
       reads.push(groupReads)
     }
+    const projectId = projects.at(0)
+    const groupId = groups.at(0)
+    const survivingGroupId = groups.at(1)
+    const orphanGroupId = groups.at(2)
+    const targetMembers = members.at(0)
+    const otherMembers = members.at(1)
+    const orphanMembers = members.at(2)
+    const targetReads = reads.at(0)
+    const otherReads = reads.at(1)
+    const orphanReads = reads.at(2)
+    if (!projectId || !groupId || !survivingGroupId || !orphanGroupId ||
+      !targetMembers || !otherMembers || !orphanMembers || !targetReads || !otherReads || !orphanReads) {
+      throw new Error('fixture_scopes_missing')
+    }
     // Existing orphan rows are deliberately outside this fix.
-    await ctx.db.delete(groups[2]!)
+    await ctx.db.delete(orphanGroupId)
     return {
-      userId, projectId: projects[0]!, groupId: groups[0]!, targetMembers: members[0]!, targetReads: reads[0]!,
-      survivingGroups: [groups[1]!], survivingMembers: [...members[1]!, ...members[2]!],
-      survivingReads: [...reads[1]!, ...reads[2]!],
+      userId, projectId, groupId, targetMembers, targetReads,
+      survivingGroups: [survivingGroupId], survivingMembers: [...otherMembers, ...orphanMembers],
+      survivingReads: [...otherReads, ...orphanReads],
     }
   })
 }
