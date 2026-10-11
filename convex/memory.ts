@@ -152,7 +152,8 @@ export const listMemoryBoxesForCleanup = internalQuery({
       ),
     )
     // Keep the table's creation order when combining the status ranges.
-    return boxes.flat().toSorted((a, b) => a._creationTime - b._creationTime)
+    // oxlint-disable-next-line unicorn/no-array-sort -- safe because this fresh array is owned here and the web target lacks ES2023 toSorted.
+    return boxes.flat().sort((a, b) => a._creationTime - b._creationTime)
   },
 })
 
