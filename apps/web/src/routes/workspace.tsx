@@ -1,11 +1,11 @@
-import { Link, Navigate, Outlet, createFileRoute, useLocation } from '@tanstack/react-router'
+import { Link, Navigate, Outlet, createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
 import { useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { useEffect, useState } from 'react'
 
 import { api } from '../../../../convex/_generated/api'
 import TrackLoader from '#/components/TrackLoader'
 import { authClient } from '#/lib/auth-client'
-import { useDevAuthBypass } from '#/lib/dev-auth-bypass'
+import { disableDevAuthBypass, useDevAuthBypass } from '#/lib/dev-auth-bypass'
 import { useOAuthCallbackPending } from '#/lib/oauth-callback'
 import { useReleaseConfigState } from '#/lib/release-config'
 
@@ -49,15 +49,21 @@ function WorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: boolean 
 }
 
 function CompanyWorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: boolean }) {
+  const sessionUserId = authClient.useSession().data?.user.id
   const user = useQuery(api.auth.getCurrentUser)
   const ensureCurrentUser = useMutation(api.auth.ensureCurrentUser)
   const syncDevUser = useMutation(api.auth.syncDevUser)
   const next = useLocation({ select: (location) => location.href })
+  const navigate = useNavigate()
   const [failed, setFailed] = useState(false)
+  const linked = Boolean(sessionUserId && user && (
+    user.authUserId === sessionUserId || user.googleSubject === sessionUserId
+  ))
+  const needsProvisioning = user !== undefined && !linked
 
   useEffect(() => {
     let cancelled = false
-    if (user === null && !failed) {
+    if (sessionUserId && needsProvisioning && !failed) {
       const provision = devAuthEnabled ? syncDevUser({}) : ensureCurrentUser({})
       void provision.then((userId) => {
         if (!cancelled && !userId) setFailed(true)
@@ -66,18 +72,25 @@ function CompanyWorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: b
       })
     }
     return () => { cancelled = true }
-  }, [devAuthEnabled, ensureCurrentUser, failed, syncDevUser, user])
+  }, [devAuthEnabled, ensureCurrentUser, failed, needsProvisioning, sessionUserId, syncDevUser])
 
-  if (failed && !user) {
+  if (failed && !linked) {
     return (
       <main className="track-loading">
         <p role="alert">We couldn’t prepare your workspace.</p>
         <button type="button" onClick={() => setFailed(false)}>Retry</button>
-        <Link to="/sign-in">Sign in again</Link>
+        <Link to="/sign-in" onClick={(event) => {
+          event.preventDefault()
+          void authClient.signOut().then(({ error }) => {
+            if (error) return
+            disableDevAuthBypass()
+            void navigate({ to: '/sign-in', replace: true })
+          }).catch(() => setFailed(true))
+        }}>Sign in again</Link>
       </main>
     )
   }
-  if (!user) return <TrackLoader label="Loading your workspace" />
+  if (!user || !linked) return <TrackLoader label="Loading your workspace" />
   if (!user.displayName.trim() || !user.profileDesignation?.trim() || !user.timezone?.trim()) {
     // The old layout remains mounted briefly while the router opens onboarding.
     if (!next.startsWith('/workspace')) return null
