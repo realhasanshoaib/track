@@ -54,31 +54,31 @@ function CompanyWorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: b
   const syncDevUser = useMutation(api.auth.syncDevUser)
   const next = useLocation({ select: (location) => location.href })
   const [failed, setFailed] = useState(false)
-  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (user !== null) return
     let cancelled = false
-    const provision = devAuthEnabled ? syncDevUser({}) : ensureCurrentUser({})
-    void provision.then((userId) => {
-      if (!cancelled && !userId) setFailed(true)
-    }).catch(() => {
-      if (!cancelled) setFailed(true)
-    })
+    if (user === null && !failed) {
+      const provision = devAuthEnabled ? syncDevUser({}) : ensureCurrentUser({})
+      void provision.then((userId) => {
+        if (!cancelled && !userId) setFailed(true)
+      }).catch(() => {
+        if (!cancelled) setFailed(true)
+      })
+    }
     return () => { cancelled = true }
-  }, [attempt, devAuthEnabled, ensureCurrentUser, syncDevUser, user])
+  }, [devAuthEnabled, ensureCurrentUser, failed, syncDevUser, user])
 
   if (failed && !user) {
     return (
       <main className="track-loading">
         <p role="alert">We couldn’t prepare your workspace.</p>
-        <button type="button" onClick={() => { setFailed(false); setAttempt(attempt + 1) }}>Retry</button>
+        <button type="button" onClick={() => setFailed(false)}>Retry</button>
         <Link to="/sign-in">Sign in again</Link>
       </main>
     )
   }
   if (!user) return <TrackLoader label="Loading your workspace" />
-  if (!user.displayName?.trim() || !user.profileDesignation?.trim() || !user.timezone?.trim()) {
+  if (!user.displayName.trim() || !user.profileDesignation?.trim() || !user.timezone?.trim()) {
     // The old layout remains mounted briefly while the router opens onboarding.
     if (!next.startsWith('/workspace')) return null
     return <Navigate to="/onboarding/profile" search={{ next }} replace />

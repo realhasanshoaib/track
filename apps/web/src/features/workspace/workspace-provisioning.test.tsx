@@ -12,9 +12,9 @@ import { Route } from '../../routes/workspace'
 type TestProfile = { displayName: string; profileDesignation: string; timezone: string }
 
 const backend = vi.hoisted(() => {
-  function initialUser(): TestProfile | null | undefined { return undefined }
+  const profile: { user: TestProfile | null | undefined } = { user: undefined }
   return {
-    user: initialUser(),
+    ...profile,
     companyModel: true,
     authenticated: true,
     listeners: new Set<() => void>(),
