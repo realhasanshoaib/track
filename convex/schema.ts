@@ -281,6 +281,7 @@ export default defineSchema({
     .index('by_project_status', ['projectId', 'status'])
     .index('by_user', ['userId'])
     .index('by_project_user', ['projectId', 'userId'])
+    .index('by_user_company', ['userId', 'companyId'])
     .index('by_project_company_status', ['projectId', 'companyId', 'status'])
     .index('by_project_company_user_term', ['projectId', 'companyId', 'userId', 'term']),
 
