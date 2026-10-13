@@ -44,7 +44,7 @@
     "hono": "4.13.7",
     "jose": "6.2.5",
     "react": "19.2.7",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
