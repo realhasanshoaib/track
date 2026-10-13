@@ -18,6 +18,33 @@ const modules = (import.meta as ImportMeta & {
 const pushFlow = flowDefinitionSchema.parse(flowDefinitions[0])
 
 describe('durable mobile push lifecycle', () => {
+  it('preserves browser journey ownership when its clock is ahead of push events', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-clock-skew')
+    const actor = asUser(t, userId)
+    const traceId = createDiagnosticCode()
+    const event = {
+      version: 1, traceId, journeyTraceId: traceId, spanId: '1234567890abcdef',
+      eventId: 'before_push', occurredAt: Date.now() + 60_000,
+      source: 'browser', kind: 'event', name: 'browser.push_source', status: 'ok', level: 'info',
+    }
+    expect(await actor.mutation(api.diagnostics.ingest, { events: [event] })).toEqual({ accepted: 1 })
+    await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'clock-skew', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'clock-skew', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 60_000, deferDispatch: true, sourceTraceId: traceId,
+    })
+    const nextEvent = { ...event, eventId: 'after_push', occurredAt: Date.now() + 61_000 }
+    expect(await actor.mutation(api.diagnostics.ingest, { events: [nextEvent] })).toEqual({ accepted: 1 })
+    await expect(actor.mutation(api.diagnostics.ingest, { events: [{
+      ...nextEvent, eventId: 'changed_journey', journeyTraceId: createDiagnosticCode(),
+    }] })).rejects.toThrow('diagnostics_invalid_link')
+    const otherUserId = await seedUser(t, 'push-clock-skew-other')
+    await expect(asUser(t, otherUserId).mutation(api.diagnostics.ingest, { events: [{
+      ...nextEvent, eventId: 'other_user',
+    }] })).rejects.toThrow('diagnostics_invalid_link')
+  })
+
   it('records a delivered run on its source trace and finds it by flow run', async () => {
     const t = convexTest(schema, modules)
     const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-delivered-flow')

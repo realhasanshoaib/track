@@ -62,7 +62,14 @@ export const ingest = mutation({
         .first()
       if (traceOwner && traceOwner.subjectId !== actor.authSubject)
         throw new Error('diagnostics_invalid_link')
-      if (traceOwner && traceOwner.journeyTraceId !== event.journeyTraceId)
+      // Server push events share the source trace but do not carry its browser journey.
+      const browserTraceOwner = traceOwner?.sourceSurface === 'server'
+        ? await ctx.db.query('diagnosticEvents')
+          .withIndex('by_trace_occurred_at', (q) => q.eq('traceId', event.traceId))
+          .filter((q) => q.eq(q.field('sourceSurface'), 'web'))
+          .first()
+        : traceOwner
+      if (browserTraceOwner && browserTraceOwner.journeyTraceId !== event.journeyTraceId)
         throw new Error('diagnostics_invalid_link')
       if (event.journeyTraceId) {
         const journeyTraceId = event.journeyTraceId
