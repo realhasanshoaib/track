@@ -2698,7 +2698,7 @@ packages:
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
   '@q9labsai/cli@https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-cli-0.4.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-cli-0.4.0.tgz}
+    resolution: {integrity: sha512-m8QOm89q31ciR/F+B4XdT93mv8o+zs61GzXAAr8vtKd6gCfX5sPZcQfksA4nKCM7HPc4k2Z4CojPk0CmUXweOg==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-cli-0.4.0.tgz}
     version: 0.4.0
     engines: {node: '>=24'}
     hasBin: true
@@ -2726,12 +2726,12 @@ packages:
     engines: {node: '>=24'}
 
   '@q9labsai/diagnostics@https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz}
+    resolution: {integrity: sha512-iGF/EC8+Us1uyVMjJAuHnUcKC86AU4Dl+Hsioeo5l9DvZWXLpZOmrn9mh3eJ9HvbBIadfxHHVQpteT8LgQl/zQ==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.4.0/q9labsai-diagnostics-0.4.0.tgz}
     version: 0.4.0
     engines: {node: '>=24'}
 
   '@q9labsai/gates@https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz':
-    resolution: {tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz}
+    resolution: {integrity: sha512-80fRfwyoitMcq0FsBxMVKlLTTLrta+neGcPT4negyBCwVcnrIhBL68T25TCSn1jLx/sc/FzU9eD5+RuTt07L5w==, tarball: https://github.com/Q9Labs/q9stack/releases/download/v0.3.1/q9labsai-gates-0.3.1.tgz}
     version: 0.3.1
     engines: {node: '>=24'}
     hasBin: true
