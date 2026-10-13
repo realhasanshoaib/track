@@ -54,7 +54,7 @@ async function recordPushStep(
 async function recordPushResult(
   ctx: MutationCtx,
   intent: Doc<'pushDeliveryIntents'>,
-  outcome: 'delivered' | 'retrying' | 'expired' | 'failed',
+  outcome: 'delivered' | 'retrying' | 'expired' | 'failed' | 'canceled',
 ) {
   await recordPushStep(ctx, intent, 'result', outcome)
   if (outcome !== 'retrying' && (intent.attemptCount > 1 || intent.status === 'retry_wait'))
@@ -204,7 +204,7 @@ export const cancelIntent = internalMutation({
       updatedAt: now,
     })
     if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'canceled')
-    else await recordPushResult(ctx, intent, 'failed')
+    else await recordPushResult(ctx, intent, 'canceled')
     await ctx.db.insert('pushDeliveryAttempts', {
       intentId: intent._id,
       attemptNumber: intent.attemptCount,

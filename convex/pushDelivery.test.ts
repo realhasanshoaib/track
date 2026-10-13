@@ -80,6 +80,29 @@ describe('durable mobile push lifecycle', () => {
       .toEqual({ events: [] })
   })
 
+  it('records cancellation after a retry without reporting provider failure', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-retry-cancel')
+    const intentId = required(await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'retry-cancel', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'retry-cancel', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
+    }))
+    const attemptNumber = required(await t.mutation(internal.pushDelivery.markSending, { intentId }))
+    await t.mutation(internal.pushDelivery.recordFailure, {
+      intentId, attemptNumber, category: 'provider_unavailable', permanent: false, providerLatencyMs: 1,
+    })
+    await t.mutation(internal.pushDelivery.cancelIntent, { intentId, reason: 'eligibility_changed' })
+    const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+    expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+      .toEqual([
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'retrying'], ['result', 'canceled'], ['settled', 'canceled'],
+      ])
+    expect(checkFlowRun(pushFlow, run.events, Date.now()).verdict).toBe('ok')
+    expect(await t.run(async (ctx) => ctx.db.get(intentId))).toMatchObject({ status: 'canceled' })
+  })
+
   it('records retry and later expiry in the same run', async () => {
     const t = convexTest(schema, modules)
     const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-expired-flow')

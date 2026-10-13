@@ -77,7 +77,7 @@ instrumentation are not part of this implementation.
 Native push delivery records server-side `push.delivery` diagnostic events for
 queued, dispatch, sending, and result transitions. The dispatch branch covers
 pre-send cancellation or expiry without inventing a send attempt. After a retry,
-a conditional settled step records the final delivered, expired, or failed
+a conditional settled step records the final delivered, expired, failed, or canceled
 outcome. The delivery-intent ID is the flow run; it is not a user identity.
 An existing source diagnostic trace is reused when supplied by the producer,
 including its verified subject, otherwise the intent gets its own trace.
