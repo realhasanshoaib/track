@@ -145,6 +145,17 @@ function stableHash(value: string) {
   return hash >>> 0
 }
 
+function resolveEntityPattern(kind: EntityMarkKind, id: string) {
+  let state = stableHash(`${kind}:${id}:identity`)
+  if (state === 0) state = 0x9e3779b9
+  return Array.from({ length: 25 }, () => {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    return (state & 0x80000000) !== 0
+  })
+}
+
 function matchesNameCue(normalizedName: string, cue: string) {
   const normalizedCue = cue.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
   return ` ${normalizedName} `.includes(` ${normalizedCue} `)
@@ -234,9 +245,11 @@ export function resolveEntityMark(input: {
   const index = stableHash(`${input.kind}:${input.id}`)
   const fallbackColor = entityMarkColorKeys[index % entityMarkColorKeys.length]!
   const colorKey = input.colorKey && isEntityMarkColorKey(input.colorKey) ? input.colorKey : fallbackColor
-  const iconKey = input.iconKey && isEntityMarkIconKey(input.iconKey)
-    ? input.iconKey
-    : iconFromName(input.kind, input.id, input.name)
+  const customIconKey = input.iconKey && isEntityMarkIconKey(input.iconKey) ? input.iconKey : undefined
+  const iconKey = customIconKey ?? iconFromName(input.kind, input.id, input.name)
+  const pattern = !customIconKey && (input.kind === 'company' || input.kind === 'project')
+    ? resolveEntityPattern(input.kind, input.id)
+    : null
 
-  return { colorKey, iconKey, palette: entityMarkPalette[colorKey] }
+  return { colorKey, iconKey, palette: entityMarkPalette[colorKey], pattern }
 }

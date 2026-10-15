@@ -1,7 +1,10 @@
 import { useMutation, usePaginatedQuery } from 'convex/react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { StateEntering, StateLayout } from '@/constants/motion';
+import { createSubmissionGate } from '@/lib/submission-state';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../../../../convex/_generated/api';
@@ -22,10 +25,9 @@ import { useTrackUser } from '@/contexts/track-user-context';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
 import { channelHref, type RepresentedProjectContext } from '@/lib/company-navigation';
-import { uniqueAttentionIdentities } from '@/lib/mobile-attention';
 import { taskDetailHref, taskListHref, type MobileTaskIdentity } from '@/lib/task-navigation';
 import { threadConversationHref } from '@/lib/thread-navigation';
-import { sortInboxItems } from '@/lib/inbox-feed';
+import { filterInboxItems, inboxPageFeedback, type InboxFilter } from '@/lib/inbox-feed';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 
@@ -85,7 +87,7 @@ type AttentionItem = {
   createdAt: number;
 };
 
-type AttentionFilter = 'all' | 'mentions' | 'replies' | 'tasks' | 'suggestions' | 'invitations';
+type AttentionFilter = InboxFilter;
 
 const emptyCopy: Record<AttentionFilter, { body: string; title: string }> = {
   all: { title: "You're clear", body: 'New assignments, mentions, replies, suggestions, and invitations will appear here.' },
@@ -147,26 +149,13 @@ export default function InboxScreen() {
   const [search, setSearch] = useState('');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [invitationBusy, setInvitationBusy] = useState<string | null>(null);
-  const visibleItems = useMemo(() => {
-    const filtered = uniqueAttentionIdentities(items).filter((item) => {
-      return filter === 'all'
-        || (filter === 'tasks' && item.kind === 'task')
-        || (filter === 'mentions' && item.kind === 'message' && item.eventType === 'mention')
-        || (filter === 'replies' && item.kind === 'message' && item.eventType === 'direct_reply')
-        || (filter === 'suggestions' && item.kind === 'suggestion')
-        || (filter === 'invitations' && item.kind === 'invitation');
-      });
-    const query = search.trim().toLocaleLowerCase();
-    const searched = query ? filtered.filter((item) => {
-      const searchable = item.kind === 'task'
-        ? `${item.taskTitle} ${item.projectName} ${item.companyName ?? ''} ${eventCopy(item.eventType)}`
-        : item.kind === 'message'
-          ? `${item.senderName} ${item.preview} ${item.projectName} ${item.groupName} ${item.threadName ?? ''} ${item.companyName ?? ''}`
-          : `${item.title} ${item.preview} ${item.projectName} ${item.companyName ?? ''}`;
-      return searchable.toLocaleLowerCase().includes(query);
-    }) : filtered;
-    return sortInboxItems(searched, (item) => item.kind === 'invitation' && item.invitationId === params.invitationId);
-  }, [filter, items, params.invitationId, search]);
+  const invitationGate = useRef(createSubmissionGate());
+  const reducedMotion = useReducedMotion();
+  const pageFeedback = inboxPageFeedback(itemStatus, search, emptyCopy[filter]);
+  const hasMoreItems = pageFeedback.hasMore;
+  const visibleItems = useMemo(() => filterInboxItems(items, filter, search, eventCopy,
+    (item) => item.kind === 'invitation' && item.invitationId === params.invitationId),
+  [filter, items, params.invitationId, search]);
 
   function openItem(item: AttentionItem) {
     hapticLight();
@@ -213,7 +202,6 @@ export default function InboxScreen() {
         headerShown: false,
       }} />
       <ConnectivityBanner style={styles.connection} />
-      {itemStatus === 'LoadingFirstPage' ? <ScreenLoading variant="inbox" /> : (
         <FlatList
           style={styles.screenContent}
           contentInsetAdjustmentBehavior="never"
@@ -226,7 +214,7 @@ export default function InboxScreen() {
               ? dayLabel(visibleItems[index - 1].createdAt)
               : null;
             return (
-              <View style={styles.daySection}>
+              <Animated.View entering={reducedMotion ? undefined : StateEntering} layout={reducedMotion ? undefined : StateLayout} style={styles.daySection}>
                 {section !== previousSection ? (
                   <ThemedText accessibilityRole="header" style={styles.dayHeading} themeColor="textSecondary" type="captionBold">
                     {section}
@@ -236,6 +224,8 @@ export default function InboxScreen() {
                   invitationBusy={invitationBusy}
                   item={item}
                   onInvitationDecision={(invitationId, decision) => {
+                    const token = invitationGate.current.begin();
+                    if (!token) return;
                     setInvitationBusy(`${invitationId}:${decision}`);
                     void decideInvitation({ invitationId, decision })
                       .then((result) => {
@@ -245,11 +235,11 @@ export default function InboxScreen() {
                         showToast({ title: decision === 'accept' ? 'Company joined' : 'Invitation declined', tone: 'success' });
                       })
                       .catch(() => showToast({ title: 'Invitation unavailable', message: 'It expired or your access changed.', tone: 'error' }))
-                      .finally(() => setInvitationBusy(null));
+                      .finally(() => { if (invitationGate.current.finish(token)) setInvitationBusy(null); });
                   }}
                   onPress={() => openItem(item)}
                 />
-              </View>
+              </Animated.View>
             );
           }}
           ListHeaderComponent={
@@ -304,17 +294,16 @@ export default function InboxScreen() {
             </View>
           }
           ListEmptyComponent={
-            <EmptyState
+            pageFeedback.loading ? <ScreenLoading variant="inbox" /> : <EmptyState
               icon={search ? 'search' : 'check-circle'}
-              title={search ? 'No matching updates' : emptyCopy[filter].title}
-              body={search ? 'Try a different name, Project, Channel, or update.' : emptyCopy[filter].body}
+              title={pageFeedback.title}
+              body={pageFeedback.body}
             />
           }
-          ListFooterComponent={itemStatus === 'LoadingMore' ? <View style={styles.footer}><ActivityIndicator color={theme.accentStrong} /></View> : null}
+          ListFooterComponent={hasMoreItems ? <View style={styles.footer}><ActionButton label={itemStatus === 'LoadingMore' ? 'Loading earlier updates…' : 'Load earlier updates'} loading={itemStatus === 'LoadingMore'} onPress={() => { if (itemStatus === 'CanLoadMore') loadMoreItems(10); }} variant="secondary" /></View> : null}
           onEndReached={() => { if (itemStatus === 'CanLoadMore') loadMoreItems(10); }}
           onEndReachedThreshold={0.6}
         />
-      )}
       <OptionsSheet onClose={() => setFilterSheetOpen(false)} title="Filter Inbox" visible={filterSheetOpen}>
         <SheetSection title="Show">
           {([
@@ -346,8 +335,7 @@ function AttentionRow({ invitationBusy, item, onInvitationDecision, onPress }: {
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const invitationBusyForItem = Boolean(item.kind === 'invitation'
-    && invitationBusy?.startsWith(`${item.invitationId}:`));
+  const invitationBusyForItem = Boolean(invitationBusy);
   if (item.kind !== 'invitation') {
     const notificationTone = item.kind === 'message'
       ? item.eventType === 'mention'

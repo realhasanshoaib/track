@@ -62,12 +62,14 @@ function stateGlyph(category?: TaskStateCategory) {
 }
 
 export function TaskStatusPill({
+  accessibilityLabel,
   appearance = 'soft',
   category,
   compact = false,
   label,
   onPress,
 }: {
+  accessibilityLabel?: string;
   appearance?: 'plain' | 'soft';
   category?: TaskStateCategory;
   compact?: boolean;
@@ -90,19 +92,20 @@ export function TaskStatusPill({
     </>
   );
   const backgroundColor = appearance === 'plain' ? 'transparent' : palette.background;
-  if (!onPress) return <View style={[styles.pill, compact && styles.compactPill, { backgroundColor }]}>{body}</View>;
+  const pill = (pressed = false) => <View style={[styles.pill, compact && styles.compactPill, { backgroundColor }, pressed && styles.pressedControl]}>{body}</View>;
+  if (!onPress) return pill();
   return (
     <Pressable
       accessibilityHint="Opens status options so you can choose a new status"
-      accessibilityLabel={`Change status: ${label}`}
+      accessibilityLabel={accessibilityLabel ?? `Change status: ${label}`}
       accessibilityRole="button"
-      hitSlop={12}
+      hitSlop={compact ? undefined : 12}
       onPress={() => {
         hapticLight();
         onPress();
       }}
-      style={({ pressed }) => [styles.pill, compact && styles.compactPill, { backgroundColor }, pressed && styles.pressedControl]}>
-      {body}
+      style={compact ? styles.compactPillHitTarget : undefined}>
+      {({ pressed }) => pill(pressed)}
     </Pressable>
   );
 }
@@ -315,7 +318,7 @@ export function TaskCard({
             onPressIn={pressFeedback.onPressIn}
             onPressOut={pressFeedback.onPressOut}
             style={[styles.listRowPressable, pressFeedback.animatedStyle]}>
-            <View style={[styles.listLeading, { backgroundColor: statePalette.background }]}>
+            <View style={[styles.listLeading, { backgroundColor: assignee && assignee !== 'You' ? 'transparent' : statePalette.background }]}>
               {assignee && assignee !== 'You'
                 ? <ColoredAvatar label={assignee} seed={assignee} size={32} />
                 : <PlatformIcon color={statePalette.foreground} name={stateGlyph(category)} size={19} variant={category === 'completed' ? 'filled' : 'outline'} />}
@@ -559,6 +562,7 @@ const styles = StyleSheet.create({
   originDot: { borderRadius: Radius.pill, borderWidth: 2, height: 8, width: 8 },
   pill: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, flexDirection: 'row', gap: 5, maxWidth: 168, minHeight: 28, paddingHorizontal: Spacing.two, paddingVertical: 5 },
   compactPill: { gap: 4, maxWidth: 142, minHeight: 24, paddingHorizontal: Spacing.one, paddingVertical: 2 },
+  compactPillHitTarget: { alignItems: 'flex-start', justifyContent: 'center', minHeight: TouchTarget },
   pillDot: { borderRadius: Radius.pill, height: 8, width: 8 },
   pillLabel: { flexShrink: 1 },
   priority: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },

@@ -18,6 +18,7 @@ import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { messageSwipeCancelIntent, messageSwipeIntent } from '@/lib/message-swipe';
 import { hapticLight } from '@/lib/haptics';
+import { hasPlayableAudioAttachment } from '@/lib/attachment-presentation';
 
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 
@@ -34,15 +35,18 @@ export type ProjectMemberRow = FunctionReturnType<typeof api.mobile.listProjectM
 
 const SWIPE_LIMIT = 72;
 const SWIPE_THRESHOLD = 56;
+const SWIPE_ACTIVATION_DISTANCE = 16;
+const SWIPE_VERTICAL_FAILURE_DISTANCE = 14;
 const SWIPE_ACTION_WIDTH = TouchTarget;
+const SWIPE_ACTION_GAP = Spacing.one;
 const SWIPE_ACTION_ENTER_OFFSET = 24;
 
 type Props = {
   highlighted?: boolean;
-  contextActions?: MessageAction[];
   item: Exclude<GroupedThreadItem, { kind: 'date-sep' }>;
   isFirstInGroup: boolean;
   isOwnMessage?: boolean;
+  contextActions?: MessageAction[];
   onLongPress: () => void;
   /** Opens the source of a forwarded snapshot when still authorized. */
   onOpenForwardSource?: () => void;
@@ -55,15 +59,17 @@ type Props = {
   onSwipeReport?: () => void;
   readReceipts?: { recipientCount: number; readThroughSequences: number[] };
   selected?: boolean;
+  selectionMode?: boolean;
+  onPressMessage?: () => void;
   variant?: 'conversation' | 'thread';
 };
 
 export function ThreadRow({
-  contextActions,
   highlighted = false,
   item,
   isFirstInGroup,
   isOwnMessage,
+  contextActions,
   onLongPress,
   onOpenForwardSource,
   onOpenThread,
@@ -73,6 +79,8 @@ export function ThreadRow({
   onSwipeReport,
   readReceipts,
   selected = false,
+  selectionMode = false,
+  onPressMessage,
   variant = 'conversation',
 }: Props) {
   const theme = useTheme();
@@ -82,6 +90,8 @@ export function ThreadRow({
   const replyProgress = useSharedValue(0);
   const trayOpenAtStart = useSharedValue(false);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
+  const inlinePlayback = item.kind === 'message' && !item.item.message.deletedAt
+    && hasPlayableAudioAttachment(item.item.attachments);
   const readReceipt = item.kind === 'message' && isOwnMessage
     ? {
         readCount: readReceipts?.readThroughSequences.filter((sequence) =>
@@ -97,8 +107,10 @@ export function ThreadRow({
     message={item.item}
     readReceipt={readReceipt}
     selected={selected}
-    contextActions={contextActions}
-    onLongPress={Platform.OS === 'ios' && contextActions?.length ? undefined : onLongPress}
+    selectionMode={selectionMode}
+    contextActions={selectionMode ? undefined : contextActions}
+    onLongPress={Platform.OS === 'android' || (Platform.OS === 'ios' && contextActions?.length && !inlinePlayback) ? undefined : onLongPress}
+    onPressSelection={onPressMessage}
     onOpenForwardSource={onOpenForwardSource}
     onForwardMedia={onSwipeForward}
     onOpenThread={onOpenThread}
@@ -107,7 +119,7 @@ export function ThreadRow({
   /> : null;
   const assistantBubble = item.kind === 'assistant' ? <AssistantMessage
     isFirstInGroup={isFirstInGroup}
-    onLongPress={onLongPress}
+    onLongPress={Platform.OS === 'android' ? undefined : onLongPress}
     stream={item.stream}
     timeLabel={fmtTime(item.stream.createdAt)}
   /> : null;
@@ -115,7 +127,8 @@ export function ThreadRow({
 
   const gesture = Gesture.Pan()
     .enabled(Boolean(onSwipeReply || hasSwipeActions))
-    .activeOffsetX([-10, 10])
+    .activeOffsetX([-SWIPE_ACTIVATION_DISTANCE, SWIPE_ACTIVATION_DISTANCE])
+    .failOffsetY([-SWIPE_VERTICAL_FAILURE_DISTANCE, SWIPE_VERTICAL_FAILURE_DISTANCE])
     .onBegin(() => {
       trayOpenAtStart.value = actionWidth.value >= SWIPE_ACTION_WIDTH - 1;
     })
@@ -168,6 +181,13 @@ export function ThreadRow({
       replyProgress.value = reducedMotion ? 0 : withSpring(0, { damping: 20 });
     });
 
+  const longPressGesture = Gesture.LongPress()
+    .enabled(Platform.OS === 'android')
+    .minDuration(500)
+    .maxDistance(16)
+    .onStart(() => scheduleOnRN(onLongPress));
+  const rowGesture = Platform.OS === 'android' ? Gesture.Race(gesture, longPressGesture) : gesture;
+
   const replyIconStyle = useAnimatedStyle(() => ({
     opacity: interpolate(replyProgress.value, [0, SWIPE_THRESHOLD], [0, 1], 'clamp'),
     transform: [{ scale: interpolate(replyProgress.value, [0, SWIPE_THRESHOLD], [0.7, 1], 'clamp') }],
@@ -177,7 +197,9 @@ export function ThreadRow({
     transform: [{ translateX: interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [SWIPE_ACTION_ENTER_OFFSET, 0], 'clamp') }],
   }));
   const messageSwipeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -actionWidth.value }],
+    transform: [{
+      translateX: -actionWidth.value - interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_ACTION_GAP], 'clamp'),
+    }],
   }));
   const actionTray = hasSwipeActions ? <Animated.View
     accessibilityElementsHidden={!actionsExposed}
@@ -190,16 +212,16 @@ export function ThreadRow({
       setActionsExposed(false);
       actionWidth.value = reducedMotion ? 0 : withSpring(0, { damping: 20 });
       onLongPress();
-    }} style={({ pressed }) => [styles.swipeAction, { backgroundColor: pressed ? theme.backgroundSelected : theme.accentSoft }]}>
+    }} style={({ pressed }) => [styles.swipeAction, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElevated, borderColor: theme.hairline }]}>
       <PlatformIcon color={theme.accentStrong} name="dots-horizontal" size={19} weight="regular" />
     </Pressable>
   </Animated.View> : null;
 
   return (
-    <GestureDetector gesture={gesture}>
+    <GestureDetector gesture={rowGesture}>
       <View style={styles.swipeContainer}>
         <Animated.View style={[styles.replyHint, replyIconStyle]}>
-          <View style={[styles.replyHintBadge, { backgroundColor: theme.backgroundElement }]}>
+          <View style={[styles.replyHintBadge, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline }]}>
             <PlatformIcon color={theme.textSecondary} name="reply" size={16} />
           </View>
         </Animated.View>
@@ -219,9 +241,10 @@ export function ThreadRow({
 }
 
 export function DateSeparator({ label }: { label: string }) {
+  const theme = useTheme();
   return (
     <View style={styles.dateSep}>
-      <View style={styles.dateSepPill}>
+      <View style={[styles.dateSepPill, { backgroundColor: theme.backgroundElement, borderColor: theme.hairline }]}>
         <ThemedText themeColor="textSecondary" type="captionBold">
           {label}
         </ThemedText>
@@ -273,11 +296,13 @@ const styles = StyleSheet.create({
   dateSep: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    marginVertical: Spacing.three,
+    marginTop: Spacing.three,
     paddingHorizontal: Spacing.four,
   },
   dateSepPill: {
+    borderCurve: 'continuous',
     borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
   },
@@ -291,14 +316,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     bottom: 0,
     justifyContent: 'center',
-    left: Spacing.two,
+    left: 0,
     position: 'absolute',
     top: 0,
     width: 32,
   },
   replyHintBadge: {
     alignItems: 'center',
+    borderCurve: 'continuous',
     borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
     height: 28,
     justifyContent: 'center',
     width: 28,
@@ -320,7 +347,10 @@ const styles = StyleSheet.create({
   messageContent: { minWidth: 0, width: '100%', zIndex: 1 },
   swipeAction: {
     alignItems: 'center',
+    borderCurve: 'continuous',
+    borderColor: 'transparent',
     borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
     height: TouchTarget,
     justifyContent: 'center',
     width: TouchTarget,

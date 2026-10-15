@@ -63,6 +63,7 @@ export default function ProfileScreen() {
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [developmentCheckStatus, setDevelopmentCheckStatus] = useState('Tap a check to open it.');
   const [appearanceWidth, setAppearanceWidth] = useState(0);
   const appearanceIndex = Math.max(0, APPEARANCE_OPTIONS.findIndex(([value]) => value === themeOverride));
   const appearanceSegmentWidth = Math.max(0, (appearanceWidth - Spacing.one * 4) / APPEARANCE_OPTIONS.length);
@@ -104,11 +105,24 @@ export default function ProfileScreen() {
 
   return <ThemedView style={[styles.screen, { paddingTop: safeAreaInsets.top, paddingLeft: safeAreaInsets.left, paddingRight: safeAreaInsets.right }]}>
     <Stack.Screen options={{ title: 'Profile', headerShown: false }} />
-    <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]} contentInsetAdjustmentBehavior="never">
+    <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]} contentInsetAdjustmentBehavior="never" keyboardShouldPersistTaps="handled">
       <ConnectivityBanner />
       <View style={styles.profileHeader}>
         <ThemedText accessibilityRole="header" style={styles.pageTitle} type="display">Profile</ThemedText>
       </View>
+      {/* {__DEV__ ? <SheetSection title="Development checks">
+        <SheetRow icon="play" label="Voice playback check" onPress={() => {
+          setDevelopmentCheckStatus('Voice check tapped. Opening…');
+          router.push('/dev/attachment-preview');
+        }} />
+        <SheetRow icon="analytics" label="Screen lag check" onPress={() => {
+          setDevelopmentCheckStatus('Lag check tapped. Opening…');
+          router.push('/dev/performance-check');
+        }} />
+        <View style={{ minHeight: 40, justifyContent: 'center', paddingHorizontal: Spacing.four }}>
+          <ThemedText accessibilityLiveRegion="polite" numberOfLines={2} themeColor="textSecondary" type="caption">{developmentCheckStatus}</ThemedText>
+        </View>
+      </SheetSection> : null} */}
       <View style={styles.identityCard}>
         <ColoredAvatar label={displayName || profile?.user?.email || 'Track member'} seed={trackUserId ?? displayName} size={72} />
         <View style={styles.identityCopy}>

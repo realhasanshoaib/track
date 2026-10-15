@@ -1,7 +1,7 @@
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePaginatedQuery, useQuery } from 'convex/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -55,9 +55,6 @@ export default function ProjectOverviewScreen() {
   const attentionPages = usePaginatedQuery(api.mobile.listAttention, trackUserId ? {
     userId: trackUserId, actingCompanyId: companyId,
   } : 'skip', { initialNumItems: 10 });
-  useEffect(() => {
-    if (attentionPages.status === 'CanLoadMore') attentionPages.loadMore(10);
-  }, [attentionPages.loadMore, attentionPages.status]);
   const project = navigation?.available && navigation.project && navigation.membership ? navigation : undefined;
   const projectName = project?.project.name ?? 'Project overview';
   const projectAttention = (attentionPages.results as MobileAttentionItem[])
@@ -127,7 +124,7 @@ export default function ProjectOverviewScreen() {
     ) : projectId && project ? (
       <ScreenEntrance style={styles.screenContent}><ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]} contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
         <ProjectHero archived={navigation.archived} colorKey={project.project.markColorKey} company={project.project.clientLabel ?? projectCompany} description={project.project.description} iconKey={project.project.markIconKey} memberCount={memberCount} name={projectName} projectId={String(projectId)} role={projectRole} />
-        <ProjectAttention items={projectAttention} onOpen={openAttention} />
+        <ProjectAttention items={projectAttention} onOpen={openAttention} loading={attentionPages.status === 'LoadingFirstPage'} loadingMore={attentionPages.status === 'LoadingMore'} onLoadMore={attentionPages.status === 'CanLoadMore' ? () => attentionPages.loadMore(10) : undefined} />
         <ProjectWorkHub channelCount={channelCount} dueSoonCount={dueSoonCount} onBoard={openBoard} onChannels={openChannels} onTasks={openTasks} openTaskCount={openTaskCount} tasksEnabled={release.tasks} unreadCount={unreadCount} />
         {release.tasks ? <ProjectProgress completed={completedTaskCount} total={totalTaskCount} /> : null}
       </ScrollView></ScreenEntrance>

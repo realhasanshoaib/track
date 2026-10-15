@@ -5,7 +5,7 @@ import { entityDirectoryRow, entityDirectoryRowStyle } from './entity-directory-
 describe('Channel and Board directory row geometry', () => {
   it('keeps both row types on the same comfortable, aligned layout', () => {
     expect(entityDirectoryRow).toEqual({
-      iconSize: 42,
+      iconSize: 48,
       minHeight: 68,
       gap: 8,
       copyGap: 3,

@@ -1,8 +1,12 @@
 import { TopTabs } from 'expo-router/js-top-tabs';
+import { useReducedMotion } from 'react-native-reanimated';
+
 import { PrimaryNavigation } from '@/components/primary-navigation';
 import { PrimaryNavigationVisibilityProvider } from '@/contexts/primary-navigation-visibility-context';
 
 export default function PrimaryTabsLayout() {
+  const reducedMotion = useReducedMotion();
+
   return (
     <PrimaryNavigationVisibilityProvider>
       <TopTabs
@@ -10,9 +14,9 @@ export default function PrimaryTabsLayout() {
         tabBarPosition="bottom"
         tabBar={(props: Parameters<typeof PrimaryNavigation>[0]) => <PrimaryNavigation {...props} />}
         screenOptions={{
-          animationEnabled: false,
+          animationEnabled: !reducedMotion,
           lazy: true,
-          swipeEnabled: false,
+          swipeEnabled: true,
         }}
       >
         <TopTabs.Screen name="(home)" options={{ title: 'Chats' }} />

@@ -16,7 +16,7 @@ import {
   getArchivedThreadSnapshot,
   hasArchivedChannelVisibility,
 } from './lib/projectExitArchive'
-import { buildMessageDetail } from './messages'
+import { buildMessageDetail, hiddenMessageIdsForUser, visibleMessages } from './messages'
 
 const threadStatus = v.union(v.literal('active'), v.literal('archived'))
 type ThreadCtx = QueryCtx | MutationCtx
@@ -678,7 +678,10 @@ export const listMessages = query({
           : q.eq('channelThreadId', thread._id))
         .order('desc')
         .take(boundedThreadMessageLimit(args.limit))
-    return await Promise.all(messages.filter((message) => message._id !== thread.sourceMessageId).map(async (message) =>
+      const hiddenIds = await hiddenMessageIdsForUser(ctx, args.userId, messages)
+    return await Promise.all(visibleMessages(messages, hiddenIds).filter((message) =>
+      message._id !== thread.sourceMessageId,
+    ).map(async (message) =>
         await buildMessageDetail(
           ctx,
           message,
@@ -730,13 +733,15 @@ export const listMessagePage = query({
           : q.eq('channelThreadId', thread._id))
         .order('desc')
         .paginate({ ...args.paginationOpts, numItems: pageSize })
-      const page = result.page.filter((message) => message._id !== thread.sourceMessageId)
+      const hiddenIds = await hiddenMessageIdsForUser(ctx, args.userId, [...result.page])
+      const page = visibleMessages([...result.page], hiddenIds).filter((message) => message._id !== thread.sourceMessageId)
       if (args.paginationOpts.cursor === null && args.targetMessageId) {
         const target = await ctx.db.get(args.targetMessageId)
         if (
           target?.channelThreadId === thread._id &&
           target.projectId === thread.projectId &&
           target.groupId === thread.groupId &&
+          !(await hiddenMessageIdsForUser(ctx, args.userId, [target])).has(String(target._id)) &&
           (!cutoff || target.createdAt <= cutoff) &&
           !page.some((message) => message._id === target._id)
         ) {
@@ -763,7 +768,9 @@ export const listMessagePage = query({
           const reversedNewer = [...newer]
           // eslint-disable-next-line unicorn/no-array-reverse -- reason: ES2022 compatibility; operates on a fresh local array.
           reversedNewer.reverse()
-          page.splice(0, page.length, ...reversedNewer, target, ...older)
+          const targetContext = [...reversedNewer, target, ...older]
+          const hiddenTargetContextIds = await hiddenMessageIdsForUser(ctx, args.userId, targetContext)
+          page.splice(0, page.length, ...visibleMessages(targetContext, hiddenTargetContextIds))
         }
       }
     return {

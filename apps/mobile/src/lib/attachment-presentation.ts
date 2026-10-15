@@ -8,6 +8,13 @@ export function isAudioAttachment(input: { contentType: string; kind?: string })
   return input.kind === 'voice_note' || input.contentType.startsWith('audio/');
 }
 
+export function hasPlayableAudioAttachment(attachments: readonly {
+  attachment: { contentType: string; kind?: string };
+  url?: string | null;
+}[]) {
+  return attachments.some(({ attachment, url }) => Boolean(url) && isAudioAttachment(attachment));
+}
+
 /**
  * The composer writes a short machine caption for an attachment-only message.
  * The extension fallback keeps an older named-file caption from rendering
@@ -17,12 +24,14 @@ const AUTO_ATTACHMENT_BODY =
   /^(Voice note|Sent a voice note\.?|Attached \d+ (?:files|images?)|Attached file|Attached .+\.[a-z0-9]{1,6})$/i;
 
 /**
- * The composer stores a machine caption ("Voice note", "Attached 1 image") when a
- * message is only attachments, so previews and notifications have text. The
- * bubble itself renders the attachment, so that caption must never show there.
+ * The composer stores a machine caption when a message only has attachments.
+ * Older messages can also store the attachment filename as the body. The
+ * bubble renders the attachment itself, so neither generated value is needed
+ * as message text.
  */
-export function isAutoAttachmentBody(body: string) {
-  return AUTO_ATTACHMENT_BODY.test(body.trim());
+export function isAutoAttachmentBody(body: string, attachmentNames: readonly string[] = []) {
+  const normalizedBody = body.trim().toLowerCase();
+  return AUTO_ATTACHMENT_BODY.test(body.trim()) || attachmentNames.some((name) => name.trim().toLowerCase() === normalizedBody);
 }
 
 export function formatFileSize(bytes: number) {

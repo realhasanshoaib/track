@@ -428,7 +428,13 @@ export const remove = mutation({
     for (const row of assistantStreams) await ctx.db.delete(row._id)
     for (const row of typingIndicators) await ctx.db.delete(row._id)
     for (const row of projectAttachments) await ctx.db.delete(row._id)
-    for (const row of messages) await ctx.db.delete(row._id)
+    for (const row of messages) {
+      const hides = await ctx.db.query('messageHides')
+        .withIndex('by_message', (q) => q.eq('messageId', row._id))
+        .collect()
+      for (const hide of hides) await ctx.db.delete(hide._id)
+      await ctx.db.delete(row._id)
+    }
     for (const row of invitations) await ctx.db.delete(row._id)
     for (const row of projectMembers) await ctx.db.delete(row._id)
     for (const row of groups) await ctx.db.delete(row._id)

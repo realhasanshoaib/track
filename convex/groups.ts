@@ -230,7 +230,13 @@ export const remove = mutation({
     for (const row of channelThreads) await ctx.db.delete(row._id)
     for (const row of typingIndicators) await ctx.db.delete(row._id)
     for (const row of attachments) await ctx.db.delete(row._id)
-    for (const row of messages) await ctx.db.delete(row._id)
+    for (const row of messages) {
+      const hides = await ctx.db.query('messageHides')
+        .withIndex('by_message', (q) => q.eq('messageId', row._id))
+        .collect()
+      for (const hide of hides) await ctx.db.delete(hide._id)
+      await ctx.db.delete(row._id)
+    }
     for (const row of groupMembers) await ctx.db.delete(row._id)
     await ctx.db.delete(args.groupId)
   },

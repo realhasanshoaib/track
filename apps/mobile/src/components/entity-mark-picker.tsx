@@ -38,7 +38,7 @@ export function EntityMarkPicker({
         <Choice label="Auto" selected={!colorKey} onPress={() => onColorChange('')} />
         {entityMarkColorKeys.map((key) => <Choice key={key} label={key} selected={colorKey === key} onPress={() => onColorChange(key)} leading={<View style={[styles.swatch, { backgroundColor: entityMarkPalette[key].background }]} />} />)}
       </ScrollView>
-      <ThemedText themeColor="textSecondary" type="caption">Automatic keeps the background stable and picks a useful icon from the name. Channel lists vary repeated icons so each visible Channel stays easy to recognize.</ThemedText>
+      <ThemedText themeColor="textSecondary" type="caption">Automatic uses this item’s stable identity to pick a mark and color. Company and Project marks match across web and mobile.</ThemedText>
     </View>
   );
 }

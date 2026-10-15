@@ -1,7 +1,7 @@
 import type { FunctionReturnType } from 'convex/server';
 import { useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 
 import { resolveDistinctChannelIconKeys, type EntityMarkIconKey } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
@@ -12,6 +12,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
+import { StateEntering, StateExiting, StateLayout } from '@/constants/motion';
+import { ActionButton } from '@/components/action-button';
 import { projectRoleLabel } from '@/lib/role-label';
 
 export type DirectoryProject = {
@@ -83,6 +85,8 @@ export function ProjectDirectoryCard({
   expanded,
   item,
   loadingChannels,
+  loadingMoreChannels = false,
+  onLoadMoreChannels,
   onOpenChannel,
   onOpenProject,
   onToggle,
@@ -91,6 +95,8 @@ export function ProjectDirectoryCard({
   expanded: boolean;
   item: DirectoryProject;
   loadingChannels: boolean;
+  loadingMoreChannels?: boolean;
+  onLoadMoreChannels?: () => void;
   onOpenChannel: (channel: DirectoryChannel) => void;
   onOpenProject: () => void;
   onToggle: () => void;
@@ -107,7 +113,7 @@ export function ProjectDirectoryCard({
   const archived = item.membership.status === 'archived';
   const role = archived ? 'Read-only archive' : projectRoleLabel(item.membership.role);
   return (
-    <View style={[styles.card, { backgroundColor: archived ? theme.backgroundElement : theme.backgroundElevated, borderColor: theme.hairline }]}>
+    <Animated.View layout={reduceMotion ? undefined : StateLayout} style={[styles.card, { backgroundColor: archived ? theme.backgroundElement : theme.backgroundElevated, borderColor: theme.hairline }]}>
       <Pressable
         accessibilityHint={archived ? 'Opens this read-only Project archive' : expanded ? 'Collapses the Channel preview' : 'Expands the Channel preview'}
         accessibilityLabel={`${item.project.name}. ${role}. ${item.groupCount} Channels.${item.unreadCount ? ` ${item.unreadCount} unread.` : ''}`}
@@ -143,20 +149,21 @@ export function ProjectDirectoryCard({
 
       {expanded && !archived ? (
         <Animated.View
-          entering={reduceMotion ? FadeIn.duration(120) : FadeInDown.duration(200)}
-          exiting={reduceMotion ? FadeOut.duration(100) : FadeOut.duration(150)}
-          layout={reduceMotion ? undefined : LinearTransition.duration(180)}
+          entering={reduceMotion ? undefined : StateEntering}
+          exiting={reduceMotion ? undefined : StateExiting}
+          layout={reduceMotion ? undefined : StateLayout}
           style={[styles.channelList, { borderTopColor: theme.hairline }]}>
           {loadingChannels ? <View accessibilityLabel="Loading Channels" style={[styles.channelSkeleton, { backgroundColor: theme.skeleton }]} /> : channels.length ? channels.map((channel) => (
             <ChannelRow channel={channel} iconKey={channelIconKeys.get(String(channel.group._id)) ?? channel.group.markIconKey} key={channel.group._id} onPress={() => onOpenChannel(channel)} />
-          )) : <ThemedText style={styles.emptyChannels} themeColor="textSecondary" type="caption">No Channels are visible for this membership.</ThemedText>}
+          )) : <ThemedText style={styles.emptyChannels} themeColor="textSecondary" type="caption">{onLoadMoreChannels || loadingMoreChannels ? 'No Channels in the loaded page.' : 'No Channels are visible for this membership.'}</ThemedText>}
+          {onLoadMoreChannels || loadingMoreChannels ? <ActionButton label={loadingMoreChannels ? 'Loading Channels…' : 'Load more Channels'} loading={loadingMoreChannels} onPress={() => onLoadMoreChannels?.()} variant="secondary" /> : null}
           <Pressable accessibilityRole="button" onPress={onOpenProject} style={styles.openProject}>
             <ThemedText style={{ color: theme.accentStrong }} type="captionBold">Open Project</ThemedText>
             <PlatformIcon color={theme.accentStrong} name="chevron-right" size={15} />
           </Pressable>
         </Animated.View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 

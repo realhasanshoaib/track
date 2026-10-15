@@ -5,6 +5,10 @@ import { ColoredAvatar } from '@/components/colored-avatar';
 import { EntityMark } from '@/components/entity-mark';
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
+import { ActionButton } from '@/components/action-button';
+import { SkeletonList } from '@/components/skeleton-row';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { StateLayout } from '@/constants/motion';
 import { Radius, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
@@ -86,15 +90,17 @@ function HubRow({ detail, icon, label, onPress, wide = false }: { detail: string
   </AnimatedPressable>;
 }
 
-export function ProjectAttention({ items, onOpen }: { items: MobileAttentionItem[]; onOpen: (item: MobileAttentionItem) => void }) {
+export function ProjectAttention({ items, onOpen, loading = false, loadingMore = false, onLoadMore }: { items: MobileAttentionItem[]; onOpen: (item: MobileAttentionItem) => void; loading?: boolean; loadingMore?: boolean; onLoadMore?: () => void }) {
   const theme = useTheme();
-  if (!items.length) return null;
-  return <View style={styles.attentionSection}>
+  const reducedMotion = useReducedMotion();
+  return <Animated.View layout={reducedMotion ? undefined : StateLayout} style={styles.attentionSection}>
     <SectionHeading title="Needs your attention" />
     <View style={[styles.attentionList, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+      {loading ? <SkeletonList count={2} label="Loading Project updates" /> : !items.length ? <ThemedText style={styles.attentionCard} themeColor="textSecondary" type="small">{onLoadMore || loadingMore ? 'No Project updates in the loaded page.' : 'No updates need your attention.'}</ThemedText> : null}
       {items.map((item, index) => <AttentionCard item={item} key={`${item.kind}:${item.id}`} last={index === items.length - 1} onPress={() => onOpen(item)} />)}
     </View>
-  </View>;
+    {onLoadMore || loadingMore ? <ActionButton label={loadingMore ? 'Loading more updates…' : 'Load more updates'} loading={loadingMore} onPress={() => onLoadMore?.()} variant="secondary" /> : null}
+  </Animated.View>;
 }
 
 function AttentionCard({ item, last, onPress }: { item: MobileAttentionItem; last: boolean; onPress: () => void }) {

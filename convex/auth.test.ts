@@ -2,7 +2,7 @@ import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { register as registerBetterAuth } from '@convex-dev/better-auth/test'
 
-import { api } from './_generated/api'
+import { api, components } from './_generated/api'
 import schema from './schema'
 import { isDevAuthBypassEnabled } from './lib/devAuth'
 
@@ -27,6 +27,39 @@ function createTest() {
   registerBetterAuth(t)
   return t
 }
+
+describe('authenticated user bootstrap', () => {
+  it('does not expose an email-matched user before its authenticated subject is bound', async () => {
+    const t = createTest()
+    const email = 'bootstrap-regression@track.test'
+    const legacyUserId = await t.run(async (ctx) => await ctx.db.insert('users', {
+      authUserId: 'old-fixture-subject', googleSubject: 'old-fixture-subject',
+      email, normalizedEmail: email, displayName: 'Bootstrap Regression',
+      twoFactorEnabled: false, createdAt: 1, updatedAt: 1,
+    }))
+    const authenticated = await t.run(async (ctx) => {
+      const user = await ctx.runMutation(components.betterAuth.adapter.create, {
+        input: { model: 'user', data: { name: 'Bootstrap Regression', email,
+          emailVerified: false, createdAt: 1, updatedAt: 1 } },
+      })
+      const session = await ctx.runMutation(components.betterAuth.adapter.create, {
+        input: { model: 'session', data: { userId: user._id,
+          expiresAt: Date.now() + 60_000, token: 'bootstrap-test-session', createdAt: 1, updatedAt: 1 } },
+      })
+      return { subject: user._id, sessionId: session._id, email }
+    })
+    const actor = t.withIdentity(authenticated)
+    await expect(actor.query(api.auth.getCurrentUser, {})).resolves.toBeNull()
+    await expect(actor.mutation(api.auth.ensureCurrentUser, {})).resolves.toBe(legacyUserId)
+    await expect(actor.query(api.auth.getCurrentUser, {})).resolves.toMatchObject({
+      _id: legacyUserId, authUserId: authenticated.subject,
+    })
+    await expect(actor.query(api.mobile.listProjects, {
+      userId: legacyUserId, personalOnly: true, paginationOpts: { cursor: null, numItems: 1 },
+    })).resolves.toMatchObject({ page: [] })
+    await expect(t.query(api.auth.getCurrentUser, {})).resolves.toBeNull()
+  }, 15_000)
+})
 
 beforeEach(() => {
   delete process.env.DEV_AUTH_BYPASS

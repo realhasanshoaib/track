@@ -8,6 +8,7 @@
  */
 
 import type { Id } from '../../../../convex/_generated/dataModel';
+import { withOperationTimeout } from './promise-timeout';
 
 export type AttachmentKind = 'file' | 'voice_note';
 
@@ -96,6 +97,7 @@ type PreparedAttachment = {
 /** Progress updates land in React state, so only report meaningful steps. */
 const ProgressStep = 0.05;
 const UploadTimeoutMs = 120_000;
+const BackendMutationTimeoutMs = 30_000;
 const MaxConcurrentUploads = 3;
 
 async function mapConcurrent<Result>(
@@ -178,14 +180,14 @@ async function uploadOne(input: {
 }): Promise<PreparedAttachment> {
   const blob = await (await fetch(input.file.uri)).blob();
   const contentType = input.file.contentType || blob.type || 'application/octet-stream';
-  const intent = await input.target.generateUploadUrl({
+  const intent = await withOperationTimeout(input.target.generateUploadUrl({
     contentType,
     durationMs: input.file.durationMs,
     filename: input.file.filename,
     intentKey: input.intentKey,
     kind: input.file.kind,
     size: blob.size,
-  });
+  }), BackendMutationTimeoutMs, 'attachment_upload_intent');
   let storageId = intent.storageId;
   if (!storageId) {
     if (!intent.uploadUrl) throw new Error('upload_intent_unavailable');
@@ -195,10 +197,10 @@ async function uploadOne(input: {
       onProgress: input.onProgress,
       url: intent.uploadUrl,
     });
-    const claimed = await input.target.claimUploadIntent({
+    const claimed = await withOperationTimeout(input.target.claimUploadIntent({
       intentId: intent.intentId,
       storageId: uploadedStorageId,
-    });
+    }), BackendMutationTimeoutMs, 'attachment_upload_claim');
     if (!claimed.storageId) throw new Error('upload_intent_unavailable');
     storageId = claimed.storageId;
   }
@@ -224,11 +226,11 @@ export async function sendComposerMessage(
   const { attachments, body, replyToMessageId, reportProgress, target } = input;
 
   if (attachments.length === 0) {
-    const messageId = await target.sendMessage({
+    const messageId = await withOperationTimeout(target.sendMessage({
       body,
       idempotencyKey: input.idempotencyKey,
       replyToMessageId,
-    });
+    }), BackendMutationTimeoutMs, 'message_send');
     input.onMessageCreated?.(messageId);
     return { failedIds: [], messageId };
   }
@@ -255,7 +257,7 @@ export async function sendComposerMessage(
 
   let messageId = input.messageId ?? null;
   if (!messageId && (body || prepared.length > 0)) {
-    messageId = await target.sendMessage({
+    messageId = await withOperationTimeout(target.sendMessage({
       attachments: prepared.map(({ contentType, durationMs, file, kind, size, uploadIntentId }) => ({
         contentType,
         durationMs,
@@ -267,7 +269,7 @@ export async function sendComposerMessage(
       body: body || fallbackBody(prepared),
       idempotencyKey: input.idempotencyKey,
       replyToMessageId,
-    });
+    }), BackendMutationTimeoutMs, 'message_send');
     input.onMessageCreated?.(messageId);
     for (const attachment of prepared) reportProgress(attachment.file.id, 1);
   } else if (messageId) {
@@ -277,7 +279,7 @@ export async function sendComposerMessage(
       const attachment = prepared[index];
       if (!attachment) return null;
       try {
-        await target.attachFile({
+        await withOperationTimeout(target.attachFile({
           contentType: attachment.contentType,
           durationMs: attachment.durationMs,
           filename: attachment.file.filename,
@@ -286,7 +288,7 @@ export async function sendComposerMessage(
           size: attachment.size,
           storageId: attachment.storageId,
           uploadIntentId: attachment.uploadIntentId,
-        });
+        }), BackendMutationTimeoutMs, 'attachment_attach');
         reportProgress(attachment.file.id, 1);
         return null;
       } catch {

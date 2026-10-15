@@ -122,7 +122,7 @@ export function TaskCollection({
 
   return (
     <FlatList
-      contentContainerStyle={[styles.list, bottomPadding !== undefined && { paddingBottom: bottomPadding }]}
+      contentContainerStyle={[styles.list, styles.taskCollectionList, bottomPadding !== undefined && { paddingBottom: bottomPadding }]}
       data={visibleTasks}
       keyExtractor={(item) => item.task._id}
       keyboardDismissMode="on-drag"
@@ -296,6 +296,7 @@ const styles = StyleSheet.create({
   empty: { alignSelf: 'center', gap: Spacing.three, maxWidth: 360, paddingTop: Spacing.six, width: '100%' },
   eyebrow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
   list: { gap: Spacing.three, paddingBottom: Spacing.four },
+  taskCollectionList: { paddingHorizontal: Spacing.four },
   meter: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
   meterFill: { height: '100%' },
   meterTrack: { borderRadius: Radius.pill, height: 4, overflow: 'hidden', width: 44 },

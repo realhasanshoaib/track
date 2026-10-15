@@ -166,11 +166,13 @@ export const listProjects = query({
   args: {
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
+    personalOnly: v.optional(v.boolean()),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
+    if (args.personalOnly && args.actingCompanyId) throw new Error('invalid_project_scope')
     if (args.actingCompanyId) {
       requireCompanyModelEnabled()
       await requireActiveCompanyMembership(ctx, actor, args.actingCompanyId)
@@ -181,6 +183,9 @@ export const listProjects = query({
         .withIndex('by_user_company_status', (q) =>
           q.eq('userId', args.userId).eq('companyId', args.actingCompanyId),
         )
+        .paginate(args.paginationOpts)
+      : args.personalOnly ? await ctx.db.query('projectMembers')
+        .withIndex('by_user_company_status', (q) => q.eq('userId', args.userId).eq('companyId', undefined))
         .paginate(args.paginationOpts)
       : await ctx.db
         .query('projectMembers')
@@ -476,6 +481,7 @@ export const listMyTasks = query({
   args: {
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
+    personalOnly: v.optional(v.boolean()),
     openOnly: v.optional(v.boolean()),
     dueDateStart: v.optional(v.string()),
     dueDateEnd: v.optional(v.string()),
@@ -484,6 +490,7 @@ export const listMyTasks = query({
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
+    if (args.personalOnly && args.actingCompanyId) throw new Error('invalid_project_scope')
     const assigneeNameCache = new Map<string, string | null>([
       [String(args.userId), (await ctx.db.get(args.userId))?.displayName ?? null],
     ])
@@ -499,6 +506,9 @@ export const listMyTasks = query({
     const memberships = args.actingCompanyId
       ? await ctx.db.query('projectMembers').withIndex('by_user_company_status', (q) =>
           q.eq('userId', args.userId).eq('companyId', args.actingCompanyId).eq('status', 'active'),
+        ).order('desc').paginate(args.paginationOpts)
+      : args.personalOnly ? await ctx.db.query('projectMembers').withIndex('by_user_company_status', (q) =>
+          q.eq('userId', args.userId).eq('companyId', undefined).eq('status', 'active'),
         ).order('desc').paginate(args.paginationOpts)
       : await ctx.db.query('projectMembers').withIndex('by_user', (q) => q.eq('userId', args.userId)).filter((q) => q.eq(q.field('status'), 'active')).order('desc').paginate(args.paginationOpts)
     const rows = []

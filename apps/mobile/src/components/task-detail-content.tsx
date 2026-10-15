@@ -1,6 +1,6 @@
 import type { TaskActivityAction } from '@track/shared/tasks';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useKeyboardState, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { FadeInDown, FadeOut, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -16,6 +16,7 @@ import type {
 } from '@/components/task-detail-types';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
+import { StateEntering, StateExiting } from '@/constants/motion';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticMedium } from '@/lib/haptics';
@@ -455,8 +456,8 @@ export function TaskCommentComposer({
 
   return (
     <Animated.View
-      entering={reduceMotion ? undefined : FadeInDown.duration(180)}
-      exiting={reduceMotion ? undefined : FadeOut.duration(130)}
+      entering={reduceMotion ? undefined : StateEntering}
+      exiting={reduceMotion ? undefined : StateExiting}
       style={[styles.composer, keyboardStyle, {
       backgroundColor: theme.background,
       borderTopColor: theme.hairline,
@@ -509,16 +510,16 @@ export function TaskCommentComposer({
           value={value}
         />
         <Pressable
-          accessibilityLabel="Send update"
+          accessibilityLabel={busy ? 'Sending update' : 'Send update'}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !canSend }}
+          accessibilityState={{ busy, disabled: !canSend }}
           disabled={!canSend}
           onPress={() => {
             hapticMedium();
             onSend();
           }}
           style={[styles.sendButton, { backgroundColor: theme.accent, opacity: canSend ? 1 : 0.45 }]}>
-          <PlatformIcon color={theme.accentInk} name="send" size={19} />
+          {busy ? <ActivityIndicator color={theme.accentInk} size="small" /> : <PlatformIcon color={theme.accentInk} name="send" size={19} />}
         </Pressable>
       </View>
     </Animated.View>

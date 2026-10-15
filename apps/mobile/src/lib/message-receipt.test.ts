@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { messageReceiptPresentation } from './message-receipt';
+import { messageDeliveryAccessibilityLabel, messageReceiptPresentation } from './message-receipt';
 
 describe('messageReceiptPresentation', () => {
   it('shows a single sent check before any recipient has read the message', () => {
@@ -33,5 +33,15 @@ describe('messageReceiptPresentation', () => {
       icon: 'check-all',
       seen: true,
     });
+  });
+});
+
+describe('messageDeliveryAccessibilityLabel', () => {
+  it('includes the read count in the sent image button label', () => {
+    expect(messageDeliveryAccessibilityLabel({
+      isOwnMessage: true,
+      readReceipt: { readCount: 2, recipientCount: 4 },
+      timeLabel: '16:31',
+    })).toBe('Sent at 16:31. Seen by 2 of 4 people.');
   });
 });

@@ -20,17 +20,21 @@ type PlayableVoiceNote = { attachment: Doc<'attachments'>; url: string };
  */
 export function AttachmentList({
   attachments,
+  imageDeliveryAccessibilityLabel,
   imageDeliveryMeta,
   isOwnMessage,
   onLongPress,
+  selectionMode = false,
   senderAvatarUrl,
   senderName,
   voiceDeliveryMeta,
 }: {
   attachments: AttachmentWithUrl[];
+  imageDeliveryAccessibilityLabel?: string;
   imageDeliveryMeta?: ReactNode;
   isOwnMessage: boolean;
   onLongPress?: () => void;
+  selectionMode?: boolean;
   senderAvatarUrl?: string | null;
   senderName: string;
   voiceDeliveryMeta?: ReactNode;
@@ -55,7 +59,7 @@ export function AttachmentList({
       images.push({
         contentType: attachment.contentType,
         filename: attachment.filename,
-        height: preview?.height ?? null,
+        height: preview?.height ?? attachment.height ?? null,
         id: attachment._id,
         originalUrl: url,
         previewHeight: preview?.previewHeight ?? null,
@@ -63,7 +67,7 @@ export function AttachmentList({
         previewWidth: preview?.previewWidth ?? null,
         size: attachment.size,
         url: displayUrl,
-        width: preview?.width ?? null,
+        width: preview?.width ?? attachment.width ?? null,
       });
       continue;
     }
@@ -80,13 +84,29 @@ export function AttachmentList({
 
   return (
     <View style={styles.stack}>
-      {images.length ? <ImageAttachments deliveryMeta={imageDeliveryMeta} images={images} onLongPress={onLongPress} /> : null}
+      {images.length ? (
+        <ImageAttachments
+          deliveryAccessibilityLabel={imageDeliveryAccessibilityLabel}
+          deliveryMeta={imageDeliveryMeta}
+          images={images}
+          onLongPress={onLongPress}
+          selectionMode={selectionMode}
+        />
+      ) : null}
       {voiceNotes.map(({ attachment, url }, index) => (
-        <View key={attachment._id} style={[styles.voiceNoteClip, isOwnMessage ? styles.voiceNoteOwn : styles.voiceNoteOther]}>
+        <View
+          key={attachment._id}
+          style={[
+            styles.voiceNoteClip,
+            isOwnMessage ? styles.voiceNoteOwn : styles.voiceNoteOther,
+            { alignSelf: isOwnMessage ? 'flex-end' : 'flex-start' },
+          ]}>
           <VoiceNotePlayer
             attachment={attachment}
             deliveryMeta={index === voiceNotes.length - 1 ? voiceDeliveryMeta : undefined}
             isOwnMessage={isOwnMessage}
+              onLongPress={onLongPress}
+            selectionMode={selectionMode}
             senderAvatarUrl={senderAvatarUrl}
             senderName={senderName}
             url={url}

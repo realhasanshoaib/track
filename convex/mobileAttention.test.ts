@@ -453,6 +453,59 @@ describe('mobile attention queue', () => {
       expect.objectContaining({ companyId: fixture.companyId, companyName: 'Company A', projectMemberId: fixture.memberId }),
     ]))
 
+    const personal = await t.run(async (ctx) => {
+      const projectId = await ctx.db.insert('projects', {
+        name: 'Personal delivery', accessProfile: 'legacy', status: 'active',
+        createdBy: userId, createdAt: 1, updatedAt: 1,
+      })
+      const memberId = await ctx.db.insert('projectMembers', {
+        projectId, userId, role: 'owner', status: 'active', createdAt: 1, updatedAt: 1,
+      })
+      return { projectId, memberId }
+    })
+    const personalBoardId = await t.withIdentity(identity).mutation(api.taskBoards.create, {
+      projectId: personal.projectId, name: 'Personal board',
+    })
+    const personalTask = await t.withIdentity(identity).mutation(api.tasks.create, {
+      projectId: personal.projectId, boardId: personalBoardId, title: 'Personal task', priority: 'none',
+      assigneeProjectMemberId: personal.memberId, idempotencyKey: 'personal-scope-task',
+    })
+    const retriedTask = await t.withIdentity(identity).mutation(api.tasks.create, {
+      projectId: personal.projectId, boardId: personalBoardId, title: 'Personal task', priority: 'none',
+      assigneeProjectMemberId: personal.memberId, idempotencyKey: 'personal-scope-task',
+    })
+    expect(retriedTask.taskId).toBe(personalTask.taskId)
+    const commentInput = { taskId: personalTask.taskId, body: 'Retry this update after a lost response',
+      mentionedProjectMemberIds: [], idempotencyKey: 'personal-comment-retry' }
+    const commentId = await t.withIdentity(identity).mutation(api.taskComments.create, commentInput)
+    expect(await t.withIdentity(identity).mutation(api.taskComments.create, commentInput)).toBe(commentId)
+    const commentRows = await t.run(async (ctx) => await ctx.db.query('taskComments')
+      .withIndex('by_task_idempotency', (q) => q.eq('taskId', personalTask.taskId)
+        .eq('idempotencyKey', commentInput.idempotencyKey)).collect())
+    expect(commentRows).toHaveLength(1)
+    expect(commentRows[0].body).toBe(commentInput.body)
+    const personalProjects = await t.withIdentity(identity).query(api.mobile.listProjects, {
+      userId, personalOnly: true, paginationOpts: { cursor: null, numItems: 1 },
+    })
+    expect(personalProjects.page.map((item) => item.project._id)).toEqual([personal.projectId])
+    expect(personalProjects.isDone).toBe(true)
+    const personalTasks = await t.withIdentity(identity).query(api.mobile.listMyTasks, {
+      userId, personalOnly: true, paginationOpts: { cursor: null, numItems: 1 },
+    })
+    expect(personalTasks.page.map((item) => item.task._id)).toEqual([personalTask.taskId])
+    expect(personalTasks.isDone).toBe(true)
+    const personalBoards = await t.withIdentity(identity).query(api.taskBoards.listMine, { personalOnly: true })
+    expect(personalBoards.map((item) => item.board._id)).toEqual([personalBoardId])
+    for (const query of [api.mobile.listProjects, api.mobile.listMyTasks]) {
+      await expect(t.withIdentity(identity).query(query, {
+        userId, personalOnly: true, actingCompanyId: fixture.companyId,
+        paginationOpts: { cursor: null, numItems: 1 },
+      })).rejects.toThrow('invalid_project_scope')
+    }
+    await expect(t.withIdentity(identity).query(api.taskBoards.listMine, {
+      personalOnly: true, actingCompanyId: fixture.companyId,
+    })).rejects.toThrow('invalid_project_scope')
+
     const companyWeekTasks = await t.withIdentity(identity).query(api.mobile.listMyTasks, {
       userId,
       actingCompanyId: fixture.companyId,

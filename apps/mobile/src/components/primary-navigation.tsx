@@ -3,7 +3,7 @@ import type { MaterialTopTabNavigationEventMap } from 'expo-router/js-top-tabs';
 import { BlurView } from 'expo-blur';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { usePathname, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useKeyboardState } from 'react-native-keyboard-controller';
@@ -17,12 +17,13 @@ import { AndroidBottomTabHeight, BottomTabInset, IconSize, PrimaryCreateActionCl
 import { usePrimaryNavigationVisibility } from '@/contexts/primary-navigation-visibility-context';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight } from '@/lib/haptics';
-import { primaryDestinationForRoute, primaryNavigationHeight, primaryNavigationSafeAreaInset, primaryNavigationVisibleForPath, primaryRouteIndex, primaryTabIndexAtX, primaryTabResetTarget, type PrimaryDestination } from '@/lib/primary-navigation';
+import { primaryDestinationForRoute, primaryNavigationHeight, primaryNavigationSafeAreaInset, primaryNavigationVisibleForPath, primaryRouteIndex, primaryTabIndexAtX, primaryTabResetTarget, primaryTabSelectionOffset, type PrimaryDestination } from '@/lib/primary-navigation';
 import { useReleaseConfig } from '@/lib/release-config';
 import { taskListHref } from '@/lib/task-navigation';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 type StandaloneTabKey = PrimaryDestination['key'];
+const NavigationIconWellSize = 40;
 type RouterTabBarProps = {
   navigation: NavigationHelpers<ParamListBase, MaterialTopTabNavigationEventMap>;
   state: TabNavigationState<ParamListBase>;
@@ -119,6 +120,7 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
+  const isIOS = Platform.OS === 'ios';
   const isAndroid = Platform.OS === 'android';
   const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, Spacing.one);
   const [reduceTransparency, setReduceTransparency] = useState(false);
@@ -127,7 +129,14 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
     : primaryNavigationHeight(fontScale, BottomTabInset);
   const reducedMotion = useReducedMotion();
   const [rowWidth, setRowWidth] = useState(0);
+  const [indicatorTop, setIndicatorTop] = useState<number | null>(null);
+  const activeIndex = items.findIndex((item) => item.key === activeKey);
+  const indicatorLeft = useSharedValue<number>(0);
+  const indicatorInitialized = useRef(false);
   const hiddenProgress = useSharedValue(hidden ? 1 : 0);
+  const handleIconLayout = useCallback((top: number) => {
+    setIndicatorTop((current) => current === top ? current : top);
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return undefined;
@@ -148,6 +157,21 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
       : withSpring(hidden ? 1 : 0, { dampingRatio: 1, duration: 280 }));
   }, [hidden, hiddenProgress, reducedMotion]);
 
+  useEffect(() => {
+    if (rowWidth <= 0 || activeIndex < 0) return;
+    const target = primaryTabSelectionOffset(rowWidth, items.length, activeIndex, NavigationIconWellSize);
+    if (!indicatorInitialized.current) {
+      indicatorLeft.set(target);
+      indicatorInitialized.current = true;
+      return;
+    }
+    if (reducedMotion) {
+      indicatorLeft.set(target);
+      return;
+    }
+    indicatorLeft.set(withSpring(target, { damping: 12, mass: 0.55, stiffness: 260 }));
+  }, [activeIndex, indicatorLeft, items.length, reducedMotion, rowWidth]);
+
   function commitDrag(index: number) {
     const item = items[index];
     if (item && !item.disabled) {
@@ -167,11 +191,25 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
     opacity: 1 - hiddenProgress.get(),
     transform: [{ translateY: hiddenProgress.get() * (navigationHeight + insets.bottom + 24) }],
   }));
+  const indicatorStyle = useAnimatedStyle(() => ({
+    opacity: rowWidth <= 0 || activeIndex < 0 || indicatorTop === null ? 0 : 1,
+    transform: [{ translateX: indicatorLeft.get() }],
+  }));
   const solidSelection = isAndroid || reduceTransparency;
   const useNativeGlass = Platform.OS === 'ios' && !reduceTransparency && safeGlassAvailability();
   const navigationSurface = solidSelection ? theme.homeSurface : 'transparent';
+  const indicatorSize = NavigationIconWellSize;
   const navigationRow = <View accessibilityRole="tablist" onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)} style={[styles.row, { height: navigationHeight }]}>
-    {items.map((item) => <NavigationTab active={item.key === activeKey} item={item} key={item.key} onPress={() => onSelect(item)} />)}
+    {isIOS ? <Animated.View pointerEvents="none" style={[styles.selectionPill, {
+      backgroundColor: '#ffffff',
+      borderColor: theme.accent,
+      borderRadius: indicatorSize / 2,
+      borderWidth: StyleSheet.hairlineWidth,
+      height: indicatorSize,
+      top: indicatorTop ?? 0,
+      width: indicatorSize,
+    }, indicatorStyle]} /> : null}
+    {items.map((item) => <NavigationTab active={item.key === activeKey} item={item} key={item.key} onIconLayout={handleIconLayout} onPress={() => onSelect(item)} />)}
   </View>;
 
   return <>
@@ -213,9 +251,10 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   </>;
 }
 
-function NavigationTab({ active, item, onPress }: {
+function NavigationTab({ active, item, onIconLayout, onPress }: {
   active: boolean;
   item: NavigationItem | (PrimaryDestination & { href: string });
+  onIconLayout: (top: number) => void;
   onPress: () => void;
 }) {
   const theme = useTheme();
@@ -230,7 +269,11 @@ function NavigationTab({ active, item, onPress }: {
     onPress={() => { hapticLight(); onPress(); }}
     style={({ pressed }) => [styles.item, { backgroundColor: 'transparent', opacity: item.disabled ? 0.38 : pressed ? 0.9 : 1 }]}
   >
-    <View style={[styles.iconWell, { backgroundColor: active ? theme.accentSoft : 'transparent', borderColor: active ? theme.accentStrong : 'transparent' }]}>
+    <View onLayout={(event) => onIconLayout(event.nativeEvent.layout.y)} style={[styles.iconWell, {
+      backgroundColor: active && isAndroid ? '#ffffff' : 'transparent',
+      borderColor: active && isAndroid ? theme.accent : 'transparent',
+      borderWidth: StyleSheet.hairlineWidth,
+    }]}>
       <PlatformIcon color={active ? activeIconColor : theme.textSecondary} name={item.icon} size={isAndroid ? 24 : IconSize.large + 4} variant={active ? 'filled' : 'outline'} weight={active ? 'semibold' : 'regular'} />
     </View>
     <ThemedText numberOfLines={1} style={[styles.itemLabel, isAndroid && styles.androidItemLabel, { color: active ? activeIconColor : theme.textSecondary }]} type="captionBold">{item.label}</ThemedText>
@@ -273,10 +316,11 @@ const styles = StyleSheet.create({
   createButtonFill: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
   createSlot: { alignItems: 'center', elevation: 10, position: 'absolute', zIndex: 10 },
   fabBand: { overflow: 'visible', position: 'relative', zIndex: 5 },
-  iconWell: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 40, justifyContent: 'center', width: 40 },
+  iconWell: { alignItems: 'center', borderCurve: 'circular', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: NavigationIconWellSize, justifyContent: 'center', width: NavigationIconWellSize },
   materialClip: { borderCurve: 'continuous', borderRadius: Radius.pill, overflow: 'hidden' },
   item: { alignItems: 'center', alignSelf: 'stretch', borderCurve: 'continuous', borderRadius: Radius.large, flex: 1, justifyContent: 'center', minHeight: 56, minWidth: 0, overflow: 'hidden' },
   itemLabel: { ...Typography.captionBold, marginTop: 1 },
   positioner: { alignSelf: 'center', bottom: 0, maxWidth: 480, overflow: 'visible', paddingTop: Spacing.two, position: 'absolute', width: '88%', zIndex: 50 },
-  row: { alignItems: 'center', flexDirection: 'row', height: BottomTabInset, overflow: 'visible' },
+  row: { alignItems: 'center', flexDirection: 'row', height: BottomTabInset, overflow: 'visible', position: 'relative' },
+  selectionPill: { borderCurve: 'circular', borderWidth: StyleSheet.hairlineWidth, left: 0, position: 'absolute' },
 });

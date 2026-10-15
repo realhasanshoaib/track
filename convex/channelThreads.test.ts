@@ -850,6 +850,87 @@ describe('Channel threads', () => {
     expect(deletionAudit?.before).not.toHaveProperty('body')
   })
 
+  it('bulk deletes owned messages and hides existing tombstones only for the requester', async () => {
+    const { groupId, member, owner, projectId, t } = await seedLegacyChannel()
+    const ownerActor = asUser(t, owner)
+    const threadId = await ownerActor.mutation(api.channelThreads.create, {
+      creatorId: owner,
+      groupId,
+      idempotencyKey: 'bulk-delete-thread',
+      name: 'Bulk deletion',
+      projectId,
+    })
+    const rootMessageIds = await Promise.all(['first', 'second'].map(async (label) =>
+      await ownerActor.mutation(api.messages.send, {
+        authorId: owner,
+        body: `Delete ${label} message`,
+        groupId,
+        idempotencyKey: `bulk-delete-${label}`,
+        projectId,
+      }),
+    ))
+    const replyMessageId = await ownerActor.mutation(api.messages.send, {
+      authorId: owner,
+      body: 'Delete this reply too',
+      channelThreadId: threadId,
+      groupId,
+      idempotencyKey: 'bulk-delete-reply',
+      projectId,
+    })
+    const messageIds = [...rootMessageIds, replyMessageId]
+
+    await expect(asUser(t, member).mutation(api.messages.removeMany, {
+      actorId: member,
+      messageIds,
+    })).rejects.toThrow('message_delete_forbidden')
+    expect(await Promise.all(messageIds.map(async (messageId) =>
+      (await t.run(async (ctx) => await ctx.db.get(messageId)))?.deletedAt,
+    ))).toEqual([undefined, undefined, undefined])
+
+    await expect(ownerActor.mutation(api.messages.removeMany, {
+      actorId: owner,
+      messageIds,
+    })).resolves.toEqual({ deletedCount: 3 })
+    await expect(ownerActor.mutation(api.messages.hideDeletedForMe, {
+      actorId: owner,
+      messageIds,
+    })).resolves.toEqual({ hiddenCount: 3 })
+
+    const ownerTimeline = await ownerActor.query(api.messages.listDetailed, { groupId, userId: owner })
+    const memberTimeline = await asUser(t, member).query(api.messages.listDetailed, { groupId, userId: member })
+    expect(ownerTimeline.some(({ message }) => messageIds.includes(message._id))).toBe(false)
+    expect(memberTimeline.filter(({ message }) => messageIds.includes(message._id))).toHaveLength(2)
+    const ownerPage = await ownerActor.query(api.messages.listPage, {
+      groupId,
+      userId: owner,
+      paginationOpts: { numItems: 50, cursor: null },
+    })
+    const memberPage = await asUser(t, member).query(api.messages.listPage, {
+      groupId,
+      userId: member,
+      paginationOpts: { numItems: 50, cursor: null },
+    })
+    expect(ownerPage.page.some(({ message }) => messageIds.includes(message._id))).toBe(false)
+    expect(memberPage.page.filter(({ message }) => messageIds.includes(message._id))).toHaveLength(2)
+
+    const ownerReplies = await ownerActor.query(api.channelThreads.listMessages, { threadId, userId: owner })
+    const memberReplies = await asUser(t, member).query(api.channelThreads.listMessages, { threadId, userId: member })
+    expect(ownerReplies).toEqual([])
+    expect(memberReplies.map(({ message }) => message._id)).toEqual([replyMessageId])
+    const ownerReplyPage = await ownerActor.query(api.channelThreads.listMessagePage, {
+      threadId,
+      userId: owner,
+      paginationOpts: { numItems: 50, cursor: null },
+    })
+    const memberReplyPage = await asUser(t, member).query(api.channelThreads.listMessagePage, {
+      threadId,
+      userId: member,
+      paginationOpts: { numItems: 50, cursor: null },
+    })
+    expect(ownerReplyPage.page).toEqual([])
+    expect(memberReplyPage.page.map(({ message }) => message._id)).toEqual([replyMessageId])
+  })
+
   it('keeps deleted replies in thread counts and timeline history', async () => {
     const { groupId, owner, projectId, t } = await seedLegacyChannel()
     const actor = asUser(t, owner)

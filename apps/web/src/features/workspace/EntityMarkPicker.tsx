@@ -36,7 +36,7 @@ export function EntityMarkPicker({
           {entityMarkColorKeys.map((key) => <option key={key} value={key}>{key[0]!.toUpperCase() + key.slice(1)}</option>)}
         </select>
       </label>
-      <p>Automatic keeps the background stable and chooses an icon from the name. Channel lists vary repeated icons so visible Channels stay easy to recognize.</p>
+      <p>Automatic uses this item’s stable identity to pick a mark and color. Company and Project marks match across web and mobile.</p>
     </fieldset>
   )
 }

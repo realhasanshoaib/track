@@ -43,9 +43,8 @@ export function ConversationProjectTabs({ projects, selectedId, onSelect, onOpen
   }, [selectedIndex]);
 
   return <View style={styles.section}>
-    <View style={styles.sectionHeading}>
-      <ThemedText themeColor="textSecondary" type="captionBold">Projects</ThemedText>
-      {selectedProject && onOpen ? <Pressable
+    {selectedProject && onOpen ? <View style={styles.sectionHeading}>
+      <Pressable
         accessibilityLabel={`Open ${selectedProject.name} Project`}
         accessibilityRole="button"
         hitSlop={8}
@@ -54,8 +53,8 @@ export function ConversationProjectTabs({ projects, selectedId, onSelect, onOpen
       >
         <ThemedText themeColor="accentStrong" type="captionBold">Open Project</ThemedText>
         <PlatformIcon color={theme.accentStrong} name="chevron-right" size={16} weight="regular" />
-      </Pressable> : null}
-    </View>
+      </Pressable>
+    </View> : null}
 
     <FlatList
       accessibilityLabel="Project scope"

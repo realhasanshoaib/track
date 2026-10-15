@@ -1,5 +1,5 @@
 import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
-import { useConvexAuth, useQuery } from 'convex/react'
+import { useConvexAuth, useMutation, useQuery } from 'convex/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
 
@@ -17,6 +17,19 @@ type LiveAlert = {
   id: string
   title: string
   type: 'info' | 'warning'
+}
+
+function WebAccountBootstrap() {
+  const { isAuthenticated } = useConvexAuth()
+  const user = useQuery(api.auth.getCurrentUser, isAuthenticated ? {} : 'skip')
+  const ensureCurrentUser = useMutation(api.auth.ensureCurrentUser)
+  useEffect(() => {
+    if (!isAuthenticated || user !== null) return
+    void ensureCurrentUser({}).catch(() => {
+      appToast.error('Account setup failed', 'Reload to retry preparing your account.')
+    })
+  }, [ensureCurrentUser, isAuthenticated, user])
+  return null
 }
 
 function WebLiveAlerts() {
@@ -112,6 +125,7 @@ export default function AppProviders({
     <ConvexBetterAuthProvider authClient={providerAuthClient} client={convexClient}>
       <TooltipProvider>
         <AppToastProvider>
+          <WebAccountBootstrap />
           <WebLiveAlerts />
           {children}
         </AppToastProvider>

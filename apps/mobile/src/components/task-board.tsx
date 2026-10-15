@@ -20,7 +20,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { isCompactTaskBoard, taskBoardColumnIndex } from '@/lib/task-board-layout';
 import { taskStatePalette } from '@/lib/task-state-palette';
 import { taskErrorMessage } from '@/lib/user-facing-error';
+import { projectTaskBoard } from '@/lib/task-board-projection';
 import { uniqueTaskViews } from '@/lib/unique-task-views';
+import { createSubmissionGate } from '@/lib/submission-state';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { StateEntering, StateExiting, StateLayout } from '@/constants/motion';
 
 const ColumnWidth = 280;
 const ColumnGap = Spacing.three;
@@ -45,10 +49,6 @@ type LastMove = {
   message: string;
   optimistic: { index: number; stateId: string };
 };
-
-function byRank(a: MobileTaskView, b: MobileTaskView) {
-  return a.task.rank < b.task.rank ? -1 : a.task.rank > b.task.rank ? 1 : 0;
-}
 
 const taskReasonPattern = /task_[a-z_]+(?::\d+)?/;
 
@@ -106,19 +106,9 @@ export function TaskBoard({
   const [moveTarget, setMoveTarget] = useState<MobileTaskView | null>(null);
   const [failure, setFailure] = useState<{ message: string; retry?: TaskMoveInput } | null>(null);
   const [lastMove, setLastMove] = useState<LastMove | null>(null);
+  const moveGate = useRef(createSubmissionGate());
 
-  const display = useMemo(() => {
-    const sorted = columns.map((column) => ({ ...column, tasks: uniqueTaskViews(column.tasks).sort(byRank) }));
-    const moved = pending && sorted.flatMap((column) => column.tasks)
-      .find((item) => item.task._id === pending.taskId);
-    if (!pending || !moved) return sorted;
-    return sorted.map((column) => {
-      const tasks = column.tasks.filter((item) => item.task._id !== pending.taskId);
-      if (column.state._id !== pending.stateId) return { ...column, tasks };
-      tasks.splice(Math.min(pending.index, tasks.length), 0, moved);
-      return { ...column, tasks };
-    });
-  }, [columns, pending]);
+  const display = useMemo(() => projectTaskBoard(columns, pending), [columns, pending]);
 
   useEffect(() => {
     if (!activeStateId) return;
@@ -140,6 +130,8 @@ export function TaskBoard({
     undoOptimistic?: { index: number; stateId: string },
     restoreUndoOnFailure?: LastMove,
   ) {
+    const token = moveGate.current.begin();
+    if (!token) return;
     setPending({ ...optimistic, taskId: input.taskId });
     setFailure(null);
     setLastMove(null);
@@ -156,7 +148,7 @@ export function TaskBoard({
         ? { message: 'This task still has open checklist items.', retry: { ...input, confirmOpenSubtasks: true } }
         : { message: moveFailureMessage(reason) });
     } finally {
-      setPending(null);
+      if (moveGate.current.finish(token)) setPending(null);
     }
   }
 
@@ -269,7 +261,7 @@ export function TaskBoard({
                 key={column.state._id}
                 onOpen={onOpen}
                 onStatusPress={setMoveTarget}
-                readOnly={readOnly}
+                readOnly={readOnly || pending !== null}
               />
             ))}
           </ScrollView>
@@ -300,7 +292,7 @@ export function TaskBoard({
               key={column.state._id}
               onOpen={onOpen}
               onStatusPress={setMoveTarget}
-              readOnly={readOnly}
+              readOnly={readOnly || pending !== null}
             />
           ))}
         </ScrollView>
@@ -352,6 +344,7 @@ function BoardColumn({
 }) {
   const theme = useTheme();
   const palette = taskStatePalette(theme, column.state.category);
+  const reducedMotion = useReducedMotion();
   const visibleTasks = uniqueTaskViews(column.tasks);
 
   return (
@@ -379,6 +372,7 @@ function BoardColumn({
           </View>
         )}
         renderItem={({ item }) => (
+          <Animated.View entering={reducedMotion ? undefined : StateEntering} exiting={reducedMotion ? undefined : StateExiting} layout={reducedMotion ? undefined : StateLayout}>
           <BoardCard
             assigneeName={assigneeName}
             item={item}
@@ -388,6 +382,7 @@ function BoardColumn({
             readOnly={readOnly}
             focused={item.task._id === focusedTaskId}
           />
+          </Animated.View>
         )}
         showsVerticalScrollIndicator={false}
         style={styles.columnScroller}
@@ -445,7 +440,7 @@ function BoardCard({
 
 const styles = StyleSheet.create({
   boardScroller: { flex: 1 },
-  boardViewport: { flex: 1, minHeight: 520 },
+  boardViewport: { flex: 1, minHeight: 0 },
   column: { minHeight: 0, overflow: 'visible', width: ColumnWidth },
   columnBody: { flexGrow: 1, gap: CardGap, paddingBottom: Spacing.four },
   columnScroller: { flex: 1 },
@@ -472,6 +467,6 @@ const styles = StyleSheet.create({
   compactColumns: { gap: ColumnGap, paddingBottom: Spacing.four, paddingRight: Spacing.three },
   columnDot: { borderRadius: Radius.pill, height: 8, width: 8 },
   columnTitle: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minWidth: 0 },
-  root: { flex: 1, gap: Spacing.three },
+  root: { flex: 1, gap: Spacing.three, minHeight: 0 },
   sheetStateIcon: { alignItems: 'center', borderRadius: Radius.small, height: 32, justifyContent: 'center', width: 32 },
 });

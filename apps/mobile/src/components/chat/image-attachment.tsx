@@ -1,9 +1,14 @@
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
+import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 
 import { ImageViewer } from '@/components/chat/image-viewer';
+import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
+import { chatImageAspectRatio } from '@/lib/chat-image-layout';
+import { MESSAGE_SELECTION_RAIL_WIDTH } from '@/components/chat/message-layout';
 import type { ViewableImage } from '@/components/chat/types';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -12,14 +17,8 @@ import { formatFileSize } from '@/lib/attachment-presentation';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Warm neutral blur shown while the full image decodes. */
-const PLACEHOLDER = 'L6Ptp*~q00%M?bofM{WB00Rj_3M{';
-
 const GRID_GAP = 2;
 const MAX_TILES = 4;
-const SINGLE_DEFAULT_RATIO = 4 / 3;
-const SINGLE_MIN_RATIO = 0.56;
-const SINGLE_MAX_RATIO = 1.9;
 
 /** A wide lead tile for three images, otherwise pairs that fill each row. */
 function gridRows(images: ViewableImage[]) {
@@ -34,21 +33,19 @@ function imageSource(image: ViewableImage, previewFailed: boolean) {
   return image.previewUrl ?? image.url;
 }
 
-function knownImageRatio(image: ViewableImage) {
-  if (!image.width || !image.height || image.width < 1 || image.height < 1) return null;
-  return Math.min(Math.max(image.width / image.height, SINGLE_MIN_RATIO), SINGLE_MAX_RATIO);
-}
 
 type Props = {
+  deliveryAccessibilityLabel?: string;
   deliveryMeta?: ReactNode;
   images: ViewableImage[];
   onLongPress?: () => void;
+  selectionMode?: boolean;
 };
 
-export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
+export function ImageAttachments({ deliveryAccessibilityLabel, deliveryMeta, images, onLongPress, selectionMode = false }: Props) {
   const { width } = useWindowDimensions();
   const [openImage, setOpenImage] = useState<ViewableImage | null>(null);
-  const maxWidth = Math.min(width * 0.72, 320);
+  const maxWidth = Math.max(0, Math.min(width * 0.72, 320) - (selectionMode ? MESSAGE_SELECTION_RAIL_WIDTH : 0));
 
   function open(image: ViewableImage) {
     hapticLight();
@@ -66,6 +63,8 @@ export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
       {visible.length === 1 ? (
         <SingleImage
           image={visible[0]}
+          deliveryAccessibilityLabel={deliveryAccessibilityLabel}
+          deliveryMeta={deliveryMeta}
           maxWidth={maxWidth}
           onLongPress={onLongPress}
           onPress={open}
@@ -79,6 +78,8 @@ export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
                   height={half}
                   image={image}
                   key={image.id}
+                  deliveryMeta={image.id === lastTile.id ? deliveryMeta : undefined}
+                  deliveryAccessibilityLabel={image.id === lastTile.id ? deliveryAccessibilityLabel : undefined}
                   onLongPress={onLongPress}
                   onPress={open}
                   overflow={overflow > 0 && image.id === lastTile.id ? overflow : 0}
@@ -89,7 +90,6 @@ export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
           ))}
         </View>
       )}
-      {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
       <ImageViewer image={openImage} onClose={() => setOpenImage(null)} />
     </View>
   );
@@ -97,33 +97,40 @@ export function ImageAttachments({ deliveryMeta, images, onLongPress }: Props) {
 
 function SingleImage({
   image,
+  deliveryAccessibilityLabel,
+  deliveryMeta,
   maxWidth,
   onLongPress,
   onPress,
 }: {
   image: ViewableImage;
+  deliveryAccessibilityLabel?: string;
+  deliveryMeta?: ReactNode;
   maxWidth: number;
   onLongPress?: () => void;
   onPress: (image: ViewableImage) => void;
 }) {
   const theme = useTheme();
-  const [ratio, setRatio] = useState(knownImageRatio(image) ?? SINGLE_DEFAULT_RATIO);
+  const reducedMotion = useReducedMotion();
+  const ratio = chatImageAspectRatio(image);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [originalFailed, setOriginalFailed] = useState(false);
 
-  if (originalFailed) return <BrokenImage image={image} width={maxWidth} />;
+  if (originalFailed) {
+    return <BrokenImage deliveryAccessibilityLabel={deliveryAccessibilityLabel} deliveryMeta={deliveryMeta} height={maxWidth / ratio} image={image} onLongPress={onLongPress} onPress={() => onPress(image)} width={maxWidth} />;
+  }
 
   return (
-    <Pressable
+    <GesturePressable
       accessibilityHint="Opens the image full screen"
-      accessibilityLabel={`Image ${image.filename}, ${formatFileSize(image.size)}`}
-      accessibilityRole="imagebutton"
+      accessibilityLabel={imageButtonLabel(image, deliveryAccessibilityLabel)}
+      accessibilityRole="button"
       onLongPress={onLongPress}
       onPress={() => onPress(image)}
       style={[styles.tile, { backgroundColor: theme.skeleton, width: maxWidth }]}>
       <Image
         cachePolicy="memory-disk"
-        contentFit="cover"
+        contentFit={image.width && image.height ? 'cover' : 'contain'}
         onError={() => {
           if (image.previewUrl && !previewFailed) {
             setPreviewFailed(true);
@@ -131,23 +138,23 @@ function SingleImage({
           }
           setOriginalFailed(true);
         }}
-        onLoad={({ source }) =>
-          setRatio(knownImageRatio(image) ?? Math.min(Math.max(source.width / source.height, SINGLE_MIN_RATIO), SINGLE_MAX_RATIO))
-        }
-        placeholder={Platform.OS === 'web' ? undefined : PLACEHOLDER}
+        placeholder={ChatImagePlaceholder}
         placeholderContentFit="cover"
         recyclingKey={image.id}
         source={{ uri: imageSource(image, previewFailed) }}
         style={{ aspectRatio: ratio, width: maxWidth }}
-        transition={90}
+        transition={reducedMotion ? 0 : ChatImageTransition}
       />
-    </Pressable>
+      {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
+    </GesturePressable>
   );
 }
 
 function ImageTile({
   height,
   image,
+  deliveryAccessibilityLabel,
+  deliveryMeta,
   onLongPress,
   onPress,
   overflow = 0,
@@ -155,26 +162,27 @@ function ImageTile({
 }: {
   height: number;
   image: ViewableImage;
+  deliveryAccessibilityLabel?: string;
+  deliveryMeta?: ReactNode;
   onLongPress?: () => void;
   onPress: (image: ViewableImage) => void;
   overflow?: number;
   width: number;
 }) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const [previewFailed, setPreviewFailed] = useState(false);
   const [originalFailed, setOriginalFailed] = useState(false);
 
-  if (originalFailed) return <BrokenImage image={image} width={width} />;
+  if (originalFailed) {
+    return <BrokenImage deliveryAccessibilityLabel={deliveryAccessibilityLabel} deliveryMeta={deliveryMeta} height={height} image={image} onLongPress={onLongPress} onPress={() => onPress(image)} width={width} />;
+  }
 
   return (
-    <Pressable
+    <GesturePressable
       accessibilityHint="Opens the image full screen"
-      accessibilityLabel={
-        overflow
-          ? `Image ${image.filename} and ${overflow} more`
-          : `Image ${image.filename}, ${formatFileSize(image.size)}`
-      }
-      accessibilityRole="imagebutton"
+      accessibilityLabel={imageButtonLabel(image, deliveryAccessibilityLabel, overflow)}
+      accessibilityRole="button"
       onLongPress={onLongPress}
       onPress={() => onPress(image)}
       style={[styles.tile, { backgroundColor: theme.skeleton, height, width }]}>
@@ -188,12 +196,12 @@ function ImageTile({
           }
           setOriginalFailed(true);
         }}
-        placeholder={Platform.OS === 'web' ? undefined : PLACEHOLDER}
+        placeholder={ChatImagePlaceholder}
         placeholderContentFit="cover"
         recyclingKey={image.id}
         source={{ uri: imageSource(image, previewFailed) }}
         style={styles.tileImage}
-        transition={90}
+        transition={reducedMotion ? 0 : ChatImageTransition}
       />
       {overflow ? (
         <View style={[styles.overflow, { backgroundColor: theme.overlay }]}>
@@ -202,22 +210,43 @@ function ImageTile({
           </ThemedText>
         </View>
       ) : null}
-    </Pressable>
+      {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
+    </GesturePressable>
   );
 }
 
-function BrokenImage({ image, width }: { image: ViewableImage; width: number }) {
+function BrokenImage({ deliveryAccessibilityLabel, deliveryMeta, height, image, onLongPress, onPress, width }: {
+  deliveryAccessibilityLabel?: string;
+  deliveryMeta?: ReactNode;
+  height: number;
+  image: ViewableImage;
+  onLongPress?: () => void;
+  onPress: () => void;
+  width: number;
+}) {
   const theme = useTheme();
   return (
-    <View
-      accessibilityLabel={`Image ${image.filename} could not be loaded`}
-      style={[styles.broken, { backgroundColor: theme.backgroundElement, width }]}>
+    <GesturePressable
+      accessibilityHint="Opens the image full screen"
+      accessibilityLabel={`${imageButtonLabel(image, deliveryAccessibilityLabel)}. Preview could not be loaded. Open full screen`}
+      accessibilityRole="button"
+      onLongPress={onLongPress}
+      onPress={onPress}
+      style={[styles.broken, { backgroundColor: theme.backgroundElement, height, width }]}>
       <PlatformIcon color={theme.textSecondary} name="image" size={18} />
       <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">
         {image.filename}
       </ThemedText>
-    </View>
+      {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
+    </GesturePressable>
   );
+}
+
+function imageButtonLabel(image: ViewableImage, deliveryAccessibilityLabel?: string, overflow = 0) {
+  const label = overflow
+    ? `Image ${image.filename} and ${overflow} more`
+    : `Image ${image.filename}, ${formatFileSize(image.size)}`;
+  return deliveryAccessibilityLabel ? `${label}. ${deliveryAccessibilityLabel}` : label;
 }
 
 const styles = StyleSheet.create({

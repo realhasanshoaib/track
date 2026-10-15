@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -21,7 +21,6 @@ const MAX_SCALE = 6;
 const ZOOMED_SCALE = 2.5;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 900;
-const PLACEHOLDER = 'L6Ptp*~q00%M?bofM{WB00Rj_3M{';
 
 function clamp(value: number, min: number, max: number) {
   'worklet';
@@ -40,6 +39,12 @@ export function ImageViewer({ image, onClose }: Props) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
+  const [usingPreviewFallback, setUsingPreviewFallback] = useState(false);
+  const originalUrl = image?.originalUrl ?? image?.url ?? null;
+  const previewFallbackUrl = image?.previewUrl && image.previewUrl !== originalUrl ? image.previewUrl : null;
+  const downloadAction = Platform.OS === 'web';
+  const actionLabel = downloadAction ? 'Download image' : 'Save or share image';
+  const loadingActionLabel = downloadAction ? 'Preparing download' : 'Preparing image';
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -65,6 +70,7 @@ export function ImageViewer({ image, onClose }: Props) {
       setShareError(null);
       setImageFailed(false);
       setImageAttempt(0);
+      setUsingPreviewFallback(false);
     }
   }, [image, reset]);
 
@@ -159,12 +165,13 @@ export function ImageViewer({ image, onClose }: Props) {
     if (!image) return;
     hapticLight();
     setImageFailed(false);
+    setUsingPreviewFallback(false);
     setImageAttempt((attempt) => attempt + 1);
   }
 
   return (
     <Modal
-      animationType="fade"
+      animationType="none"
       onRequestClose={dismiss}
       statusBarTranslucent
       transparent
@@ -191,14 +198,20 @@ export function ImageViewer({ image, onClose }: Props) {
                   <Image
                     accessibilityLabel={`Image ${image.filename}`}
                     contentFit="contain"
-                    key={`${image.id}-${imageAttempt}`}
-                    onError={() => setImageFailed(true)}
-                    placeholder={PLACEHOLDER}
+                    key={`${image.id}-${imageAttempt}-${usingPreviewFallback}`}
+                    onError={() => {
+                      if (!usingPreviewFallback && previewFallbackUrl) {
+                        setUsingPreviewFallback(true);
+                        return;
+                      }
+                      setImageFailed(true);
+                    }}
+                    placeholder={image.previewUrl ? { uri: image.previewUrl } : undefined}
                     placeholderContentFit="contain"
                     recyclingKey={image.id}
-                    source={{ uri: image.originalUrl ?? image.url }}
+                    source={{ uri: usingPreviewFallback ? previewFallbackUrl ?? originalUrl ?? image.url : originalUrl ?? image.url }}
                     style={styles.image}
-                    transition={150}
+                    transition={0}
                   />
                 )}
               </Animated.View>
@@ -221,7 +234,8 @@ export function ImageViewer({ image, onClose }: Props) {
                 </ThemedText>
               </View>
               <Pressable
-                accessibilityLabel={sharing ? 'Preparing image' : 'Share or save image'}
+                accessibilityHint={downloadAction ? 'Downloads the image and keeps this conversation open' : 'Opens the system sheet to save or share the image'}
+                accessibilityLabel={sharing ? loadingActionLabel : actionLabel}
                 accessibilityRole="button"
                 accessibilityState={{ busy: sharing, disabled: sharing }}
                 disabled={sharing}
@@ -237,7 +251,7 @@ export function ImageViewer({ image, onClose }: Props) {
                 <ThemedText style={styles.errorText} type="caption">
                   {shareError}
                 </ThemedText>
-                <Pressable accessibilityLabel="Retry share" accessibilityRole="button" onPress={share}>
+                <Pressable accessibilityLabel={downloadAction ? 'Retry download' : 'Retry share'} accessibilityRole="button" onPress={share}>
                   <ThemedText style={styles.retry} type="captionBold">
                     Retry
                   </ThemedText>

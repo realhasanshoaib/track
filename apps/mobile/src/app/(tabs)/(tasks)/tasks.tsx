@@ -1,5 +1,6 @@
 import ProjectTasksScreen from '@/screens/tasks';
+import { DevelopmentScreenProfiler } from '@/components/development-performance-monitor';
 
 export default function TasksRoute() {
-  return <ProjectTasksScreen />;
+  return <DevelopmentScreenProfiler screen="Tasks / Board"><ProjectTasksScreen /></DevelopmentScreenProfiler>;
 }

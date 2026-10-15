@@ -171,6 +171,57 @@ Motion can show where a screen came from, confirm an action, or help a person fo
 
 Before adding an animation, name its purpose: feedback, continuity, state change, orientation, or rare delight. If the purpose is unclear, use the platform default or remove the motion. Keep common actions fast, support reduced motion, and test gestures when interrupted as well as when completed.
 
+Workspace state changes use `src/constants/motion.ts`; chat aliases these settings
+from `src/components/chat/message-motion.ts`:
+200 ms entrances, layout changes, and image cross-fades, with 140 ms control
+exits. The composer reserves one fixed slot for send and voice controls so
+switching modes does not rewrap the draft. The selected attachment tray expands
+or closes with the same easing and closes when sending starts. Message
+images reserve their dimensions before decoding and retain those dimensions
+on failure. Conversation and thread handoffs warm the confirmed image cache
+before replacing a local thumbnail, with a two-second fallback for slow or
+failed loads. Reduced motion disables these transitions.
+
+Project expansion, task-board cards, Company rows, Inbox rows, and the task
+update composer use the same state easing and timing. Native navigation keeps
+its platform animation. Company logos reserve their mark size, display a neutral
+placeholder while decoding, and cross-fade into the loaded image.
+
+Submission ownership is synchronous (`src/lib/submission-state.ts`). A second
+tap cannot start an overlapping action before React renders its busy state.
+Task comments and creation retain their idempotency key when retrying an
+unchanged payload. Successful saves clear only the submitted draft; text entered
+afterward and reopened editors survive late responses. Dismissing an in-flight
+draft detaches its UI ownership while keeping its retry key, so reopening it
+cannot duplicate a successful comment or task commit. Project creation protects
+draft ownership but does not add server idempotency.
+
+Project and Channel directories load incrementally. Project attention keeps its
+heading and loading state visible and offers an explicit continuation button;
+it does not fetch the entire Company feed merely to show three updates. Inbox
+keeps its search and filters mounted while loading and distinguishes no matches
+in loaded pages from a fully exhausted result. Personal Projects stays selected
+in My Tasks rather than silently selecting a Company. Its Project, task, and
+board requests use the optional `personalOnly` backend scope before pagination
+or hydration; existing callers that omit it retain their cross-Company view.
+
+Development-only `/dev/workspace-interaction-preview` exercises the production
+Project cards, attention section, board, and task composer with long text,
+two-second responses, failures, and a short board viewport without backend writes.
+
+Only one voice note plays at a time across message rows. Starting another note
+pauses the previous player. Play and pause actions read the live player state,
+so rapid taps do not depend on the next playback-status render.
+On iOS, inline voice controls stay outside the SwiftUI context-menu host;
+long-press and swipe actions use the existing message-action sheet. Holds on
+the playback controls also open actions; waveform holds do not seek, and duplicate
+delivery from the waveform and parent bubble opens actions only once. Playback
+position on iOS updates every 100 ms and interpolates linearly over 120 ms while
+playing. Android keeps its 500 ms native interval to avoid extra polling for
+paused notes and projects progress between timestamps at the actual playback
+rate. Pause, buffering, and Reduce Motion stop interpolation. Played
+bars use the accent color, while unplayed bars remain muted.
+
 Do not use animation to hide slow work. Show progress honestly, keep the interface responsive, and preserve the person's place and input when an operation takes time.
 
 ## 11. Protect performance and perceived speed
@@ -220,7 +271,64 @@ Before calling a screen ready, confirm that:
 - The main flow works on a real simulator or device, not only in a static mockup.
 - Every remaining element helps understanding, action, recovery, trust, or identity.
 
-## 14. References
+## 14. Regression verification
+
+Run the repository gate: `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+`pnpm audit --prod`, and `pnpm build`. With the mobile web development server
+running on localhost:8083, run the fixture suite with
+`pnpm exec playwright test --config e2e/mobile-workspace.config.ts`.
+Its JSON report is `artifacts/mobile-regression/browser-results.json`.
+
+The fixture matrix covers Company selection and Personal scope with demo,
+worst-case, empty, one-item, and many-item data at 320, 390, and 834 pixels;
+My Tasks search and narrow layouts; interrupted, failed, and retried comment
+sends; reopened drafts; optimistic Board moves, undo and rollback; loading
+states; dark appearance; reduced motion; and actual browser audio clocks.
+Fixture callbacks do not prove authenticated mobile route controllers or iOS
+audio behavior. Authenticated web checks separately cover remote Task draft
+refresh and Board status changes. Calendar drag-and-drop remains a failing
+regression check.
+
+Browser voice controls still have an intermittent first-tap failure: the real
+audio test sometimes records no playback call after a single enabled-button tap.
+Normal and reduced-motion waveform checks, pause, switching notes, and control
+holds have passed in focused runs, but the intermittent tap prevents a complete
+browser regression pass. The Profile diagnostic entry check also fails while
+the Development checks block remains commented out.
+
+iPhone Expo testing confirms sent-note Play and Pause and smooth waveform
+progress after the inline playback touch fix. Other native cases below still
+require device verification. The development route `/dev/attachment-preview`
+provides the voice playback check; the Profile entry is currently commented out.
+The “Native audio check v2” panel uses the bundled audio
+asset with independent Play and Pause commands and displays load, playback,
+buffering, elapsed time, tap count, and an error flag without private URLs.
+Reload the current bundle, play for two seconds, pause, and compare this panel
+with the message voice controls below it. Record both sound and timer behavior.
+The additional Play/waveform control-hold callbacks have browser evidence but
+still need an iPhone check; the earlier iPhone confirmation predates them.
+
+Native checks must also exercise switching notes, rapid taps while buffering,
+recording then playback, sending text/voice/images/files with the keyboard
+shown and hidden, adding/removing image previews, image reveals on slow
+connections, Task drafts edited during saves, and the same flows with iOS
+Reduce Motion enabled. Browser evidence cannot substitute for these checks.
+
+For route-opening lag, the development route `/dev/performance-check` provides
+the Screen lag check; its Profile entry is currently commented out.
+Start a recording, reproduce the Task detail, Tasks / Board,
+and Chat opening/back paths, then return and stop. The capture lasts at most
+two minutes, keeps four bounded route aggregates in memory, and records no
+account identifiers, Project names, or message contents. It measures React
+render work inside each focused screen and JavaScript scheduling delays
+while the app is active; inactive-screen renders are excluded from the screen
+aggregates. It does not measure native FPS, network latency, or
+tap-to-first-paint time. Recording does not remount the navigation tree.
+Use the same build, device, data, and Reduce Motion setting for comparisons;
+separate first openings from repeated openings. Development profiling adds
+overhead, so release performance still needs a release build on a device.
+
+## 15. References
 
 - [Track Mobile UI/UX Guide](./mobile-ui-ux-guide.md): Track-specific visual direction, navigation, screen patterns, and product behavior.
 - [Track Mobile UI/UX Review](./mobile-ui-ux-review.md): Existing screen review notes and verification evidence.

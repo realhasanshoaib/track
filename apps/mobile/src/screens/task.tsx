@@ -7,6 +7,7 @@ import { KeyboardAwareScrollView, useKeyboardState } from 'react-native-keyboard
 import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createDraftSubmissionState, createSubmissionGate } from '@/lib/submission-state';
 import {
   AccessibilityInfo,
   Clipboard,
@@ -43,7 +44,6 @@ import { MaxFontScale, MobileHeaderMetrics, Radius, Spacing, TouchTarget, Typogr
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useTheme } from '@/hooks/use-theme';
 import { taskErrorMessage } from '@/lib/user-facing-error';
-import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { channelHref, projectOverviewHref } from '@/lib/company-navigation';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
@@ -90,7 +90,6 @@ function errorMessage(failure: unknown) {
 export default function TaskScreen() {
   const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
-  const bottomDockClearance = useBottomTabContentInset(0);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const router = useRouter();
   const release = useReleaseConfig();
@@ -204,8 +203,12 @@ export default function TaskScreen() {
   const checklistY = useRef(0);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const checklistInputFocused = useRef(false);
-  const subtaskIntentRef = useRef(idempotencyKey());
-  const commentDraftKey = useRef<string | null>(null);
+  const subtaskSubmission = useRef(createDraftSubmissionState());
+  const submissionGate = useRef(createSubmissionGate());
+  const commentSubmission = useRef(createDraftSubmissionState());
+  const commentSignature = useRef('');
+  commentSignature.current = JSON.stringify([projectId, taskKey, companyId, membershipId, comment, mentionIds]);
+  const pendingPatch = useRef<TaskFieldPatch | null>(null);
   const subtaskPendingRef = useRef(false);
   const keyCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -239,6 +242,8 @@ export default function TaskScreen() {
     companyId ?? '',
     membershipId ?? '',
   ].join(':');
+  const currentTaskIdentity = useRef(taskIdentity);
+  currentTaskIdentity.current = taskIdentity;
 
   useEffect(() => () => {
     if (keyCopiedTimer.current) clearTimeout(keyCopiedTimer.current);
@@ -251,6 +256,12 @@ export default function TaskScreen() {
       title: sourceDetail.task.title,
     };
     if (taskIdentityRef.current !== taskIdentity || !serverSnapshotRef.current || !baselineSnapshotRef.current) {
+      if (taskIdentityRef.current !== null && taskIdentityRef.current !== taskIdentity) {
+        commentSubmission.current.invalidate();
+        setComment('');
+        setMentionIds([]);
+        setComposerOpen(false);
+      }
       taskIdentityRef.current = taskIdentity;
       serverSnapshotRef.current = nextSnapshot;
       baselineSnapshotRef.current = nextSnapshot;
@@ -270,7 +281,10 @@ export default function TaskScreen() {
     const descriptionDirty = localDescription !== baselineSnapshot.description;
     const titleChanged = previousSnapshot.title !== nextSnapshot.title;
     const descriptionChanged = previousSnapshot.description !== nextSnapshot.description;
-    if ((titleDirty && titleChanged) || (descriptionDirty && descriptionChanged)) setConflict(true);
+    const ownTitleSave = pendingPatch.current?.title === nextSnapshot.title;
+    const ownDescriptionSave = pendingPatch.current?.description !== undefined
+      && (pendingPatch.current.description ?? '') === nextSnapshot.description;
+    if ((titleDirty && titleChanged && !ownTitleSave) || (descriptionDirty && descriptionChanged && !ownDescriptionSave)) setConflict(true);
     if (!titleDirty && titleDraft !== null && titleDraft !== nextSnapshot.title) setTitleDraft(nextSnapshot.title);
     if (!descriptionDirty && field === 'description' && description !== nextSnapshot.description) setDescription(nextSnapshot.description);
     serverSnapshotRef.current = nextSnapshot;
@@ -303,14 +317,19 @@ export default function TaskScreen() {
   const labelIds = detail?.labels.flatMap((label) => label ? [label._id] : []) ?? [];
 
   async function run(action: () => Promise<unknown>, clear?: () => void) {
+    const token = submissionGate.current.begin();
+    if (!token) return false;
+    const submittedTaskIdentity = taskIdentity;
     setBusy(true);
     setError('');
     try {
       await action();
+      if (currentTaskIdentity.current !== submittedTaskIdentity) return false;
       clear?.();
       hapticMedium();
       return true;
     } catch (failure) {
+      if (currentTaskIdentity.current !== submittedTaskIdentity) return false;
       setError(errorMessage(failure));
       if (failure instanceof Error && failure.message.includes('task_conflict')) {
         savedRevision.current = null;
@@ -318,12 +337,17 @@ export default function TaskScreen() {
       }
       return false;
     } finally {
-      setBusy(false);
+      if (submissionGate.current.finish(token)) setBusy(false);
     }
   }
 
   async function saveField(patch: TaskFieldPatch, confirmOpenSubtasks?: boolean) {
     if (!detail) return;
+    const token = submissionGate.current.begin();
+    if (!token) return;
+    const submittedTitleDraft = titleDraft;
+    const submittedTaskIdentity = taskIdentity;
+    pendingPatch.current = patch;
     setField(null);
     setConfirmPatch(null);
     setBusy(true);
@@ -336,6 +360,7 @@ export default function TaskScreen() {
         ...patch,
         ...identity,
       });
+      if (currentTaskIdentity.current !== submittedTaskIdentity) return;
       savedRevision.current = nextRevision;
       const previousSnapshot = serverSnapshotRef.current;
       if (previousSnapshot) {
@@ -348,9 +373,10 @@ export default function TaskScreen() {
         serverSnapshotRef.current = nextSnapshot;
         baselineSnapshotRef.current = nextSnapshot;
       }
-      if (patch.title !== undefined) setTitleDraft(null);
+      if (patch.title !== undefined) setTitleDraft((current) => current === submittedTitleDraft ? null : current);
       hapticMedium();
     } catch (failure) {
+      if (currentTaskIdentity.current !== submittedTaskIdentity) return;
       if (failure instanceof Error
         && failure.message.includes('task_open_subtasks_confirmation_required')) {
         setConfirmPatch(patch);
@@ -363,19 +389,22 @@ export default function TaskScreen() {
       }
       if (patch.description !== undefined) setField('description');
     } finally {
-      setBusy(false);
+      pendingPatch.current = null;
+      if (submissionGate.current.finish(token)) setBusy(false);
     }
   }
 
   async function saveLabels(next: Array<Id<'taskLabels'>>) {
     if (!detail) return;
+    const submittedTaskIdentity = taskIdentity;
     await run(async () => {
-      savedRevision.current = await setTaskLabels({
+      const nextRevision = await setTaskLabels({
         taskId: detail.task._id,
         labelIds: next,
         expectedRevision: savedRevision.current ?? detail.task.revision,
         ...identity,
       });
+      if (currentTaskIdentity.current === submittedTaskIdentity) savedRevision.current = nextRevision;
     });
   }
 
@@ -433,6 +462,9 @@ export default function TaskScreen() {
   async function addComment() {
     const body = comment.trim();
     if (!detail || !body || busy || !detail.capabilities.canComment) return;
+    const token = submissionGate.current.begin();
+    if (!token) return;
+    const draft = commentSubmission.current.capture(commentSignature.current, idempotencyKey);
     setBusy(true);
     setError('');
     try {
@@ -440,17 +472,20 @@ export default function TaskScreen() {
         taskId: detail.task._id,
         body,
         mentionedProjectMemberIds: mentionIds,
-        idempotencyKey: commentDraftKey.current ??= idempotencyKey(),
+        idempotencyKey: draft.key,
         ...identity,
       });
-      setComment('');
-      commentDraftKey.current = null;
-      setMentionIds([]);
-      setComposerOpen(false);
+      if (commentSubmission.current.settleSuccess(draft, commentSignature.current)) {
+        setComment('');
+        setMentionIds([]);
+        setComposerOpen(false);
+      }
     } catch (failure) {
-      setError(taskErrorMessage(failure, 'The update could not be added. Check your connection and try again.'));
+      if (commentSubmission.current.isCurrent(draft, commentSignature.current)) {
+        setError(taskErrorMessage(failure, 'The update could not be added. Check your connection and try again.'));
+      }
     } finally {
-      setBusy(false);
+      if (submissionGate.current.finish(token)) setBusy(false);
     }
   }
 
@@ -471,6 +506,8 @@ export default function TaskScreen() {
 
   function addSubtask() {
     if (!detail || !subtask.trim() || subtaskPendingRef.current) return;
+    const submittedSubtask = subtask;
+    const draft = subtaskSubmission.current.capture(JSON.stringify([taskIdentity, subtask]), idempotencyKey);
     subtaskPendingRef.current = true;
     void run(() => createTask({
       projectId: project,
@@ -478,11 +515,11 @@ export default function TaskScreen() {
       parentTaskId: detail.task._id,
       title: subtask.trim(),
       priority: 'none',
-      idempotencyKey: subtaskIntentRef.current,
+      idempotencyKey: draft.key,
       ...identity,
     }), () => {
-      setSubtask('');
-      subtaskIntentRef.current = idempotencyKey();
+      setSubtask((current) => current === submittedSubtask ? '' : current);
+      subtaskSubmission.current.invalidate();
     }).finally(() => {
       subtaskPendingRef.current = false;
     });
@@ -517,6 +554,7 @@ export default function TaskScreen() {
     ?? (detail.assignee ? 'Assigned member' : 'Unassigned');
   const displayedAssigneeName = assigneeName;
   const projectName = projectNavigation?.available && projectNavigation.project ? projectNavigation.project.name : 'Project';
+  const companyName = projectNavigation?.available && projectNavigation.company ? projectNavigation.company.displayName : 'Company';
   const updatesLoading = updateFilter === 'comments'
     ? commentPage.status === 'LoadingFirstPage'
     : updateFilter === 'activity'
@@ -544,21 +582,10 @@ export default function TaskScreen() {
   return (
     <ThemedView style={styles.screen}>
       <Stack.Screen options={{
-        title: 'Task',
+        title: detail.task.title,
         headerTitleAlign: 'left',
         headerRight: () => (
           <View style={styles.headerActions}>
-            <IconButton
-              accessibilityLabel={detail.following ? 'Unfollow task' : 'Follow task'}
-              appearance="plain"
-              icon="bookmark"
-              onPress={() => void run(() => setFollowing({
-                taskId: detail.task._id,
-                enabled: !detail.following,
-                ...identity,
-              }))}
-              selected={detail.following}
-            />
             <IconButton
               accessibilityLabel="Task options"
               appearance="plain"
@@ -644,6 +671,50 @@ export default function TaskScreen() {
               </View>
               </View>
             )}
+            <View style={styles.projectCrumbs}>
+              <View style={styles.breadcrumbItem}>
+                <EntityMark
+                  id={String(projectNavigation?.company?._id ?? routeIdentity?.companyId ?? 'company')}
+                  imageUrl={projectNavigation?.company?.logoUrl ?? undefined}
+                  kind="company"
+                  name={companyName}
+                  size={18}
+                />
+                <ThemedText numberOfLines={1} style={styles.breadcrumbName} type="captionBold">{companyName}</ThemedText>
+              </View>
+              <PlatformIcon color={theme.textTertiary} name="chevron-right" size={14} />
+              <Pressable
+                accessibilityHint="Opens this task on its Project Board"
+                accessibilityLabel={`Open Project ${projectName}${detail.board ? `, ${detail.board.name} Board` : ''}`}
+                accessibilityRole="button"
+                onPress={() => {
+                  hapticLight();
+                  if (detail.board) {
+                    router.push(taskListHref(project, routeIdentity, undefined, undefined, {
+                      boardId: detail.task.boardId,
+                      taskId: detail.task._id,
+                    }));
+                  } else {
+                    router.push(projectOverviewHref(project, routeIdentity ? {
+                      archived: Boolean(routeIdentity.archived),
+                      companyId: routeIdentity.companyId,
+                      membershipId: routeIdentity.membershipId,
+                    } : null));
+                  }
+                }}
+                style={({ pressed }) => [styles.breadcrumbItem, pressed && styles.breadcrumbPressed]}
+              >
+                <EntityMark
+                  colorKey={projectNavigation?.project?.markColorKey}
+                  iconKey={projectNavigation?.project?.markIconKey}
+                  id={String(project)}
+                  kind="project"
+                  name={projectName}
+                  size={18}
+                />
+                <ThemedText numberOfLines={1} style={styles.breadcrumbName} type="captionBold">{projectName}</ThemedText>
+              </Pressable>
+            </View>
             <View style={styles.identityRow}>
               <Pressable
                 accessibilityHint={keyCopied ? 'Task identifier copied to the clipboard' : 'Copies the full task identifier'}
@@ -670,43 +741,6 @@ export default function TaskScreen() {
                 <ThemedText themeColor="textSecondary" type="captionBold">Edit</ThemedText>
               </Pressable> : null}
             </View>
-            <Pressable
-              accessibilityHint="Opens this task on its Project Board"
-              accessibilityLabel={`Open ${projectName}${detail.board ? `, ${detail.board.name} Board` : ''}`}
-              accessibilityRole="button"
-              onPress={() => {
-                hapticLight();
-                if (detail.board) {
-                  router.push(taskListHref(project, routeIdentity, undefined, undefined, {
-                    boardId: detail.task.boardId,
-                    taskId: detail.task._id,
-                  }));
-                } else {
-                  router.push(projectOverviewHref(project, routeIdentity ? {
-                    archived: Boolean(routeIdentity.archived),
-                    companyId: routeIdentity.companyId,
-                    membershipId: routeIdentity.membershipId,
-                  } : null));
-                }
-              }}
-              style={({ pressed }) => [styles.projectBoardCard, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
-            >
-              <EntityMark
-                colorKey={projectNavigation?.project?.markColorKey}
-                iconKey={projectNavigation?.project?.markIconKey}
-                id={String(project)}
-                kind="project"
-                name={projectName}
-                size={32}
-              />
-              <View style={styles.projectBoardCopy}>
-                <ThemedText numberOfLines={1} type="smallBold">{projectName}</ThemedText>
-                <View style={styles.boardDestination}>
-                  <PlatformIcon color={theme.textSecondary} name="view-board" size={14} />
-                  <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{detail.board?.name ?? 'Project overview'}</ThemedText>
-                </View>
-              </View>
-            </Pressable>
             <View style={[styles.propertiesCard, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
               <View style={styles.propertyGrid}>
                 <View style={styles.propertyField}>
@@ -848,17 +882,21 @@ export default function TaskScreen() {
         assignees={assignees}
         busy={busy}
         mentionIds={mentionIds}
-        onCancel={() => setComposerOpen(false)}
+        onCancel={() => { commentSubmission.current.dismiss(); setComposerOpen(false); }}
         onChangeText={(value) => {
-          if (value !== comment) commentDraftKey.current = null;
+          commentSignature.current = JSON.stringify([projectId, taskKey, companyId, membershipId, value, mentionIds]);
           setComment(value);
         }}
-        onMentionToggle={(memberId) => setMentionIds((current) => current.includes(memberId as Id<'projectMembers'>)
-          ? current.filter((id) => id !== memberId)
-          : [...current, memberId as Id<'projectMembers'>])}
+        onMentionToggle={(memberId) => setMentionIds((current) => {
+          const next = current.includes(memberId as Id<'projectMembers'>)
+            ? current.filter((id) => id !== memberId)
+            : [...current, memberId as Id<'projectMembers'>];
+          commentSignature.current = JSON.stringify([projectId, taskKey, companyId, membershipId, comment, next]);
+          return next;
+        })}
         onSend={() => void addComment()}
         value={comment}
-      /> : !keyboardVisible && (canAdvance || canComment) ? <View style={[styles.bottomDock, { backgroundColor: theme.background, borderTopColor: theme.hairline, marginBottom: bottomDockClearance, paddingBottom: bottomDockClearance ? 0 : safeAreaInsets.bottom }]}>
+      /> : !keyboardVisible && (canAdvance || canComment) ? <View style={[styles.bottomDock, { backgroundColor: theme.background, borderTopColor: theme.hairline, paddingBottom: Math.max(Spacing.two, safeAreaInsets.bottom) }]}>
         {canAdvance ? <ActionButton
           icon={taskDecision.icon}
           label={taskDecision.label}
@@ -950,6 +988,7 @@ export default function TaskScreen() {
           <SheetSection>
             {labels?.length ? labels.map((label) => (
               <SheetRow
+                disabled={busy}
                 icon="tag"
                 key={label._id}
                 label={label.name}
@@ -963,6 +1002,20 @@ export default function TaskScreen() {
         ) : null}
         {field === 'more' ? (
           <SheetSection>
+            {!readOnly && detail.capabilities.canComment ? <SheetRow
+              detail="Get notified when this task changes."
+              icon={detail.following ? 'bell-off-outline' : 'bell-outline'}
+              label={detail.following ? 'Stop following task updates' : 'Follow task updates'}
+              onPress={() => {
+                setField(null);
+                void run(() => setFollowing({
+                  taskId: detail.task._id,
+                  enabled: !detail.following,
+                  ...identity,
+                }));
+              }}
+              selected={detail.following}
+            /> : null}
             <SheetRow
               icon="project"
               label="View project"
@@ -1031,7 +1084,7 @@ export default function TaskScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: Spacing.four, padding: Spacing.four, paddingTop: MobileHeaderMetrics.contentTop },
-  footerAction: { alignSelf: 'stretch', flex: 1 },
+  footerAction: { alignSelf: 'stretch', borderCurve: 'continuous', borderRadius: Radius.large, flex: 1 },
   assigneeCopy: { flex: 1, gap: 2, minWidth: 0 },
   assigneeField: { flex: 1, gap: Spacing.one, justifyContent: 'center', minHeight: 56, minWidth: 0, paddingHorizontal: Spacing.one, paddingVertical: Spacing.one },
   assigneeValue: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
@@ -1039,9 +1092,10 @@ const styles = StyleSheet.create({
   editTitleButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.one, justifyContent: 'center', minHeight: TouchTarget, minWidth: TouchTarget, paddingHorizontal: Spacing.two },
   identityRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minHeight: TouchTarget },
   taskKeyButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, minHeight: 36, paddingHorizontal: Spacing.two },
-  projectBoardCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, minHeight: 60, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
-  projectBoardCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
-  boardDestination: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  projectCrumbs: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
+  breadcrumbItem: { alignItems: 'center', flexGrow: 0, flexDirection: 'row', flexShrink: 1, gap: Spacing.one, maxWidth: '48%', minHeight: TouchTarget, minWidth: 0 },
+  breadcrumbPressed: { opacity: 0.68 },
+  breadcrumbName: { flexShrink: 1, minWidth: 0 },
   propertiesCard: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
   propertyDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.one },
   propertyGrid: { alignItems: 'stretch', flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.one, paddingVertical: Spacing.two },

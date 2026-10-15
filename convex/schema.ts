@@ -346,6 +346,13 @@ export default defineSchema({
       filterFields: ['projectId'],
     }),
 
+  messageHides: defineTable({
+    messageId: v.id('messages'),
+    userId: v.id('users'),
+  })
+    .index('by_user_message', ['userId', 'messageId'])
+    .index('by_message', ['messageId']),
+
   channelThreads: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),

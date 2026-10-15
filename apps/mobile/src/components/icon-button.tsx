@@ -1,5 +1,6 @@
 import { ActivityIndicator, StyleSheet } from 'react-native';
 
+import { IOSGlassMaterial } from '@/components/ios-glass-material';
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { Radius, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -12,7 +13,7 @@ type Props = {
   icon: IconName;
   loading?: boolean;
   onPress: () => void;
-  appearance?: 'surface' | 'plain';
+  appearance?: 'surface' | 'plain' | 'glass';
   selected?: boolean;
   size?: number;
 };
@@ -50,12 +51,13 @@ export function IconButton({
       style={[
         styles.button,
         {
-          backgroundColor: appearance === 'plain' ? 'transparent' : selected ? theme.accentSoft : theme.homeSurface,
-          borderColor: appearance === 'plain' ? 'transparent' : theme.homeBorder,
+          backgroundColor: appearance === 'plain' || appearance === 'glass' ? 'transparent' : selected ? theme.accentSoft : theme.homeSurface,
+          borderColor: appearance === 'plain' || appearance === 'glass' ? 'transparent' : theme.homeBorder,
           opacity: unavailable ? 0.42 : 1,
         },
         pressFeedback.animatedStyle,
       ]}>
+      {appearance === 'glass' ? <IOSGlassMaterial style={styles.glassMaterial} /> : null}
       {loading ? <ActivityIndicator color={color} size="small" /> : <PlatformIcon color={color} name={icon} size={size} weight="medium" />}
     </AnimatedPressable>
   );
@@ -71,5 +73,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     width: TouchTarget,
+  },
+  glassMaterial: {
+    borderCurve: 'continuous',
+    borderRadius: Radius.pill,
   },
 });

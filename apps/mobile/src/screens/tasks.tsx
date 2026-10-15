@@ -4,8 +4,11 @@ import type { FunctionReturnType } from 'convex/server';
 import type { EntityMarkColorKey, EntityMarkIconKey } from '@track/shared';
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createDraftSubmissionState, createSubmissionGate } from '@/lib/submission-state';
+import { idempotencyKey } from '@/lib/idempotency';
+import { matchesTaskCompanyScope } from '@/lib/my-task-work-view';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
@@ -64,6 +67,10 @@ type CreatePicker = 'assignee' | 'board' | 'priority' | 'status' | null;
 type BoardSort = 'manual' | 'due' | 'priority';
 type BoardFilter = 'all' | 'open' | 'completed' | 'high';
 type GlobalBoardView = FunctionReturnType<typeof api.taskBoards.listMine>[number];
+type BoardMarkTarget = Pick<MobileBoardView, 'board'> & {
+  companyId?: Id<'companies'>;
+  projectMemberId?: Id<'projectMembers'>;
+};
 type TaskStatusTarget = {
   identity: {
     actingCompanyId?: Id<'companies'>;
@@ -167,31 +174,36 @@ export default function TasksScreen() {
     logoUrl: company.logoUrl,
     name: company.displayName,
   }] : []), [activeCompanies]);
-  useEffect(() => {
-    if (!actingCompanyId && activeCompanies[0]?.company?._id) setActingCompanyId(activeCompanies[0].company._id);
-  }, [actingCompanyId, activeCompanies, setActingCompanyId]);
-  const projectDirectoryPages = usePaginatedQuery(api.mobile.listTaskProjects, release.tasks && !projectId && trackUserId && actingCompanyId ? {
+  const companyProjectPages = usePaginatedQuery(api.mobile.listTaskProjects, release.tasks && !projectId && trackUserId && actingCompanyId ? {
     userId: trackUserId,
     actingCompanyId,
   } : 'skip', { initialNumItems: 12 });
-  const projectDirectory = useMemo(() => (projectDirectoryPages.results as Array<FunctionReturnType<typeof api.mobile.listTaskProjects>['page'][number]>)
-    .filter((item): item is NonNullable<typeof item> => Boolean(item && item.membership.status === 'active')),
-  [projectDirectoryPages.results]);
+  const personalProjectPages = usePaginatedQuery(api.mobile.listProjects, release.tasks && !projectId && trackUserId && !actingCompanyId ? {
+    userId: trackUserId,
+    personalOnly: true,
+  } : 'skip', { initialNumItems: 12 });
+  const projectDirectoryPages = actingCompanyId ? companyProjectPages : personalProjectPages;
+  const projectDirectory = useMemo(() => projectDirectoryPages.results
+    .filter((item): item is NonNullable<typeof item> => Boolean(item
+      && (item.membership.status === 'active' || item.membership.status === undefined)
+      && matchesTaskCompanyScope(item.membership.companyId, actingCompanyId))),
+  [actingCompanyId, projectDirectoryPages.results]);
   const globalBoards = useQuery(api.taskBoards.listMine, release.tasks && !projectId ? {
     actingCompanyId: actingCompanyId ?? undefined,
+    personalOnly: !actingCompanyId,
   } : 'skip') as GlobalBoardView[] | undefined;
   const assignedTaskPages = usePaginatedQuery(
     api.mobile.listMyTasks,
     release.tasks && !projectId && trackUserId
-      ? { userId: trackUserId, actingCompanyId: actingCompanyId ?? undefined }
+      ? { userId: trackUserId, actingCompanyId: actingCompanyId ?? undefined, personalOnly: !actingCompanyId }
       : 'skip',
     { initialNumItems: 12 },
   );
   const assignedTaskRows = useMemo(() => assignedTaskPages.results.filter((item): item is MyTask =>
-    Boolean(item && (!actingCompanyId || String(item.companyId ?? '') === String(actingCompanyId))),
+    Boolean(item && matchesTaskCompanyScope(item.companyId, actingCompanyId)),
   ), [actingCompanyId, assignedTaskPages.results]);
   const companyBoards = useMemo(() =>
-    globalBoards?.filter((item) => String(item.companyId ?? '') === String(actingCompanyId ?? '')) ?? [],
+    globalBoards?.filter((item) => matchesTaskCompanyScope(item.companyId, actingCompanyId)) ?? [],
   [actingCompanyId, globalBoards]);
   const suggestions = useQuery(api.taskSuggestions.list, release.tasks && projectId && !readOnly ? {
     projectId: project,
@@ -208,7 +220,7 @@ export default function TasksScreen() {
   const [createProjectDropdownOpen, setCreateProjectDropdownOpen] = useState(false);
   const [selectedCreateProjectId, setSelectedCreateProjectId] = useState<Id<'projects'> | null>(null);
   const [boardOpen, setBoardOpen] = useState(false);
-  const [boardMarkTarget, setBoardMarkTarget] = useState<MobileBoardView | null>(null);
+  const [boardMarkTarget, setBoardMarkTarget] = useState<BoardMarkTarget | null>(null);
   const [boardMarkIconKey, setBoardMarkIconKey] = useState<EntityMarkIconKey | ''>('');
   const [boardMarkColorKey, setBoardMarkColorKey] = useState<EntityMarkColorKey | ''>('');
   const [boardMarkSaving, setBoardMarkSaving] = useState(false);
@@ -223,6 +235,9 @@ export default function TasksScreen() {
   const [assigneeId, setAssigneeId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const createGate = useRef(createSubmissionGate());
+  const createDraft = useRef(createDraftSubmissionState());
+  const createSignature = useRef('');
   const [assignedTaskConfirmation, setAssignedTaskConfirmation] = useState<{ task: MyTask; stateId: string } | null>(null);
   const [boardSearch, setBoardSearch] = useState('');
   const [activeBoardStateId, setActiveBoardStateId] = useState('');
@@ -250,13 +265,13 @@ export default function TasksScreen() {
     setBoardMarkSaving(true);
     try {
       await updateBoardMark({
-        actingCompanyId: identity?.companyId,
+        actingCompanyId: boardMarkTarget.companyId ?? identity?.companyId,
         boardId: boardMarkTarget.board._id,
         description: boardMarkTarget.board.description ?? null,
         markColorKey: boardMarkColorKey || null,
         markIconKey: boardMarkIconKey || null,
         name: boardMarkTarget.board.name,
-        projectMemberId: identity?.membershipId,
+        projectMemberId: boardMarkTarget.projectMemberId ?? identity?.membershipId,
       });
       setBoardMarkTarget(null);
     } catch (failure) {
@@ -365,8 +380,10 @@ export default function TasksScreen() {
   const selectedCreateAssigneeId = assignableCreateAssignees?.some((item) =>
     item.member._id === assigneeId,
   ) ? assigneeId : '';
+  createSignature.current = JSON.stringify([createScopeProjectId, createScopeIdentity, selectedCreateBoard?.board._id, title, description, createWorkflowStateId, priority, dueDate, selectedCreateAssigneeId]);
 
   function closeCreateSheet() {
+    createDraft.current.dismiss();
     setCreatePicker(null);
     setCreateProjectDropdownOpen(false);
     setCreateOpen(false);
@@ -507,6 +524,9 @@ export default function TasksScreen() {
 
   async function create() {
     if (!title.trim() || !createScopeProjectId || createBoardsLoading) return;
+    const token = createGate.current.begin();
+    if (!token) return;
+    const draft = createDraft.current.capture(createSignature.current, idempotencyKey);
     setBusy(true);
     setError('');
     try {
@@ -524,11 +544,15 @@ export default function TasksScreen() {
         assigneeProjectMemberId: selectedCreateAssigneeId
           ? selectedCreateAssigneeId as Id<'projectMembers'>
           : undefined,
-        idempotencyKey: `${Date.now()}-${Math.random()}`,
+        idempotencyKey: draft.key,
         ...createScopeQueryIdentity,
       };
       if (offline && trackUserId) {
         await enqueueOfflineTask(trackUserId, taskInput);
+        if (!createDraft.current.settleSuccess(draft, createSignature.current)) {
+          showToast({ title: 'Task saved offline', message: 'Your current draft is kept.', tone: 'info' });
+          return;
+        }
         hapticMedium();
         closeCreateSheet();
         setTitle('');
@@ -542,6 +566,10 @@ export default function TasksScreen() {
         return;
       }
       const result = await createTask(taskInput);
+      if (!createDraft.current.settleSuccess(draft, createSignature.current)) {
+        showToast({ title: 'Task created', message: 'Your current draft is kept.', tone: 'success' });
+        return;
+      }
       hapticMedium();
       closeCreateSheet();
       setTitle('');
@@ -553,9 +581,10 @@ export default function TasksScreen() {
       setAssigneeId('');
       router.push(taskDetailHref(createScopeProjectId, result.publicKey, createScopeIdentity));
     } catch (failure) {
-      setError(readableError(failure));
+      if (createDraft.current.isCurrent(draft, createSignature.current)) setError(readableError(failure));
+      else showToast({ title: 'Task not created', message: readableError(failure), tone: 'error' });
     } finally {
-      setBusy(false);
+      if (createGate.current.finish(token)) setBusy(false);
     }
   }
 
@@ -699,7 +728,7 @@ export default function TasksScreen() {
         confirmationTask={assignedTaskConfirmation?.task ?? null}
         boards={companyBoards}
         boardsLoading={globalBoards === undefined}
-        companyName={actingCompany?.company?.displayName ?? 'All Companies'}
+        companyName={actingCompany?.company?.displayName ?? 'Personal Projects'}
         companyId={actingCompanyId}
         companyLogoUrl={actingCompany?.company?.logoUrl ?? null}
         companyOptions={companyOptions}
@@ -717,6 +746,14 @@ export default function TasksScreen() {
         onOpenBoard={(item) => {
           const targetIdentity = item.companyId ? { companyId: item.companyId, membershipId: item.projectMemberId } : null;
           router.push(taskListHref(item.project._id, targetIdentity, undefined, undefined, { boardId: item.board._id }) as never);
+        }}
+        onCreateTaskInBoard={(item) => {
+          const targetIdentity = item.companyId ? { companyId: item.companyId, membershipId: item.projectMemberId } : null;
+          router.push(taskListHref(item.project._id, targetIdentity, undefined, undefined, { boardId: item.board._id, create: true }) as never);
+        }}
+        onEditBoardMark={(item) => {
+          setBoardMarkTarget(item);
+          setBoardOpen(true);
         }}
         onOpenTask={(item) => {
           const taskIdentity = item.companyId ? { companyId: item.companyId, membershipId: item.projectMemberId } : null;
@@ -765,7 +802,6 @@ export default function TasksScreen() {
             columnCount={columns.length}
             onStatePress={setActiveBoardStateId}
             states={columns.map((column) => column.state)}
-            taskCount={visibleTaskCount}
           />
         </>
       ) : (
@@ -996,7 +1032,7 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  boardScreen: { flex: 1, gap: Spacing.three, padding: Spacing.four, paddingTop: Platform.OS === 'ios' ? Spacing.six : Spacing.four },
+  boardScreen: { flex: 1, gap: Spacing.one, padding: Spacing.four, paddingTop: Spacing.two },
   content: { gap: Spacing.three, padding: Spacing.four },
   fieldCell: { flex: 1, minWidth: 150 },
   fieldCellStacked: { flex: 0, width: '100%' },

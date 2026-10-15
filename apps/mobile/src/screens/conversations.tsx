@@ -15,15 +15,14 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ConversationProjectTabs } from '@/components/conversation-project-tabs';
 import { ScreenLoading } from '@/components/screen-loading';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
+import { WorkspaceTopControls } from '@/components/workspace-top-controls';
 import { OptionsSheet, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
-import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
+import { MobileHeaderMetrics, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useCompany } from '@/contexts/company-context';
 import { useTrackUser } from '@/contexts/track-user-context';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { useTheme } from '@/hooks/use-theme';
-import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { channelHref, projectOverviewHref, type RepresentedProjectContext } from '@/lib/company-navigation';
 import { channelSearchMessages, hasChannelMessageMatches } from '@/lib/conversation-search';
 import { hapticLight } from '@/lib/haptics';
@@ -44,11 +43,12 @@ type ConversationListItem =
   | { key: string; type: 'archive' };
 type ConversationSection = { key: string; title: string; project: ProjectRow; data: ConversationListItem[] };
 const chatViewabilityConfig = { itemVisiblePercentThreshold: 10 };
+const channelIconSize = entityDirectoryRow.iconSize;
+const searchResultChannelIconSize = 42;
 
 export default function ConversationsScreen() {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
-  const { animatedStyle: clearSearchPressStyle, onPressIn: clearSearchPressIn, onPressOut: clearSearchPressOut } = usePressFeedback({ pressedScale: 0.96 });
   const router = useRouter();
   const routeParams = useLocalSearchParams<{ archive?: string; companyId?: string; membershipId?: string; projectId?: string; startup?: string }>();
   const bottomInset = useBottomTabContentInset(Spacing.five);
@@ -221,35 +221,24 @@ export default function ConversationsScreen() {
         key={String(item.project._id)}
       />) : null}
       <SectionList
-        contentContainerStyle={[styles.content, { paddingBottom: bottomInset, paddingTop: Spacing.two + safeAreaInsets.top, paddingLeft: Spacing.four + safeAreaInsets.left, paddingRight: Spacing.four + safeAreaInsets.right }]}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomInset, paddingTop: MobileHeaderMetrics.contentTop + safeAreaInsets.top, paddingLeft: Spacing.four + safeAreaInsets.left, paddingRight: Spacing.four + safeAreaInsets.right }]}
         sections={conversationSections}
         keyExtractor={(item) => item.key}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={<View style={styles.headerStack}>
-          <View style={styles.headingRow}>
-            <View style={styles.headingCopy}>
-              <ThemedText accessibilityRole="header" numberOfLines={1} style={styles.headingTitle} type="display">Chats</ThemedText>
-            </View>
-            <Pressable accessibilityHint="Opens the Company selector" accessibilityLabel={`Switch Company. Current Company: ${companyName}`} accessibilityRole="button" onPress={() => setCompanySheetOpen(true)} style={({ pressed }) => [styles.companySwitchButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}>
-              <EntityMark id={String(actingCompanyId ?? 'company')} imageUrl={actingCompany?.company?.logoUrl} kind="company" name={companyName} size={26} />
-              <ThemedText numberOfLines={1} style={styles.companySwitchName} type="captionBold">{companyName}</ThemedText>
-              <PlatformIcon color={theme.textSecondary} name="chevron-down" size={14} weight="regular" />
-            </Pressable>
-          </View>
-          <View style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
-            <PlatformIcon color={theme.textTertiary} name="search" size={19} weight="regular" />
-            <ThemedTextInput accessibilityLabel={searchPlaceholder} autoCapitalize="none" autoCorrect={false} keyboardAppearance={theme.background === '#1b1917' ? 'dark' : 'light'} maxLength={120} maxFontSizeMultiplier={MaxFontScale} onChangeText={setSearch} placeholder={searchPlaceholder} placeholderTextColor={theme.textTertiary} returnKeyType="search" style={[styles.searchInput, { color: theme.text }]} value={search} />
-            {search ? <AnimatedPressable
-              accessibilityLabel="Clear search"
-              accessibilityRole="button"
-              entering={reducedMotion ? undefined : FadeIn.duration(110)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(80)}
-              onPressIn={clearSearchPressIn}
-              onPressOut={clearSearchPressOut}
-              onPress={() => setSearch('')}
-              style={[styles.clearSearch, clearSearchPressStyle]}
-            ><PlatformIcon color={theme.textSecondary} name="close" size={18} weight="regular" /></AnimatedPressable> : null}
-          </View>
+          <WorkspaceTopControls
+            companyId={actingCompanyId ? String(actingCompanyId) : null}
+            companyLogoUrl={actingCompany?.company?.logoUrl ?? null}
+            companyName={companyName}
+            disabled={activeCompanies.length === 0}
+            maxSearchLength={120}
+            onSearchChange={setSearch}
+            onSwitchCompany={() => setCompanySheetOpen(true)}
+            search={search}
+            searchAccessibilityLabel={searchPlaceholder}
+            searchPlaceholder={searchPlaceholder}
+            title="Chats"
+          />
           <ConversationProjectTabs
             onOpen={(id) => {
               const item = projects.find(({ project }) => String(project._id) === id);
@@ -385,8 +374,13 @@ function ConversationListRow({ item, onActions, onChannel, onMessage, project }:
     const target = channelActionTarget(project, channel);
     return <View style={[styles.channelBlock, { borderBottomColor: theme.homeBorder }]}><Pressable accessibilityActions={[{ name: 'showActions', label: 'Show Channel actions' }]} accessibilityHint="Tap to open. Touch and hold or use the Channel actions menu to show options." accessibilityLabel={`${channel.group.name} Channel${channel.unreadCount ? `, ${channel.unreadCount} unread` : ''}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} delayLongPress={360} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'showActions') onActions(target); }} onLongPress={() => { setLongPressed(true); onActions(target); }} onPressOut={() => setLongPressed(false)} onPress={() => onChannel(channel.group._id)} style={({ pressed }) => [styles.channelRow, { backgroundColor: longPressed ? theme.accentSoft : pressed ? theme.backgroundSelected : 'transparent' }]}>
       <ChannelIcon id={String(channel.group._id)} channel={channel.group} iconKey={item.iconKey} name={channel.group.name} unreadCount={channel.unreadCount} />
-      <View style={styles.rowCopy}><ThemedText numberOfLines={1} style={styles.rowTitle} type="smallBold">{channel.group.name}</ThemedText><ThemedText numberOfLines={2} themeColor="textSecondary" type="caption">{channel.lastMessage?.body?.trim() || 'No messages yet'}</ThemedText></View>
-      <View style={styles.rowMeta}>{channel.lastMessage ? <ThemedText themeColor="textTertiary" type="caption">{conversationTime(channel.lastMessage.createdAt)}</ThemedText> : null}</View>
+      <View style={styles.channelCopy}>
+        <View style={styles.channelTopLine}>
+          <ThemedText numberOfLines={1} style={[styles.rowTitle, styles.channelName]} type="subtitle">{channel.group.name}</ThemedText>
+          {channel.lastMessage ? <ThemedText style={styles.channelDate} themeColor="textTertiary" type="caption">{conversationTime(channel.lastMessage.createdAt)}</ThemedText> : null}
+        </View>
+        <ThemedText numberOfLines={2} style={styles.channelPreview} themeColor="textSecondary" type="caption">{channel.lastMessage?.body?.trim() || 'No messages yet'}</ThemedText>
+      </View>
     </Pressable></View>;
   }
   return null;
@@ -447,7 +441,7 @@ function channelActionTarget(project: ProjectRow, channel: ChannelRow): Conversa
 function ChannelIcon({ channel, id, iconKey, name, unreadCount }: { channel?: ChannelRow['group']; id: string; iconKey: EntityMarkIconKey; name: string; unreadCount: number }) {
   const theme = useTheme();
   return <View style={styles.channelIconWrap}>
-    <EntityMark colorKey={channel?.markColorKey} iconKey={iconKey} id={id} kind="channel" name={name} size={42} />
+    <EntityMark colorKey={channel?.markColorKey} iconKey={iconKey} id={id} kind="channel" name={name} size={channelIconSize} />
     {unreadCount > 0 ? <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.channelUnreadBadge, { backgroundColor: theme.accent, borderColor: theme.homeSurface }]}><ThemedText style={styles.channelUnreadCount} type="captionBold">{unreadCount > 99 ? '99+' : unreadCount}</ThemedText></View> : null}
   </View>;
 }
@@ -455,14 +449,11 @@ function ChannelIcon({ channel, id, iconKey, name, unreadCount }: { channel?: Ch
 const styles = StyleSheet.create({
   archiveLabel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   channelBlock: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: entityDirectoryRow.separatorPadding },
-  channelIcon: { alignItems: 'center', borderRadius: Radius.pill, height: entityDirectoryRow.iconSize, justifyContent: 'center', width: entityDirectoryRow.iconSize },
-  channelIconWrap: { flexShrink: 0, height: entityDirectoryRow.iconSize, position: 'relative', width: entityDirectoryRow.iconSize },
+  channelIcon: { alignItems: 'center', borderRadius: Radius.pill, height: searchResultChannelIconSize, justifyContent: 'center', width: searchResultChannelIconSize },
+  channelIconWrap: { borderRadius: Radius.pill, flexShrink: 0, height: channelIconSize, position: 'relative', width: channelIconSize },
   channelUnreadBadge: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: 1.5, justifyContent: 'center', minHeight: 24, minWidth: 24, paddingHorizontal: 3, paddingVertical: 2, position: 'absolute', right: -4, top: -4 },
   channelUnreadCount: { ...Typography.captionBold, color: '#1b1917' },
   channelRow: entityDirectoryRowStyle,
-  clearSearch: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },
-  companySwitchButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', flexShrink: 1, gap: Spacing.two, height: TouchTarget, justifyContent: 'flex-start', maxWidth: '62%', minWidth: TouchTarget, paddingHorizontal: Spacing.two },
-  companySwitchName: { flexShrink: 1, minWidth: 0 },
   content: { gap: Spacing.one, paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
   divider: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two, paddingTop: Spacing.two, paddingBottom: Spacing.one },
   dividerLabel: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, maxWidth: '80%', paddingHorizontal: Spacing.one },
@@ -471,23 +462,22 @@ const styles = StyleSheet.create({
   emptyProject: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   footerSpace: { height: Spacing.four },
   headerStack: { gap: Spacing.two, paddingBottom: Spacing.two },
-  headingRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget },
-  headingCopy: { flex: 1, gap: Spacing.two, minWidth: 0 },
-  headingTitle: { flex: 1, flexShrink: 1, minWidth: 0 },
   loadMore: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, marginHorizontal: Spacing.three, marginVertical: Spacing.two, minHeight: TouchTarget, justifyContent: 'center' },
   moreButton: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, marginHorizontal: Spacing.three, marginVertical: Spacing.two, minHeight: TouchTarget, justifyContent: 'center' },
   projectCarousel: { gap: Spacing.two, paddingVertical: Spacing.two },
   projectPill: { borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, maxWidth: 210, minHeight: 38, justifyContent: 'center', paddingHorizontal: Spacing.three },
   projectSection: { marginTop: 0 },
+  channelCopy: { flex: 1, gap: Spacing.one, minWidth: 0 },
+  channelTopLine: { alignItems: 'flex-start', flexDirection: 'row', gap: Spacing.two, minWidth: 0 },
+  channelName: { flex: 1, minWidth: 0 },
+  channelDate: { flexShrink: 0, textAlign: 'right' },
+  channelPreview: { marginTop: Spacing.half },
   rowCopy: { flex: 1, gap: entityDirectoryRow.copyGap, minWidth: 0 },
-  rowMeta: { alignItems: 'flex-end', gap: Spacing.one },
   searchResult: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, elevation: 1, flexDirection: 'row', gap: Spacing.three, marginBottom: Spacing.two, marginHorizontal: Spacing.one, minHeight: 78, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, shadowColor: '#000', shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.04, shadowRadius: 2 },
   rowTitle: { flexShrink: 1 },
   screen: { flex: 1 },
   sheetCompanyMark: { alignItems: 'center', borderRadius: Radius.medium, height: 36, justifyContent: 'center', width: 36 },
-  search: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, paddingLeft: Spacing.three },
   searchStatus: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, paddingHorizontal: Spacing.three },
-  searchInput: { ...Typography.body, flex: 1, minHeight: TouchTarget, paddingVertical: Spacing.two },
   scopeNote: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.one, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   selectorLabel: { letterSpacing: 0.8, paddingTop: Spacing.one },
 });

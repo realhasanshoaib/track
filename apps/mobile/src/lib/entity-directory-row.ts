@@ -1,6 +1,6 @@
 /** Shared geometry for tappable Channel and Board rows. */
 export const entityDirectoryRow = {
-  iconSize: 42,
+  iconSize: 48,
   minHeight: 68,
   gap: 8,
   copyGap: 3,

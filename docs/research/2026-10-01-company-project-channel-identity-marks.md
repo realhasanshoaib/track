@@ -12,11 +12,11 @@ Use a hybrid identity model:
 
 | Entity | Default | Customization | Why |
 |---|---|---|---|
-| Company | Office/building glyph on a stable identity color; show an uploaded company logo when present. | Company admins can upload or replace the Company logo. | Track already stores Company logos and has an admin-checked upload path. A real organization logo has clear value at the Company boundary. |
-| Project | A curated work-related glyph on a stable background color. | Project managers can choose from approved glyph and color tokens. | Project icons are useful for scanning and do not need user-uploaded files to feel distinct. Linear documents preset icon and color selection for Projects. |
+| Company | Show an uploaded company logo when present; otherwise use a deterministic identity pattern and color. | Company admins can upload or replace the Company logo. | Track already stores Company logos and has an admin-checked upload path. The fallback gives each Company a recognizable mark without requiring an upload. |
+| Project | Use a deterministic identity pattern and color by default. | Project managers can choose from approved glyph and color tokens. | Project marks stay recognizable across mobile and web, while managers can choose a semantic glyph when they need one. |
 | Channel | A Channel glyph on a stable background color. Use a lock glyph for a private Channel only when the access state is also named in text. | Use a small curated set of category glyphs/colors if Channel owners need customization; keep the default automatic. | A Channel is a conversation space inside a Project, so its mark should support scope recognition without suggesting a person or a separate Company. |
 
-The system should always have a complete fallback. Render an uploaded Company logo first when one is present, then a configured glyph/color, then a deterministic fallback derived from the stable entity ID and scope type. Keep the adjacent Company, Project, or Channel name visible. Initials may supplement the fallback for names, but a single initial and a four-color palette are too collision-prone to be the whole identity system.
+The system should always have a complete fallback. Render an uploaded Company logo first when one is present, then a configured glyph/color, then a deterministic identity pattern derived from the stable entity ID and scope type. Keep the adjacent Company, Project, or Channel name visible. Initials may supplement the fallback for names, but a single initial and a four-color palette are too collision-prone to be the whole identity system.
 
 Do not use task status, priority, permission, or unread colors as entity-brand colors. The current mobile Company color helper selects among success, workflow, and accent semantic colors. Apple advises against using the same color to mean different things; an identity palette should be separate from task and access-state palettes.
 
@@ -56,7 +56,7 @@ Repository paths checked: `convex/schema.ts`, `convex/schema/companyCoreTables.t
 
 ### Shared identity defaults
 
-The mobile and web `EntityMark` components use `packages/shared/src/entity-identity.ts`, which has no UI dependencies. It selects a deterministic background from entity kind and stable ID, and uses Project or Channel name cues when no glyph is saved. The palette is separate from task status and priority colors.
+The mobile and web `EntityMark` components use `packages/shared/src/entity-identity.ts`, which has no UI dependencies. It selects a deterministic background from entity kind and stable ID and generates the same 5-by-5 identity pattern for automatic Company and Project marks. Channel and Board glyph fallbacks use their names. A saved Project or Channel glyph overrides the automatic Project mark. The palette is separate from task status and priority colors.
 
 The marks appear in mobile Company switchers and Project/Channel directories, web Company and Project navigation, and Project settings. Existing web Channel wrappers use the shared resolver. A visual pass should still compare secondary legacy wrappers for size and alignment parity.
 

@@ -14,6 +14,18 @@ export function resolveReleaseConfig(
     : unavailableReleaseFeatureFlags;
 }
 
+export function canOpenExistingThread(isLoading: boolean, threadsEnabled: boolean) {
+  return isLoading || threadsEnabled;
+}
+
 export function useReleaseConfig() {
-  return resolveReleaseConfig(useQuery(api.releaseConfig.getReleaseConfig));
+  return useReleaseConfigState().config;
+}
+
+export function useReleaseConfigState() {
+  const projection = useQuery(api.releaseConfig.getReleaseConfig);
+  return {
+    config: resolveReleaseConfig(projection),
+    isLoading: projection === undefined,
+  };
 }

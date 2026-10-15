@@ -23,6 +23,7 @@ import { LAUNCH_DISPLAY_DURATION_MS, LaunchScreen } from '@/components/launch-sc
 import { AppToastProvider } from '@/components/app-toast';
 import { TrackHeaderBackground } from '@/components/primary-stack';
 import { TouchFeedback } from '@/components/touch-feedback';
+import { DevelopmentPerformanceMonitor } from '@/components/development-performance-monitor';
 import { Typography } from '@/constants/theme';
 
 if (Platform.OS !== 'web') {
@@ -126,7 +127,7 @@ function AppLayout() {
                 <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
                 <TouchFeedback>
                   <View style={styles.app}>
-                    <Stack
+                    <DevelopmentPerformanceMonitor><Stack
                       screenOptions={{
                         animation: Platform.OS === 'android' ? 'default' : 'slide_from_right',
                         gestureEnabled: true,
@@ -147,7 +148,7 @@ function AppLayout() {
                       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
                       <Stack.Screen name="company" options={{ title: 'Companies' }} />
-                    </Stack>
+                    </Stack></DevelopmentPerformanceMonitor>
                     {showContinuation ? (
                       <View pointerEvents="none" style={styles.continuation}>
                         <LaunchScreen

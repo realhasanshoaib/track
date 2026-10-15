@@ -7,10 +7,11 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, Image as NativeImage, Linking } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { UploadableFile } from '@/lib/attachment-upload';
+import { prepareChatImageDimensions } from '@/lib/chat-image-layout';
 import { hapticDestructive, hapticLight, hapticMedium } from '@/lib/haptics';
 import { shouldFinishVoiceOnRelease, type VoiceGestureOutcome } from '@/lib/voice-recording-gesture';
 
@@ -52,9 +53,12 @@ function explainDenied(subject: string, canAskAgain: boolean) {
 function assetToFile(asset: ImagePicker.ImagePickerAsset): UploadableFile {
   const contentType = asset.mimeType ?? 'image/jpeg';
   const extension = contentType.split('/')[1] ?? 'jpg';
+  const filename = asset.fileName && asset.fileName.trim().length > 0
+    ? asset.fileName
+    : `photo-${Date.now()}.${extension}`;
   return {
     contentType,
-    filename: asset.fileName ?? `photo-${Date.now()}.${extension}`,
+    filename,
     height: asset.height,
     id: nextId(),
     kind: 'file',
@@ -97,7 +101,7 @@ export async function pickDocuments(): Promise<UploadableFile[]> {
     multiple: true,
   });
   if (result.canceled) return [];
-  return result.assets.map((asset) => ({
+  const files: UploadableFile[] = result.assets.map((asset) => ({
     contentType: asset.mimeType ?? 'application/octet-stream',
     filename: asset.name,
     id: nextId(),
@@ -105,6 +109,14 @@ export async function pickDocuments(): Promise<UploadableFile[]> {
     size: asset.size ?? undefined,
     uri: asset.uri,
   }));
+  // Resolve one local file at a time to bound decoder work for large selections.
+  const prepared: UploadableFile[] = [];
+  for (const file of files) {
+    prepared.push(await prepareChatImageDimensions(file, (uri) => new Promise((resolve, reject) => {
+      NativeImage.getSize(uri, (width, height) => resolve({ width, height }), reject);
+    })));
+  }
+  return prepared;
 }
 
 function voiceNoteFile(input: { durationMs: number; uri: string }): UploadableFile {

@@ -203,11 +203,16 @@ export const list = query({
  * permission-checked per board so a Channel board never leaks through a
  * global picker. */
 export const listMine = query({
-  args: { actingCompanyId: v.optional(v.id('companies')) },
+  args: { actingCompanyId: v.optional(v.id('companies')), personalOnly: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
+    if (args.personalOnly && args.actingCompanyId) throw new Error('invalid_project_scope')
     if (args.actingCompanyId) await requireActiveCompanyMembership(ctx, actor, args.actingCompanyId)
-    const memberships = await ctx.db.query('projectMembers').withIndex('by_user', (q) => q.eq('userId', actor.userId)).collect()
+    const memberships = args.personalOnly
+      ? await ctx.db.query('projectMembers').withIndex('by_user_company_status', (q) =>
+          q.eq('userId', actor.userId).eq('companyId', undefined).eq('status', 'active'),
+        ).collect()
+      : await ctx.db.query('projectMembers').withIndex('by_user', (q) => q.eq('userId', actor.userId)).collect()
     const candidates = memberships.filter((membership) =>
       membership.status === 'active' && (!args.actingCompanyId || membership.companyId === args.actingCompanyId),
     )

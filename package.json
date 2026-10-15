@@ -31,7 +31,7 @@
     "gate": "q9gate run",
     "gate:full": "q9gate run --full",
     "convex:dev": "convex dev",
-    "convex:deploy:dev": "convex deploy",
+    "convex:deploy:dev": "convex dev --once --typecheck enable",
     "convex:deploy:prod": "convex deploy --env-file convex.prod.env"
   },
   "devDependencies": {

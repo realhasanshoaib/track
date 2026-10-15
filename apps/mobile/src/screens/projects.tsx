@@ -1,11 +1,15 @@
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createDraftSubmissionState, createSubmissionGate } from '@/lib/submission-state';
+import { idempotencyKey } from '@/lib/idempotency';
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
+import { ActionButton } from '@/components/action-button';
+import { useAppToast } from '@/components/app-toast';
 import { EmptyState } from '@/components/empty-state';
 import { EntityMark } from '@/components/entity-mark';
 import { OptionsSheet, SheetInput, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
@@ -30,6 +34,7 @@ import { hapticLight } from '@/lib/haptics';
 
 export default function ProjectsScreen() {
   const theme = useTheme();
+  const { showToast } = useAppToast();
   const bottomContentInset = useBottomTabContentInset();
   const router = useRouter();
   const { trackUserId } = useTrackUser();
@@ -38,6 +43,9 @@ export default function ProjectsScreen() {
   const [companySheetOpen, setCompanySheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const createGate = useRef(createSubmissionGate());
+  const createDraft = useRef(createDraftSubmissionState());
+  const createSignature = useRef('');
   const [clientLabel, setClientLabel] = useState('');
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -94,18 +102,12 @@ export default function ProjectsScreen() {
   );
 
   useEffect(() => {
-    if (projects.status === 'CanLoadMore') projects.loadMore(50);
-  }, [projects.loadMore, projects.status]);
-
-  useEffect(() => {
     if (expandedMembershipId && !sortedProjects.some((item) => item.membership._id === expandedMembershipId)) {
       setExpandedMembershipId(null);
     }
   }, [expandedMembershipId, sortedProjects]);
 
-  useEffect(() => {
-    if (expandedChannels.status === 'CanLoadMore') expandedChannels.loadMore(20);
-  }, [expandedChannels.loadMore, expandedChannels.status]);
+  createSignature.current = JSON.stringify([projectName, clientLabel, createCompanyId, companyModelEnabled]);
 
   function openProject(item: DirectoryProject) {
     router.push(projectOverviewHref(item.project._id, projectIdentity(item)) as never);
@@ -121,6 +123,9 @@ export default function ProjectsScreen() {
       setCreateError('Choose a Company you administer to create this Project.');
       return;
     }
+    const token = createGate.current.begin();
+    if (!token) return;
+    const draft = createDraft.current.capture(createSignature.current, idempotencyKey);
     setCreating(true);
     setCreateError('');
     try {
@@ -134,16 +139,20 @@ export default function ProjectsScreen() {
       } else {
         await createLegacyProject({ userId: trackUserId, name: projectName.trim(), clientLabel: clientLabel.trim() || undefined });
       }
-      setProjectName('');
-      setClientLabel('');
-      closeCreateSheet();
+      if (createDraft.current.settleSuccess(draft, createSignature.current)) {
+        setProjectName('');
+        setClientLabel('');
+        closeCreateSheet();
+      } else {
+        showToast({ title: 'Project created', tone: 'success' });
+      }
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : '';
-      setCreateError(/not_allowed|company_admin_required|forbidden/i.test(message)
+      if (createDraft.current.isCurrent(draft, createSignature.current)) setCreateError(/not_allowed|company_admin_required|forbidden/i.test(message)
         ? 'Only a Company owner or admin can create a Project in that Company.'
         : 'Track couldn’t create the Project. Check your connection and try again.');
     } finally {
-      setCreating(false);
+      if (createGate.current.finish(token)) setCreating(false);
     }
   }
 
@@ -159,6 +168,7 @@ export default function ProjectsScreen() {
   }
 
   function closeCreateSheet() {
+    createDraft.current.dismiss();
     setCreateOpen(false);
     if (params.create) router.setParams({ create: undefined });
   }
@@ -188,8 +198,7 @@ export default function ProjectsScreen() {
       }} />
       <ConnectivityBanner style={styles.connection} />
 
-      {projects.status === 'LoadingFirstPage' ? <ScreenEntrance style={styles.screenContent}><ScreenLoading variant="projects" /></ScreenEntrance> : (
-        <ScreenEntrance style={styles.screenContent}><FlatList
+      <ScreenEntrance style={styles.screenContent}><FlatList
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={[styles.list, { paddingBottom: bottomContentInset }]}
           data={sortedProjects}
@@ -220,12 +229,12 @@ export default function ProjectsScreen() {
               </Pressable> : null}
             </View>
           </View>}
-          ListEmptyComponent={<EmptyState
+          ListEmptyComponent={projects.status === 'LoadingFirstPage' ? <ScreenLoading variant="projects" /> : <EmptyState
             body={actingCompanyId ? 'Projects you can access will appear here.' : 'Choose a Company to see its Projects and shared work.'}
             icon="project"
             title="No Projects yet"
           />}
-          ListFooterComponent={null}
+          ListFooterComponent={projects.status === 'CanLoadMore' || projects.status === 'LoadingMore' ? <ActionButton label={projects.status === 'LoadingMore' ? 'Loading Projects…' : 'Load more Projects'} loading={projects.status === 'LoadingMore'} onPress={() => { if (projects.status === 'CanLoadMore') projects.loadMore(50); }} variant="secondary" /> : null}
           onEndReached={() => { if (projects.status === 'CanLoadMore') projects.loadMore(50); }}
           onEndReachedThreshold={0.35}
           renderItem={({ item }) => <ProjectDirectoryCard
@@ -233,12 +242,13 @@ export default function ProjectsScreen() {
             expanded={item.membership._id === expandedMembershipId}
             item={item}
             loadingChannels={item.membership._id === expandedMembershipId && expandedChannels.status === 'LoadingFirstPage'}
+            loadingMoreChannels={item.membership._id === expandedMembershipId && expandedChannels.status === 'LoadingMore'}
+            onLoadMoreChannels={item.membership._id === expandedMembershipId && expandedChannels.status === 'CanLoadMore' ? () => expandedChannels.loadMore(20) : undefined}
             onOpenChannel={(channel) => openChannel(item, channel)}
             onOpenProject={() => openProject(item)}
             onToggle={() => setExpandedMembershipId((current) => current === item.membership._id ? null : item.membership._id)}
           />}
         /></ScreenEntrance>
-      )}
 
       <OptionsSheet onClose={() => setCompanySheetOpen(false)} title="Switch Company" visible={companySheetOpen}>
         <SheetSection title="Workspace scope">

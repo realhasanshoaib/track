@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import type { AttachmentReference } from '@/components/chat/types';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -21,6 +21,9 @@ export function FileAttachment({
   const [error, setError] = useState<string | null>(null);
   const icon = attachmentIcon(attachment);
   const size = `${fileTypeLabel(attachment)} · ${formatFileSize(attachment.size)}`;
+  const actionHint = Platform.OS === 'web'
+    ? 'Downloads the file'
+    : 'Downloads the file and opens the share sheet';
 
   async function open() {
     if (!url || busy) return;
@@ -45,7 +48,7 @@ export function FileAttachment({
 
   return (
     <Pressable
-      accessibilityHint={url ? 'Downloads the file and opens the share sheet' : undefined}
+      accessibilityHint={url ? actionHint : undefined}
       accessibilityLabel={`${attachment.filename}, ${detail}`}
       accessibilityRole="button"
       accessibilityState={{ busy, disabled: !url }}
@@ -58,7 +61,7 @@ export function FileAttachment({
         <PlatformIcon color={theme.textSecondary} name={icon} size={18} />
       </View>
       <View style={styles.body}>
-        <ThemedText numberOfLines={1} type="small">
+        <ThemedText ellipsizeMode="middle" numberOfLines={2} type="small">
           {attachment.filename}
         </ThemedText>
         <View style={styles.detail}>

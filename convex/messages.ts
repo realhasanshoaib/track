@@ -63,8 +63,27 @@ type MessageAttachmentInput = {
   durationMs?: number
 }
 
+export async function hiddenMessageIdsForUser(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<'users'>,
+  messages: Doc<'messages'>[],
+) {
+  const deletedMessages = messages.filter((message) => message.deletedAt !== undefined)
+  const hideRows = await Promise.all(deletedMessages.map(async (message) =>
+    await ctx.db.query('messageHides')
+      .withIndex('by_user_message', (q) => q.eq('userId', userId).eq('messageId', message._id))
+      .unique(),
+  ))
+  return new Set(deletedMessages.flatMap((message, index) => hideRows[index] ? [String(message._id)] : []))
+}
+
+export function visibleMessages<T extends Doc<'messages'>>(messages: T[], hiddenIds: Set<string>) {
+  return messages.filter((message) => !hiddenIds.has(String(message._id)))
+}
+
 const UPLOAD_INTENT_TTL_MS = 15 * 60 * 1000
 const MAX_MESSAGE_ATTACHMENT_BYTES = 100 * 1024 * 1024
+const MAX_BULK_MESSAGE_DELETE_COUNT = 50
 
 async function validateMessageMentions(
   ctx: MutationCtx,
@@ -597,7 +616,7 @@ export const list = query({
       projectMemberId: args.projectMemberId,
     }, 'readChannel')
     const cutoff = access.companyAccess?.entitlement?.exitAt
-    return await ctx.db
+    const messages = await ctx.db
       .query('messages')
       .withIndex('by_group_thread_created_at', (q) => cutoff
         ? q.eq('groupId', args.groupId)
@@ -609,6 +628,8 @@ export const list = query({
           .eq('channelThreadId', undefined))
       .order('desc')
       .take(boundedMessageLimit(args.limit))
+    const hiddenIds = await hiddenMessageIdsForUser(ctx, args.userId, messages)
+    return visibleMessages(messages, hiddenIds)
   },
 })
 
@@ -644,14 +665,19 @@ export const listDetailed = query({
           .eq('channelThreadId', undefined))
       .order('desc')
       .take(boundedMessageLimit(args.limit))
-
     const target = args.targetMessageId ? await ctx.db.get(args.targetMessageId) : null
+    const hiddenCandidates = target && !messages.some((message) => message._id === target._id)
+      ? [...messages, target]
+      : messages
+    const hiddenIds = await hiddenMessageIdsForUser(ctx, args.userId, hiddenCandidates)
+    const visibleChannelMessages = visibleMessages(messages, hiddenIds)
     const targetIsVisible = target &&
       target.groupId === args.groupId &&
       target.channelThreadId === undefined &&
+      !hiddenIds.has(String(target._id)) &&
       (!cutoff || target.createdAt <= cutoff)
-    let selectedMessages = messages
-    if (targetIsVisible && !messages.some((message) => message._id === target._id)) {
+    let selectedMessages = visibleChannelMessages
+    if (targetIsVisible && !visibleChannelMessages.some((message) => message._id === target._id)) {
       const contextSize = Math.max(1, Math.floor((boundedMessageLimit(args.limit) - 1) / 2))
       const [older, newer] = await Promise.all([
         ctx.db
@@ -680,7 +706,11 @@ export const listDetailed = query({
       const reversedNewer = [...newer]
       // eslint-disable-next-line unicorn/no-array-reverse -- reason: ES2022 compatibility; operates on a fresh local array.
       reversedNewer.reverse()
-      selectedMessages = [...reversedNewer, target, ...older]
+      const targetContext = [...reversedNewer, target, ...older]
+      selectedMessages = visibleMessages(
+        targetContext,
+        await hiddenMessageIdsForUser(ctx, args.userId, targetContext),
+      )
     }
 
     return await Promise.all(selectedMessages.map(async (message) =>
@@ -775,12 +805,14 @@ export const listPage = query({
       .order('desc')
       .paginate({ ...args.paginationOpts, numItems: pageSize })
     let page = [...result.page]
+    const hiddenIds = await hiddenMessageIdsForUser(ctx, args.userId, page)
     if (args.paginationOpts.cursor === null && args.targetMessageId) {
       const target = await ctx.db.get(args.targetMessageId)
       const targetIsVisible = target &&
         target.projectId === group.projectId &&
         target.groupId === args.groupId &&
         target.channelThreadId === undefined &&
+        !(await hiddenMessageIdsForUser(ctx, args.userId, [target])).has(String(target._id)) &&
         (!cutoff || target.createdAt <= cutoff)
       if (targetIsVisible && !page.some((message) => message._id === target._id)) {
         const contextSize = Math.max(1, Math.floor((pageSize - 1) / 2))
@@ -810,12 +842,16 @@ export const listPage = query({
         const reversedNewer = [...newer]
         // eslint-disable-next-line unicorn/no-array-reverse -- reason: ES2022 compatibility; operates on a fresh local array.
         reversedNewer.reverse()
-        page = [...reversedNewer, target, ...older]
+        page = visibleMessages([...reversedNewer, target, ...older], await hiddenMessageIdsForUser(
+          ctx,
+          args.userId,
+          [...reversedNewer, target, ...older],
+        ))
       }
     }
     return {
       ...result,
-      page: await Promise.all(page.map(async (message) =>
+      page: await Promise.all(visibleMessages(page, hiddenIds).map(async (message) =>
         await buildMessageDetail(
           ctx,
           message,
@@ -1343,6 +1379,115 @@ export const forwardMessage = mutation({
   },
 })
 
+type MessageDeleteAccess = Awaited<ReturnType<typeof authorizeScopedRequest>>
+
+async function deleteMessagesForEveryone(
+  ctx: MutationCtx,
+  messages: Doc<'messages'>[],
+  actorId: Id<'users'>,
+  access: MessageDeleteAccess,
+) {
+  const messageIds = new Set(messages.map((message) => String(message._id)))
+  const attachments = (await Promise.all(messages.flatMap((message) =>
+    message.attachmentIds.map(async (attachmentId) => await ctx.db.get(attachmentId)),
+  ))).filter((attachment) => attachment !== null)
+  const attachmentIds = new Set(attachments.map((attachment) => String(attachment._id)))
+  const attachmentIdsByMessage = new Map(messages.map((message) => [
+    String(message._id), new Set(message.attachmentIds.map(String)),
+  ]))
+  const storageIds = [...new Map(attachments.map((attachment) => [
+    String(attachment.storageId), attachment.storageId,
+  ])).values()]
+  const unsharedStorageIds = (await Promise.all(storageIds.map(async (storageId) => {
+    const storageReferences = await ctx.db
+      .query('attachments')
+      .withIndex('by_storage', (q) => q.eq('storageId', storageId))
+      .collect()
+    return storageReferences.some((candidate) => !attachmentIds.has(String(candidate._id)))
+      ? null
+      : storageId
+  }))).filter((storageId) => storageId !== null)
+
+  for (const message of messages) {
+    await appendAuditEvent(ctx, {
+      projectId: message.projectId,
+      groupId: message.groupId,
+      channelThreadId: message.channelThreadId,
+      actorId,
+      actorProjectMemberId: access.projectMember._id,
+      actingCompanyId: access.companyAccess?.company._id,
+      entityType: 'message',
+      entityId: message._id,
+      action: 'message.deleted',
+      before: {
+        attachmentCount: (attachmentIdsByMessage.get(String(message._id))?.size ?? 0),
+        channelSequence: message.channelSequence,
+        createdAt: message.createdAt,
+      },
+    })
+    await invalidateTaskEvidence(ctx, { messageId: message._id })
+  }
+
+  const assistantStreams = await ctx.db
+    .query('assistantStreams')
+    .withIndex('by_group_created_at', (q) => q.eq('groupId', messages[0]!.groupId))
+    .collect()
+  const attachmentIdStrings = new Set(attachmentIds)
+  for (const stream of assistantStreams) {
+    const evidence = stream.evidence.filter((item) =>
+      !messageIds.has(String(item.messageId)) &&
+      (!item.attachmentId || !attachmentIdStrings.has(String(item.attachmentId))),
+    )
+    const clearsPrompt = stream.promptMessageId !== undefined && messageIds.has(String(stream.promptMessageId))
+    if (evidence.length === stream.evidence.length && !clearsPrompt) continue
+    await ctx.db.patch(stream._id, {
+      evidence,
+      promptMessageId: clearsPrompt ? undefined : stream.promptMessageId,
+      updatedAt: Date.now(),
+    })
+  }
+
+  const deletedAt = Date.now()
+  for (const message of messages) {
+    await ctx.db.patch(message._id, {
+      attachmentIds: [],
+      body: '',
+      deletedAt,
+      deletedBy: actorId,
+      forwardedFrom: undefined,
+      mentionedProjectMemberIds: [],
+      mentions: [],
+      notificationPreview: undefined,
+      trackInvocationId: undefined,
+    })
+  }
+  for (const attachment of attachments) {
+    await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
+    await ctx.db.delete(attachment._id)
+  }
+  await Promise.all(unsharedStorageIds.map(async (storageId) =>
+    await ctx.storage.delete(storageId).catch(() => undefined),
+  ))
+
+  const channelThreadIds = [...new Set(messages.flatMap((message) =>
+    message.channelThreadId ? [message.channelThreadId] : [],
+  ))]
+  for (const channelThreadId of channelThreadIds) {
+    const remainingReplies = await ctx.db
+      .query('messages')
+      .withIndex('by_thread_created_at', (q) => q.eq('channelThreadId', channelThreadId))
+      .order('desc')
+      .collect()
+    const latestReply = remainingReplies[0]
+    await ctx.db.patch(channelThreadId, {
+      replyCount: remainingReplies.length,
+      latestReplyAt: latestReply?.createdAt,
+      latestChannelSequence: latestReply?.channelSequence,
+      updatedAt: Date.now(),
+    })
+  }
+}
+
 export const remove = mutation({
   args: {
     messageId: v.id('messages'),
@@ -1381,101 +1526,118 @@ export const remove = mutation({
     if (!isAuthor) throw new Error('message_delete_forbidden')
     if (message.deletedAt) throw new Error('message_already_deleted')
 
-    const attachments = await Promise.all(
-      message.attachmentIds.map(async (attachmentId) => await ctx.db.get(attachmentId)),
-    )
-    const deletingAttachmentIds = new Set(message.attachmentIds.map(String))
-    const storageIds = [
-      ...new Map(
-        attachments.flatMap((attachment) =>
-          attachment ? [[String(attachment.storageId), attachment.storageId] as const] : [],
-        ),
-      ).values(),
-    ]
-    const unsharedStorageIds = (
-      await Promise.all(storageIds.map(async (storageId) => {
-        const storageReferences = await ctx.db
-          .query('attachments')
-          .withIndex('by_storage', (q) => q.eq('storageId', storageId))
-          .collect()
-        return storageReferences.some((candidate) =>
-          !deletingAttachmentIds.has(String(candidate._id)),
-        ) ? null : storageId
-      }))
-    ).filter((storageId) => storageId !== null)
+    await deleteMessagesForEveryone(ctx, [message], args.actorId, access)
+  },
+})
 
-    await appendAuditEvent(ctx, {
-      projectId: message.projectId,
-      groupId: message.groupId,
-      channelThreadId: message.channelThreadId,
-      actorId: args.actorId,
-      actorProjectMemberId: projectMember._id,
-      actingCompanyId: access.companyAccess?.company._id,
-      entityType: 'message',
-      entityId: message._id,
-      action: 'message.deleted',
-      before: {
-        attachmentCount: attachments.filter(Boolean).length,
-        channelSequence: message.channelSequence,
-        createdAt: message.createdAt,
-      },
-    })
-
-    await invalidateTaskEvidence(ctx, { messageId: message._id })
-    const deletingAttachmentIdStrings = new Set(message.attachmentIds.map(String))
-    const assistantStreams = await ctx.db
-      .query('assistantStreams')
-      .withIndex('by_group_created_at', (q) => q.eq('groupId', message.groupId))
-      .collect()
-    await Promise.all(assistantStreams.map(async (stream) => {
-      const evidence = stream.evidence.filter((item) =>
-        item.messageId !== message._id &&
-        (!item.attachmentId || !deletingAttachmentIdStrings.has(String(item.attachmentId))),
-      )
-      const clearsPrompt = stream.promptMessageId === message._id
-      if (evidence.length === stream.evidence.length && !clearsPrompt) return
-      await ctx.db.patch(stream._id, {
-        evidence,
-        promptMessageId: clearsPrompt ? undefined : stream.promptMessageId,
-        updatedAt: Date.now(),
-      })
-    }))
-    await ctx.db.patch(message._id, {
-      attachmentIds: [],
-      body: '',
-      deletedAt: Date.now(),
-      deletedBy: args.actorId,
-      forwardedFrom: undefined,
-      mentionedProjectMemberIds: [],
-      mentions: [],
-      notificationPreview: undefined,
-      trackInvocationId: undefined,
-    })
-    for (const attachment of attachments) {
-      if (!attachment) continue
-      await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
-      await ctx.db.delete(attachment._id)
+export const removeMany = mutation({
+  args: {
+    messageIds: v.array(v.id('messages')),
+    actorId: v.id('users'),
+    actingCompanyId: v.optional(v.id('companies')),
+    projectMemberId: v.optional(v.id('projectMembers')),
+  },
+  handler: async (ctx, args) => {
+    if (args.messageIds.length === 0 || args.messageIds.length > MAX_BULK_MESSAGE_DELETE_COUNT) {
+      throw new Error('message_delete_count_invalid')
     }
-    await Promise.all(
-      unsharedStorageIds.map(async (storageId) =>
-        await ctx.storage.delete(storageId).catch(() => undefined),
-      ),
-    )
+    const messageIds = [...new Set(args.messageIds)]
+    if (messageIds.length !== args.messageIds.length) throw new Error('message_ids_invalid')
+    const messages = await Promise.all(messageIds.map(async (messageId) => await ctx.db.get(messageId)))
+    if (messages.some((message) => message === null)) throw new Error('message_not_found')
+    const existingMessages = messages.filter((message): message is Doc<'messages'> => message !== null)
+    const firstMessage = existingMessages[0]
+    if (!firstMessage) throw new Error('message_not_found')
+    if (existingMessages.some((message) =>
+      message.projectId !== firstMessage.projectId || message.groupId !== firstMessage.groupId,
+    )) {
+      throw new Error('message_scope_mismatch')
+    }
+    const access = await authorizeScopedRequest(ctx, {
+      projectId: firstMessage.projectId,
+      groupId: firstMessage.groupId,
+      claimedUserId: args.actorId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }, 'writeChannel')
 
-    if (channelThread) {
-      const remainingReplies = await ctx.db
-        .query('messages')
-        .withIndex('by_thread_created_at', (q) => q.eq('channelThreadId', channelThread._id))
-        .order('desc')
-        .collect()
-      const latestReply = remainingReplies[0]
-      await ctx.db.patch(channelThread._id, {
-        replyCount: remainingReplies.length,
-        latestReplyAt: latestReply?.createdAt,
-        latestChannelSequence: latestReply?.channelSequence,
-        updatedAt: Date.now(),
+    const threadIds = [...new Set(existingMessages.flatMap((message) =>
+      message.channelThreadId ? [message.channelThreadId] : [],
+    ))]
+    const threads = await Promise.all(threadIds.map(async (threadId) => [
+      threadId,
+      await ctx.db.get(threadId),
+    ] as const))
+    const threadById = new Map(threads)
+    for (const message of existingMessages) {
+      const isAuthor = message.authorProjectMemberId
+        ? message.authorProjectMemberId === access.projectMember._id
+        : message.authorId === args.actorId
+      if (!isAuthor) throw new Error('message_delete_forbidden')
+      if (message.deletedAt) throw new Error('message_already_deleted')
+      if (message.channelThreadId) {
+        requireThreadsEnabled()
+        const channelThread = threadById.get(message.channelThreadId)
+        if (
+          !channelThread ||
+          channelThread.projectId !== message.projectId ||
+          channelThread.groupId !== message.groupId
+        ) {
+          throw new Error('thread_access_changed')
+        }
+        if (channelThread.status !== 'active') throw new Error('thread_archived')
+      }
+    }
+
+    await deleteMessagesForEveryone(ctx, existingMessages, args.actorId, access)
+    return { deletedCount: existingMessages.length }
+  },
+})
+
+export const hideDeletedForMe = mutation({
+  args: {
+    messageIds: v.array(v.id('messages')),
+    actorId: v.id('users'),
+    actingCompanyId: v.optional(v.id('companies')),
+    projectMemberId: v.optional(v.id('projectMembers')),
+  },
+  handler: async (ctx, args) => {
+    if (args.messageIds.length === 0 || args.messageIds.length > MAX_BULK_MESSAGE_DELETE_COUNT) {
+      throw new Error('message_delete_count_invalid')
+    }
+    const messageIds = [...new Set(args.messageIds)]
+    if (messageIds.length !== args.messageIds.length) throw new Error('message_ids_invalid')
+    const messages = await Promise.all(messageIds.map(async (messageId) => await ctx.db.get(messageId)))
+    if (messages.some((message) => message === null)) throw new Error('message_not_found')
+    const existingMessages = messages.filter((message): message is Doc<'messages'> => message !== null)
+    const firstMessage = existingMessages[0]
+    if (!firstMessage) throw new Error('message_not_found')
+    if (existingMessages.some((message) =>
+      message.projectId !== firstMessage.projectId || message.groupId !== firstMessage.groupId,
+    )) {
+      throw new Error('message_scope_mismatch')
+    }
+    await authorizeScopedRequest(ctx, {
+      projectId: firstMessage.projectId,
+      groupId: firstMessage.groupId,
+      claimedUserId: args.actorId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }, 'readChannel')
+    if (existingMessages.some((message) => !message.deletedAt)) {
+      throw new Error('message_not_deleted')
+    }
+
+    for (const message of existingMessages) {
+      const existingHide = await ctx.db.query('messageHides')
+        .withIndex('by_user_message', (q) => q.eq('userId', args.actorId).eq('messageId', message._id))
+        .unique()
+      if (!existingHide) await ctx.db.insert('messageHides', {
+        messageId: message._id,
+        userId: args.actorId,
       })
     }
+    return { hiddenCount: existingMessages.length }
   },
 })
 

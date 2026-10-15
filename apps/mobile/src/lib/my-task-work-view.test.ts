@@ -5,6 +5,7 @@ import {
   matchesMyTaskFilters,
   matchesMyTaskSearch,
   matchesMyTaskTimeView,
+  matchesTaskCompanyScope,
   sortMyTasks,
   uniqueMyTasks,
 } from './my-task-work-view';
@@ -26,6 +27,13 @@ function item(
 }
 
 describe('My Tasks work views', () => {
+  it('keeps Personal Projects separate from each Company', () => {
+    expect(matchesTaskCompanyScope(undefined, null)).toBe(true);
+    expect(matchesTaskCompanyScope('company-a', null)).toBe(false);
+    expect(matchesTaskCompanyScope(undefined, 'company-a')).toBe(false);
+    expect(matchesTaskCompanyScope('company-a', 'company-a')).toBe(true);
+    expect(matchesTaskCompanyScope('company-b', 'company-a')).toBe(false);
+  });
   const today = '2026-10-01';
   const week = ['2026-09-28', '2026-09-29', '2026-09-30', today, '2026-10-02', '2026-10-03', '2026-10-04'];
 

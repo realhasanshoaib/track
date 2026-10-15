@@ -417,7 +417,7 @@ export function CompanyProjectNavigation({
         title={actingCompany?.company?.displayName ?? "Companies"}
         to="/workspace/company"
       >
-        <EntityMark colorKey={undefined} iconKey="building" id={String(actingCompany?.company?._id ?? "company")}
+        <EntityMark id={String(actingCompany?.company?._id ?? "company")}
           imageUrl={actingCompany?.company?.logoUrl} kind="company" name={actingCompany?.company?.displayName ?? "Company"} size={30} />
         <span className="company-project-nav-copy">
           <strong>{actingCompany?.company?.displayName ?? "Companies"}</strong>

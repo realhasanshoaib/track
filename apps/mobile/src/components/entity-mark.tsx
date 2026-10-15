@@ -1,10 +1,12 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { resolveEntityMark, type EntityMarkKind } from '@track/shared';
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
 import { Radius } from '@/constants/theme';
+import { MediaPlaceholder, MediaTransition } from '@/constants/motion';
 
 const icons = {
   analytics: 'analytics',
@@ -51,8 +53,9 @@ type Props = {
 
 export function EntityMark({ colorKey, iconKey, id, imageUrl, kind, name, size = 40 }: Props) {
   const identity = resolveEntityMark({ colorKey, iconKey, id, kind, name });
-  const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => setImageFailed(false), [imageUrl]);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imageFailed = Boolean(imageUrl && failedImageUrl === imageUrl);
+  const reducedMotion = useReducedMotion();
   const radius = kind === 'channel' ? Radius.pill : Math.round(size * 0.28);
   return (
     <View
@@ -61,7 +64,16 @@ export function EntityMark({ colorKey, iconKey, id, imageUrl, kind, name, size =
       style={[styles.mark, { backgroundColor: kind === 'company' && imageUrl && !imageFailed ? 'transparent' : identity.palette.background, borderRadius: radius, height: size, width: size }]}
     >
       {kind === 'company' && imageUrl && !imageFailed ? (
-        <Image contentFit="contain" onError={() => setImageFailed(true)} source={{ uri: imageUrl }} style={{ height: size * 0.72, width: size * 0.72 }} transition={120} />
+        <Image cachePolicy="memory-disk" contentFit="contain" onError={() => setFailedImageUrl(imageUrl ?? null)} placeholder={MediaPlaceholder} placeholderContentFit="contain" recyclingKey={`${id}:${imageUrl}`} source={{ uri: imageUrl }} style={{ height: size * 0.72, width: size * 0.72 }} transition={reducedMotion ? 0 : MediaTransition} />
+      ) : identity.pattern ? (
+        <View style={[styles.pattern, { gap: size * 0.035, height: size * 0.62, width: size * 0.62 }]}>
+          {identity.pattern.map((filled, index) => <View key={index} style={{
+            backgroundColor: filled ? identity.palette.foreground : 'transparent',
+            borderRadius: Math.max(0.5, size * 0.02),
+            height: size * 0.09,
+            width: size * 0.09,
+          }} />)}
+        </View>
       ) : (
         <PlatformIcon color={identity.palette.foreground} name={icons[identity.iconKey]} size={Math.max(14, Math.round(size * 0.48))} weight="semibold" />
       )}
@@ -71,4 +83,5 @@ export function EntityMark({ colorKey, iconKey, id, imageUrl, kind, name, size =
 
 const styles = StyleSheet.create({
   mark: { alignItems: 'center', borderCurve: 'continuous', justifyContent: 'center', overflow: 'hidden' },
+  pattern: { alignContent: 'center', alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
 });

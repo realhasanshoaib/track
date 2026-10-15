@@ -90,6 +90,8 @@ test('task board moves the seeded task to the next workflow state', async ({ pag
 })
 
 test('task calendar schedules an undated task by drag and drop', async ({ page }) => {
+  // Keep the calendar fixture deterministic when the real month changes.
+  await page.clock.setFixedTime(new Date('2026-09-15T12:00:00Z'))
   await openTaskBoard(page)
 
   await page.getByRole('navigation', { name: 'Task workspace view' })

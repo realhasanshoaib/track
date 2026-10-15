@@ -1,10 +1,12 @@
 import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useNetworkState } from 'expo-network';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
-import Animated, { FadeInUp, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import { KeyboardEvents, KeyboardStickyView } from 'react-native-keyboard-controller';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
 import { parseMentions } from '@track/shared';
 
@@ -16,8 +18,15 @@ import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
 import { EmptyState } from '@/components/empty-state';
 import { PendingMessageBubble } from '@/components/chat/pending-attachment-message';
+import { ChatHeaderBackground } from '@/components/chat/chat-header-background';
+import {
+  JumpToLatestEntering,
+  JumpToLatestExiting,
+  PendingMessageEntering,
+} from '@/components/chat/message-motion';
 import { ForwardMessageSheet } from '@/components/forward-message-sheet';
 import { IconButton } from '@/components/icon-button';
+import { IOSGlassContainer } from '@/components/ios-glass-material';
 import { MessageActions } from '@/components/message-actions';
 import { MessageReportSheet, type ReportReason } from '@/components/message-report-sheet';
 import { MessageTaskReviewSheet } from '@/components/message-task-review-sheet';
@@ -35,51 +44,40 @@ import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
-import { pendingMessageAcknowledgementKey, reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pending-messages';
+import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
-import { useReleaseConfig } from '@/lib/release-config';
+import { useReleaseConfigState } from '@/lib/release-config';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
 import { assistantTaskDraft, messageTaskDraft, type ReviewableMessageTaskDraft } from '@/lib/message-task-draft';
 import { threadConversationHref } from '@/lib/thread-navigation';
+import { threadSlug } from '@/lib/thread-name';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
+import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { shouldShowJumpToLatest } from '@/lib/thread-list';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { archivePresentation } from '@/lib/archive-presentation';
-
-const FIVE_MINUTES = 5 * 60 * 1000;
-const PendingMessageEntering = FadeInUp.duration(170);
-const PendingMessageExiting = FadeOutUp.duration(120);
-const PendingMessageLayout = LinearTransition.duration(150);
+import { groupThreadTimeline } from '@/lib/grouped-thread-items';
 
 function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
-  const theme = useTheme();
   if (Platform.OS !== 'ios') return <IconButton accessibilityLabel={accessibilityLabel} icon={icon} onPress={onPress} />;
 
-  return <View style={[styles.headerButton, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
-    <IconButton accessibilityLabel={accessibilityLabel} appearance="plain" icon={icon} onPress={onPress} />
-  </View>;
-}
-
-function dateSepLabel(timestamp: number) {
-  const date = new Date(timestamp);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return 'Today';
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  return <IconButton accessibilityLabel={accessibilityLabel} appearance="glass" icon={icon} onPress={onPress} />;
 }
 
 export default function ThreadScreen() {
   const theme = useTheme();
+  const composerClosedOffset = useBottomTabBarInset();
   const safeAreaInsets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { showToast } = useAppToast();
   const router = useRouter();
+  const { animatedStyle: jumpButtonPressStyle, onPressIn: jumpButtonPressIn, onPressOut: jumpButtonPressOut } = usePressFeedback({ pressedScale: 0.96 });
   const network = useNetworkState();
-  const releaseConfig = useReleaseConfig();
+  const isOffline = network.isConnected === false || network.isInternetReachable === false;
+  const { config: releaseConfig, isLoading: releaseConfigLoading } = useReleaseConfigState();
   const { trackUserId } = useTrackUser();
   const { groupId, projectId, threadId, companyId, membershipId, archive, messageId } = useLocalSearchParams<{
     groupId: string;
@@ -145,7 +143,8 @@ export default function ThreadScreen() {
   const forwardMessage = useMutation(api.messages.forwardMessage);
   const createReport = useMutation(api.reports.create);
   const createTask = useMutation(api.tasks.create);
-  const deleteMessage = useMutation(api.messages.remove);
+  const deleteMessages = useMutation(api.messages.removeMany);
+  const hideDeletedMessages = useMutation(api.messages.hideDeletedForMe);
   const editMessage = useMutation(api.messages.edit);
   const sendSignatureRef = useRef<string | null>(null);
   const [replySelection, setReplySelection] = useState<{ scopeKey: string; message: DetailedMessage } | null>(null);
@@ -170,7 +169,9 @@ export default function ThreadScreen() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
-  const [androidSelectionMode, setAndroidSelectionMode] = useState(false);
+  const [messageSelectionMode, setMessageSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<Id<'messages'>>>(() => new Set());
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [reportTarget, setReportTarget] = useState<GroupedThreadItem | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -181,18 +182,37 @@ export default function ThreadScreen() {
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
   const exitMessageSelection = useCallback(() => {
-    setAndroidSelectionMode(false);
+    setMessageSelectionMode(false);
+    setSelectedMessageIds(new Set());
     setActionsOpen(false);
     setActionTarget(null);
   }, []);
+  const beginMessageSelection = useCallback((item: GroupedThreadItem) => {
+    if (item.kind !== 'message') return;
+    hapticLight();
+    setSelectedMessageIds(new Set([item.item.message._id]));
+    setMessageSelectionMode(true);
+    setActionTarget(item);
+    setActionsOpen(false);
+  }, []);
+  const toggleMessageSelection = useCallback((item: GroupedThreadItem) => {
+    if (item.kind !== 'message') return;
+    const id = item.item.message._id;
+    const next = new Set(selectedMessageIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedMessageIds(next);
+    setActionTarget(next.size ? item : null);
+    if (!next.size) setMessageSelectionMode(false);
+  }, [selectedMessageIds]);
   useEffect(() => {
-    if (Platform.OS !== 'android' || !androidSelectionMode) return;
+    if (Platform.OS !== 'android' || !messageSelectionMode) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       exitMessageSelection();
       return true;
     });
     return () => subscription.remove();
-  }, [androidSelectionMode, exitMessageSelection]);
+  }, [messageSelectionMode, exitMessageSelection]);
   const [editBusy, setEditBusy] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<DetailedMessage | null>(null);
   const [forwardBusyGroupId, setForwardBusyGroupId] = useState<string | null>(null);
@@ -215,7 +235,7 @@ export default function ThreadScreen() {
   }, [composerDraft]);
   const sendKey = useRef<string | null>(null);
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
-  const scrollToLatestAfterSendRef = useRef(false);
+  const scrollAfterSendMessageIdRef = useRef<string | null>(null);
   const screenActiveRef = useRef(false);
   const lastViewedSequenceRef = useRef(0);
   const lastAcknowledgedSequenceRef = useRef(0);
@@ -231,17 +251,43 @@ export default function ThreadScreen() {
     api.channelThreads.readReceiptSequences,
     queryArgs && !readOnly ? queryArgs : 'skip',
   );
-  const scrollToLatest = useCallback(() => {
+  const pinToLatest = useCallback(() => {
+    if (!atBottomRef.current) return;
+    const pin = () => {
+      const contentHeight = scrollMetricsRef.current.contentHeight;
+      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated: false, offset: contentHeight });
+      else listRef.current?.scrollToEnd({ animated: false });
+    };
+    pin();
+    requestAnimationFrame(pin);
+  }, []);
+  useEffect(() => {
+    const subscriptions = [
+      KeyboardEvents.addListener('keyboardWillShow', pinToLatest),
+      KeyboardEvents.addListener('keyboardDidShow', pinToLatest),
+    ];
+    return () => {
+      for (const subscription of subscriptions) subscription.remove();
+    };
+  }, [pinToLatest]);
+  const scrollToLatest = useCallback((animated = false) => {
     atBottomRef.current = true;
     setNewReplyCount(0);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated: !reducedMotion });
-    }));
-  }, [reducedMotion]);
+    if (!animated) setShowJumpToLatest(false);
+    const pin = () => {
+      const contentHeight = scrollMetricsRef.current.contentHeight;
+      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated, offset: contentHeight });
+      else listRef.current?.scrollToEnd({ animated });
+    };
+    pin();
+    if (!animated) {
+      requestAnimationFrame(pin);
+    }
+  }, []);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
-    atBottomRef.current = distanceFromBottom < 80;
+    atBottomRef.current = distanceFromBottom <= 80;
     if (atBottomRef.current) setNewReplyCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
   }, []);
@@ -299,51 +345,25 @@ export default function ThreadScreen() {
     [pendingMessageIdsSignature],
   );
 
-  const threadItems = useMemo<GroupedThreadItem[]>(() => {
-    const uniqueMessages = [...new Map(
-      ((messages ?? []) as DetailedMessage[])
-        .filter((item) => !pendingMessageIds.has(item.message._id))
-        .map((item) => [item.message._id, item] as const),
-    ).values()];
-    // eslint-disable-next-line unicorn/no-array-reverse -- reason: Reverse a newly copied array for the existing message ordering while supporting the web ES2022 target.
-    const messageItems = uniqueMessages.reverse().map((item) => ({
-      kind: 'message' as const,
-      key: item.message._id,
-      at: item.message.createdAt,
-      item,
-      isFirstInGroup: true,
-    }));
-    const assistantItems = ((assistantStreams ?? []) as Doc<'assistantStreams'>[]).map((stream) => ({
-      kind: 'assistant' as const,
-      key: stream._id,
-      at: stream.createdAt,
-      stream,
-      isFirstInGroup: true,
-    }));
-    const sortedItems = [...messageItems, ...assistantItems];
-    // eslint-disable-next-line unicorn/no-array-sort -- reason: Copy first to preserve immutability while supporting the web ES2022 target.
-    sortedItems.sort((a, b) => a.at - b.at);
-    const result: GroupedThreadItem[] = [];
-    let lastDate = '';
-    let lastAuthor = '';
-    let lastAt = 0;
-    let interrupted = true;
-    for (const item of sortedItems) {
-      const date = new Date(item.at).toDateString();
-      if (date !== lastDate) {
-        result.push({ kind: 'date-sep', key: `sep-${item.at}`, at: item.at, label: dateSepLabel(item.at) });
-        lastDate = date;
-        interrupted = true;
-      }
-      const author = item.kind === 'message' ? item.item.author?._id ?? 'unknown' : '__assistant__';
-      const isFirstInGroup = interrupted || author !== lastAuthor || item.at - lastAt > FIVE_MINUTES;
-      result.push({ ...item, isFirstInGroup });
-      lastAuthor = author;
-      lastAt = item.at;
-      interrupted = false;
-    }
-    return result;
-  }, [assistantStreams, messages, pendingMessageIds]);
+  const threadItems = useMemo<GroupedThreadItem[]>(() => groupThreadTimeline({
+    assistantStreams: (assistantStreams ?? []) as Doc<'assistantStreams'>[],
+    messages: (messages ?? []) as DetailedMessage[],
+    missingAuthorKey: 'unknown',
+    pendingMessageIds,
+  }), [assistantStreams, messages, pendingMessageIds]);
+  const selectedMessages = useMemo(
+    () => threadItems.filter((item): item is Extract<GroupedThreadItem, { kind: 'message' }> =>
+      item.kind === 'message' && selectedMessageIds.has(item.item.message._id),
+    ),
+    [selectedMessageIds, threadItems],
+  );
+  const canDeleteSelectedForEveryone = !readOnly && selectedMessages.length > 0 && selectedMessages.every(({ item }) =>
+    !item.message.deletedAt &&
+    item.message.authorId === trackUserId &&
+    (!pmid || !item.message.authorProjectMemberId || item.message.authorProjectMemberId === pmid),
+  );
+  const canHideSelectedForMe = selectedMessages.length > 0 && selectedMessages.every(({ item }) => Boolean(item.message.deletedAt));
+  const canRemoveSelectedMessages = canDeleteSelectedForEveryone || canHideSelectedForMe;
   useEffect(() => {
     if (!messages || !assistantStreams) return;
     const messageItems = messages as DetailedMessage[];
@@ -383,12 +403,7 @@ export default function ThreadScreen() {
     }
     newestFeedTimeRef.current = newestTime;
   }, [assistantStreams, messages, trackUserId]);
-  useEffect(() => {
-    if (!messages) return;
-    const messageItems = messages as DetailedMessage[];
-    const receivedIds = new Set(messageItems.map(({ message }) => message._id));
-    setPendingMessages((pending) => reconcilePendingMessages(pending, receivedIds, receivedMessageAttachmentStates(messageItems)));
-  }, [messages, pendingMessages]);
+  usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -470,9 +485,11 @@ export default function ThreadScreen() {
       sendSignatureRef.current = sendSignature;
     }
     const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
-    atBottomRef.current = true;
     if (pendingId) {
-      scrollToLatestAfterSendRef.current = true;
+      atBottomRef.current = true;
+      setNewReplyCount(0);
+      setShowJumpToLatest(false);
+      scrollAfterSendMessageIdRef.current = pendingId;
       setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
         ? pending
         : [...pending, { attachments: payload.attachments, id: pendingId, body, at: Date.now() }]);
@@ -565,7 +582,10 @@ export default function ThreadScreen() {
       }
       return result;
     } catch (sendError) {
-      if (pendingId) setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
+      if (pendingId) {
+        if (scrollAfterSendMessageIdRef.current === pendingId) scrollAfterSendMessageIdRef.current = null;
+        setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
+      }
       throw sendError;
     } finally {
       setBusy(false);
@@ -664,11 +684,17 @@ export default function ThreadScreen() {
 
   const buildMessageActions = useCallback((actionTarget: GroupedThreadItem) => {
     if (actionTarget.kind === 'date-sep') return [];
-    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return [];
+    const selectAction = actionTarget.kind === 'message' && (!readOnly || Boolean(actionTarget.item.message.deletedAt)) ? [{
+      label: 'Select message',
+      icon: 'check-box-outline' as const,
+      onPress: () => beginMessageSelection(actionTarget),
+    }] : [];
+    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return selectAction;
     const copyText = actionTarget.kind === 'message'
       ? actionTarget.item.message.body.trim()
       : actionTarget.stream.status === 'failed' ? '' : actionTarget.stream.answer.trim();
     return [
+      ...selectAction,
       ...(copyText ? [{ label: 'Copy message', icon: 'content-copy' as const, onPress: () => { void copyMessageText(copyText); } }] : []),
       ...(actionTarget.kind === 'message' &&
         !readOnly &&
@@ -722,39 +748,51 @@ export default function ThreadScreen() {
         label: 'Delete for everyone',
         icon: 'trash-can-outline' as const,
         destructive: true,
-        onPress: () => {
-          Alert.alert(
-            'Delete for everyone?',
-            "You can't undo deleting this message.",
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete for everyone',
-                style: 'destructive',
-                onPress: () => {
-                  setBusy(true);
-                  setError(null);
-                  void deleteMessage({
-                    messageId: actionTarget.item.message._id,
-                    actorId: trackUserId,
-                    actingCompanyId: cid,
-                    projectMemberId: pmid,
-                  }).then(() => {
-                    if (replyMessageId === actionTarget.item.message._id) setReplyTo(null);
-                    setNotice('Message deleted for everyone.');
-                  }).catch((caught) => {
-                    setError(communicationErrorMessage(caught, 'delete this message'));
-                  }).finally(() => setBusy(false));
-                },
-              },
-            ],
-          );
-        },
+        onPress: () => beginMessageSelection(actionTarget),
       }] : []),
       { label: 'Report', icon: 'flag' as const, onPress: () => { setReportError(null); setReportTarget(actionTarget); } },
     ];
-  }, [cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
+  }, [beginMessageSelection, copyMessageText, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
   const messageActions = useMemo(() => actionTarget ? buildMessageActions(actionTarget) : [], [actionTarget, buildMessageActions]);
+
+  const deleteSelectedMessages = useCallback(() => {
+    if (!trackUserId || !canRemoveSelectedMessages || bulkDeleteBusy) return;
+    const messageIds = selectedMessages.map(({ item }) => item.message._id);
+    const selectedIds = new Set(messageIds);
+    const hideForMe = canHideSelectedForMe;
+    const title = hideForMe
+      ? messageIds.length === 1 ? 'Delete this message for me?' : `Delete ${messageIds.length} messages for me?`
+      : messageIds.length === 1 ? 'Delete this message for everyone?' : `Delete ${messageIds.length} messages for everyone?`;
+    const confirmLabel = hideForMe ? 'Delete for me' : 'Delete for everyone';
+    const detail = hideForMe
+      ? 'These deleted-message notices will be hidden only for you.'
+      : 'The selected message content and attachments will be removed for everyone. You can’t undo this.';
+    Alert.alert(title, detail, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: confirmLabel,
+        style: 'destructive',
+        onPress: () => {
+          setBulkDeleteBusy(true);
+          const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
+          const request = hideForMe ? hideDeletedMessages(scope) : deleteMessages(scope);
+          void request.then(() => {
+            if (replyMessageId && selectedIds.has(replyMessageId)) setReplyTo(null);
+            exitMessageSelection();
+            showToast({
+              title: hideForMe ? 'Hidden for you' : messageIds.length === 1 ? 'Message deleted' : 'Messages deleted',
+              message: hideForMe
+                ? `${messageIds.length} deleted ${messageIds.length === 1 ? 'message is' : 'messages are'} hidden only for you.`
+                : `${messageIds.length} ${messageIds.length === 1 ? 'message was' : 'messages were'} deleted for everyone.`,
+              tone: 'success',
+            });
+          }).catch((caught) => {
+            setError(communicationErrorMessage(caught, 'delete these messages'));
+          }).finally(() => setBulkDeleteBusy(false));
+        },
+      },
+    ]);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, trackUserId]);
 
   async function submitReport(reason: ReportReason, note: string) {
     const target = reportTarget;
@@ -833,27 +871,27 @@ export default function ThreadScreen() {
     return <>
       <ThreadRow
         highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
-        contextActions={Platform.OS === 'ios' && item.kind === 'message' && !item.item.message.deletedAt ? buildMessageActions(item) : undefined}
+        contextActions={Platform.OS === 'ios' && item.kind === 'message' ? buildMessageActions(item) : undefined}
         isFirstInGroup={item.isFirstInGroup}
         isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
         item={item}
-        selected={Platform.OS === 'android' && androidSelectionMode && actionTarget?.key === item.key}
+        selected={item.kind === 'message' && selectedMessageIds.has(item.item.message._id)}
+        selectionMode={messageSelectionMode}
+        onPressMessage={messageSelectionMode && item.kind === 'message' ? () => toggleMessageSelection(item) : undefined}
         readReceipts={readReceipts}
         onLongPress={() => {
-          if (item.kind === 'message' && item.item.message.deletedAt) return;
+          if (item.kind === 'message' && messageSelectionMode) {
+            toggleMessageSelection(item);
+            return;
+          }
           hapticLight();
           setActionTarget(item);
-          if (Platform.OS === 'android' && item.kind === 'message') {
-            setAndroidSelectionMode(true);
-            setActionsOpen(false);
-          } else {
-            setActionsOpen(true);
-          }
+          setActionsOpen(true);
         }}
-        onSwipeReply={readOnly || item.kind !== 'message' ? undefined : () => setReplyTo(item.item)}
-        onSwipeForward={!readOnly && item.kind === 'message' && !item.item.message.deletedAt ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
-        onSwipeReport={() => { void submitSwipeReport(item); }}
-        onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
+        onSwipeReply={readOnly || messageSelectionMode || item.kind !== 'message' ? undefined : () => setReplyTo(item.item)}
+        onSwipeForward={!readOnly && !messageSelectionMode && item.kind === 'message' && !item.item.message.deletedAt ? () => { hapticLight(); setForwardError(null); setForwardTarget(item.item); } : undefined}
+        onSwipeReport={messageSelectionMode ? undefined : () => { void submitSwipeReport(item); }}
+        onPressReply={!messageSelectionMode && item.kind === 'message' && item.item.replyTo ? () => {
           const quotedId = item.item.replyTo?.messageId;
           if (quotedId) scrollToMessage(quotedId);
         } : undefined}
@@ -867,7 +905,7 @@ export default function ThreadScreen() {
         readOnly={readOnly}
       /> : null}
     </>;
-  }, [actionTarget, androidSelectionMode, buildMessageActions, highlightedMessageId, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, trackUserId]);
+  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pid, readOnly, releaseConfig.tasks, scrollToMessage, selectedMessageIds, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -907,10 +945,25 @@ export default function ThreadScreen() {
     }
   }
 
+  if (releaseConfigLoading && isOffline) {
+    return <ThemedView style={styles.screen}>
+      <Stack.Screen options={{ title: 'Thread unavailable' }} />
+      <EmptyState body="Connect to the internet to load this thread." icon="thread" title="Thread unavailable offline" />
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => pid && gid && tid && router.replace(threadConversationHref(pid, gid, tid, context, targetMessageId) as never)}
+        style={[styles.retry, { backgroundColor: theme.accent }]}>
+        <ThemedText style={{ color: theme.accentInk }} type="smallBold">Retry</ThemedText>
+      </Pressable>
+    </ThemedView>;
+  }
+  if (releaseConfigLoading) {
+    return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Thread' }} /><ConversationLoading label="Loading thread" variant="thread" /></ThemedView>;
+  }
   if (!releaseConfig.threads || (navigation && !navigation.available) || thread === null) {
     return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Thread unavailable' }} /><EmptyState body={navigationUnavailableCopy(Boolean(cid))} icon="thread" title="Thread unavailable or access changed" /></ThemedView>;
   }
-  if ((network.isConnected === false || network.isInternetReachable === false) && thread === undefined) {
+  if (isOffline && thread === undefined) {
     return <ThemedView style={styles.screen}>
       <Stack.Screen options={{ title: 'Thread unavailable' }} />
       <EmptyState body="Connect to the internet to load this thread." icon="thread" title="Thread unavailable offline" />
@@ -929,6 +982,7 @@ export default function ThreadScreen() {
   const sourceDate = source && !('unavailable' in source) ? source.createdAt : null;
   const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
   const channelName = groups?.find((item) => item.group._id === gid)?.group.name ?? navigation?.channel?.name ?? 'Channel';
+  const connectedThreadName = `#${threadSlug(thread.thread.name)}`;
   const sourceContextCard = source ? <Pressable
     accessibilityHint="Opens the source message in its Channel"
     accessibilityLabel={`Source message in ${channelName}`}
@@ -978,33 +1032,33 @@ export default function ThreadScreen() {
   const hasThreadTools = !navigation.archived
     || Boolean(source && !('unavailable' in source) && pid && gid)
     || Boolean(firstLinkedTask && pid);
-  const headerSelectionActions = messageActions.filter((action) =>
-    ['Reply', 'Forward', 'Delete for everyone'].includes(action.label),
-  );
+  const headerSelectionActions = selectedMessages.length === 1 && !selectedMessages[0]?.item.message.deletedAt
+    ? messageActions.filter((action) => ['Reply', 'Forward'].includes(action.label))
+    : [];
 
   return (
     <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface }]}>
       <Stack.Screen options={{
         headerShown: Platform.OS !== 'ios',
-        headerTransparent: Platform.OS === 'ios',
+        headerTransparent: true,
         headerBlurEffect: 'none',
-        headerBackground: () => <View pointerEvents="none" style={StyleSheet.absoluteFill} />,
-        headerTitle: () => androidSelectionMode ? (
-          <ThemedText accessibilityLabel="1 message selected" type="title">1</ThemedText>
-        ) : <View style={[styles.headerIdentity, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
+        headerBackground: () => <ChatHeaderBackground />,
+        headerTitle: () => messageSelectionMode ? (
+          <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
+        ) : <View style={[styles.headerIdentity, Platform.OS === 'android' && styles.iosHeaderIdentity, { backgroundColor: Platform.OS === 'android' ? theme.homeSurface : 'transparent', borderColor: theme.homeBorder }]}>
           <View style={[styles.headerMark, { backgroundColor: Platform.OS === 'ios' ? 'transparent' : theme.accentSoft }]}><PlatformIcon color={theme.accentStrong} name="thread" size={18} /></View>
           <View style={styles.headerTitle}>
-            <ThemedText numberOfLines={2} type="title">{thread.thread.name}</ThemedText>
-            <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">#{channelName}</ThemedText>
+            <ThemedText numberOfLines={1} type="title">{thread.thread.name}</ThemedText>
+            <ThemedText accessibilityLabel={`Thread ${connectedThreadName} in Channel #${channelName}`} numberOfLines={1} themeColor="textSecondary" type="caption">{connectedThreadName}</ThemedText>
           </View>
         </View>,
-        headerLeft: () => androidSelectionMode
-          ? <IconButton accessibilityLabel="Cancel message selection" appearance="plain" icon="close" onPress={exitMessageSelection} />
-          : <IconButton accessibilityLabel="Back to Channel" appearance="plain" icon="arrow-left" onPress={goBackToChannel} />,
-        headerRight: androidSelectionMode ? () => <View style={styles.headerActions}>
+        headerLeft: () => messageSelectionMode
+          ? <IconButton accessibilityLabel="Cancel message selection" appearance="surface" icon="close" onPress={exitMessageSelection} />
+          : <IconButton accessibilityLabel="Back to Channel" appearance="surface" icon="arrow-left" onPress={goBackToChannel} />,
+        headerRight: messageSelectionMode ? () => <View style={styles.headerActions}>
           {headerSelectionActions.map((action) => action.icon ? <IconButton
             accessibilityLabel={action.label}
-            appearance="plain"
+            appearance="surface"
             icon={action.icon}
             key={action.label}
             onPress={() => {
@@ -1012,20 +1066,49 @@ export default function ThreadScreen() {
               action.onPress();
             }}
           /> : null)}
-          <IconButton accessibilityLabel="More message actions" appearance="plain" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
-        </View> : hasThreadTools ? () => <IconButton accessibilityLabel="Thread options" appearance="plain" icon="dots-horizontal" onPress={() => setToolsOpen(true)} /> : undefined,
+          {canRemoveSelectedMessages ? <IconButton
+            accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
+            appearance="surface"
+            icon="trash-can-outline"
+            loading={bulkDeleteBusy}
+            onPress={deleteSelectedMessages}
+          /> : null}
+        </View> : hasThreadTools ? () => <IconButton accessibilityLabel="Thread options" appearance="surface" icon="dots-horizontal" onPress={() => setToolsOpen(true)} /> : undefined,
       }} />
-      {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: 'transparent', paddingTop: safeAreaInsets.top + Spacing.one }]}>
+      {Platform.OS === 'ios' ? <IOSGlassContainer spacing={Spacing.two} style={[styles.iosHeader, { backgroundColor: 'transparent', paddingTop: safeAreaInsets.top + Spacing.one }]}>
+        {messageSelectionMode ? <>
+          <ThreadHeaderButton accessibilityLabel="Cancel message selection" icon="close" onPress={exitMessageSelection} />
+          <View style={styles.selectionHeaderTitle}>
+            <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
+          </View>
+          <View style={styles.headerActions}>
+            {headerSelectionActions.map((action) => action.icon ? <IconButton
+              accessibilityLabel={action.label}
+              appearance="glass"
+              icon={action.icon}
+              key={action.label}
+              onPress={() => { exitMessageSelection(); action.onPress(); }}
+            /> : null)}
+            {canRemoveSelectedMessages ? <IconButton
+              accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
+              appearance="glass"
+              icon="trash-can-outline"
+              loading={bulkDeleteBusy}
+              onPress={deleteSelectedMessages}
+            /> : null}
+          </View>
+        </> : <>
         <ThreadHeaderButton accessibilityLabel="Back to Channel" icon="arrow-left" onPress={goBackToChannel} />
         <View style={[styles.headerIdentity, styles.iosHeaderIdentity, { backgroundColor: 'transparent', borderColor: theme.homeBorder }]}>
           <View style={[styles.headerMark, { backgroundColor: 'transparent' }]}><PlatformIcon color={theme.accentStrong} name="thread" size={18} /></View>
           <View style={styles.headerTitle}>
-            <ThemedText numberOfLines={2} type="title">{thread.thread.name}</ThemedText>
-            <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">#{channelName}</ThemedText>
+            <ThemedText numberOfLines={1} type="title">{thread.thread.name}</ThemedText>
+            <ThemedText accessibilityLabel={`Thread ${connectedThreadName} in Channel #${channelName}`} numberOfLines={1} themeColor="textSecondary" type="caption">{connectedThreadName}</ThemedText>
           </View>
         </View>
         {hasThreadTools ? <ThreadHeaderButton accessibilityLabel="Thread options" icon="dots-horizontal" onPress={() => setToolsOpen(true)} /> : <View style={styles.headerButtonSpacer} />}
-      </View> : null}
+        </>}
+      </IOSGlassContainer> : null}
       <ConnectivityBanner message="You’re offline. Cached replies stay available; sending will retry when you reconnect." style={styles.connection} />
       {notice ? <ThemedText accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.success }]} type="small">{notice}</ThemedText> : null}
       {error ? <ThemedText accessibilityLiveRegion="assertive" style={[styles.error, { color: theme.danger }]} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
@@ -1037,7 +1120,7 @@ export default function ThreadScreen() {
         messageIds={taskLinkMessageIds}
       >
       <FlatList
-          contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + TouchTarget + Spacing.four }]}
+          contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + Spacing.two }]}
           contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'never' : 'automatic'}
           showsVerticalScrollIndicator={false}
           style={styles.flex}
@@ -1062,24 +1145,30 @@ export default function ThreadScreen() {
             </Pressable> : null}
           </>}
           ListFooterComponent={pendingMessages.length ? (
-            <Animated.View
-              entering={reducedMotion ? undefined : FadeInUp.duration(170)}
-              exiting={reducedMotion ? undefined : FadeOutUp.duration(120)}
-              layout={reducedMotion ? undefined : PendingMessageLayout}
-            >
+            <View>
               {pendingMessages.map((message) => (
                 <Animated.View
                   entering={reducedMotion ? undefined : PendingMessageEntering}
-                  exiting={reducedMotion ? undefined : PendingMessageExiting}
                   key={message.id}
-                  layout={reducedMotion ? undefined : PendingMessageLayout}
+                  onLayout={() => {
+                    if (scrollAfterSendMessageIdRef.current !== message.id) return;
+                    scrollAfterSendMessageIdRef.current = null;
+                    scrollToLatest();
+                  }}
                 >
-                  <PendingMessageBubble attachments={message.attachments} body={message.body} />
+                  <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} offline={network.isConnected === false || network.isInternetReachable === false} />
                 </Animated.View>
               ))}
-            </Animated.View>
+            </View>
           ) : null}
-          onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 }))}
+          onScrollToIndexFailed={({ averageItemLength, index }) => requestAnimationFrame(() => {
+            if (index >= threadItems.length - 1) {
+              listRef.current?.scrollToOffset({ animated: false, offset: averageItemLength * index });
+              requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+              return;
+            }
+            listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 });
+          })}
           onLayout={({ nativeEvent }) => {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
             updateJumpToLatest();
@@ -1102,11 +1191,8 @@ export default function ThreadScreen() {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
             updateJumpToLatest();
-            if (scrollToLatestAfterSendRef.current) {
-              scrollToLatestAfterSendRef.current = false;
-              requestAnimationFrame(scrollToLatest);
-            } else if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
-              listRef.current?.scrollToEnd({ animated: !reducedMotion });
+            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
+              scrollToLatest();
             }
           }}
           ref={listRef}
@@ -1116,38 +1202,46 @@ export default function ThreadScreen() {
           viewabilityConfig={viewabilityConfig}
         />
       </TaskLinkBatchProvider>
-      {showJumpToLatest ? <Pressable
+      {showJumpToLatest ? <AnimatedPressable
         accessibilityLabel={`Jump to latest replies${newReplyCount ? `, ${newReplyCount} new replies` : ''}`}
         accessibilityRole="button"
-        onPress={() => { hapticLight(); scrollToLatest(); }}
-        style={[styles.jumpToLatest, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline, bottom: composerOverlayHeight + Spacing.two }]}
+        entering={reducedMotion ? undefined : JumpToLatestEntering}
+        exiting={reducedMotion ? undefined : JumpToLatestExiting}
+        onPressIn={jumpButtonPressIn}
+        onPressOut={jumpButtonPressOut}
+        onPress={() => { hapticLight(); scrollToLatest(!reducedMotion); }}
+        style={[styles.jumpToLatest, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline, bottom: composerOverlayHeight + Spacing.two }, jumpButtonPressStyle]}
       >
         <PlatformIcon color={theme.text} name="chevron-down" size={20} />
         {newReplyCount ? <ThemedText style={[styles.jumpToLatestCount, { color: theme.text }]} type="captionBold">{newReplyCount > 99 ? '99+' : newReplyCount}</ThemedText> : null}
-      </Pressable> : null}
-      {!readOnly ? <View
-        onLayout={({ nativeEvent }) => {
-          const height = Math.ceil(nativeEvent.layout.height);
-          setComposerOverlayHeight((current) => current === height ? current : height);
-        }}
+      </AnimatedPressable> : null}
+      {!readOnly ? <KeyboardStickyView
+        offset={{ closed: -composerClosedOffset, opened: 0 }}
         style={styles.composerOverlay}>
-        <Composer
-          activeGroupName={thread.thread.name}
-          busy={busy}
-          mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
-          mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
-          mentionCandidates={mentionCandidates}
-          onCancelReply={() => setReplyTo(null)}
-          onChangeText={setComposer}
-          onFocus={scrollToLatest}
-          onLoadMoreMentionCandidates={() => {
-            if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
+        <View
+          onLayout={({ nativeEvent }) => {
+            const height = Math.ceil(nativeEvent.layout.height);
+            setComposerOverlayHeight((current) => current === height ? current : height);
           }}
-          onSendMessage={handleSendMessage}
-          replyTo={replyTo}
-          value={composer}
-        />
-      </View> : null}
+        >
+          <Composer
+            activeGroupName={thread.thread.name}
+            busy={busy}
+            mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
+            mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
+            mentionCandidates={mentionCandidates}
+            onCancelReply={() => setReplyTo(null)}
+            onChangeText={setComposer}
+            onFocus={scrollToLatest}
+            onLoadMoreMentionCandidates={() => {
+              if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
+            }}
+            onSendMessage={handleSendMessage}
+            replyTo={replyTo}
+            value={composer}
+          />
+        </View>
+      </KeyboardStickyView> : null}
       <OptionsSheet onClose={() => setToolsOpen(false)} title="Thread" visible={toolsOpen}>
         <SheetSection>
           {!navigation.archived ? <SheetRow label={thread.following ? 'Unfollow' : 'Follow'} icon="bell-outline" onPress={() => void changeFollowing()} /> : null}
@@ -1220,15 +1314,15 @@ export default function ThreadScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerButton: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, width: TouchTarget },
   headerActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   headerButtonSpacer: { width: TouchTarget },
   iosHeader: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, paddingBottom: Spacing.two, paddingHorizontal: Spacing.three },
-  iosHeaderIdentity: { flex: 1, minWidth: 0 },
+  iosHeaderIdentity: { alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flex: 1, maxWidth: 230, minWidth: 0, overflow: 'hidden' },
+  selectionHeaderTitle: { alignItems: 'center', flex: 1, minWidth: 0 },
   jumpToLatest: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, boxShadow: '0 3px 10px rgba(0,0,0,0.14)', flexDirection: 'row', gap: Spacing.one, height: TouchTarget, justifyContent: 'center', minWidth: TouchTarget, paddingHorizontal: Spacing.two, position: 'absolute', right: Spacing.three },
   jumpToLatestCount: { textAlign: 'center' },
-  headerIdentity: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, maxWidth: 230, minHeight: TouchTarget, paddingHorizontal: Spacing.two },
-  headerMark: { alignItems: 'center', borderRadius: Radius.pill, height: 34, justifyContent: 'center', width: 34 },
+  headerIdentity: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: Spacing.two, maxWidth: 230, minHeight: TouchTarget, minWidth: 0, paddingHorizontal: Spacing.two },
+  headerMark: { alignItems: 'center', borderRadius: Radius.pill, flexShrink: 0, height: 34, justifyContent: 'center', width: 34 },
   archive: { gap: 2, padding: Spacing.three },
   connection: { marginHorizontal: Spacing.three, marginTop: Spacing.two },
   composerOverlay: { bottom: 0, left: 0, position: 'absolute', right: 0, zIndex: 2 },

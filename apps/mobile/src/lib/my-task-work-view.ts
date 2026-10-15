@@ -2,6 +2,11 @@ import type { TaskPriority } from '@track/shared/tasks';
 
 export type MyTaskViewKey = 'this-week' | 'all' | 'done';
 
+/** Personal Projects are a distinct scope, not a union of Company work. */
+export function matchesTaskCompanyScope(companyId: string | null | undefined, selectedCompanyId: string | null) {
+  return (companyId ?? null) === selectedCompanyId;
+}
+
 export type MyTaskFilters = {
   status: 'any' | 'open' | 'completed' | 'canceled';
   priority: 'any' | TaskPriority;

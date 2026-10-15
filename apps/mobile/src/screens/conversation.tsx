@@ -4,9 +4,10 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
 import * as Clipboard from 'expo-clipboard';
-import { KeyboardEvents } from 'react-native-keyboard-controller';
-import Animated, { FadeIn, FadeInRight, FadeInUp, FadeOutDown, FadeOutLeft, FadeOutUp, LinearTransition, useReducedMotion } from 'react-native-reanimated';
+import { KeyboardEvents, KeyboardStickyView } from 'react-native-keyboard-controller';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { parseMentions, resolveDistinctChannelIconKeys } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
@@ -17,6 +18,13 @@ import { Composer } from '@/components/composer';
 import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
 import { PendingMessageBubble } from '@/components/chat/pending-attachment-message';
+import { ChatHeaderBackground } from '@/components/chat/chat-header-background';
+import {
+  JumpToLatestEntering,
+  JumpToLatestExiting,
+  PendingMessageEntering,
+} from '@/components/chat/message-motion';
+import { ChannelHeaderIdentity, ChannelPickerPill, ConversationSearchPill } from '@/components/chat/conversation-header-controls';
 import { EntityMark } from '@/components/entity-mark';
 import { IconButton } from '@/components/icon-button';
 import { MessageActions } from '@/components/message-actions';
@@ -38,8 +46,9 @@ import { idempotencyKey } from '@/lib/idempotency';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy, projectChannelsHref } from '@/lib/company-navigation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
-import { shouldShowJumpToLatest, stickyDateHeaderIndices } from '@/lib/thread-list';
-import { useReleaseConfig } from '@/lib/release-config';
+import { groupThreadTimeline } from '@/lib/grouped-thread-items';
+import { shouldShowJumpToLatest } from '@/lib/thread-list';
+import { canOpenExistingThread, useReleaseConfigState } from '@/lib/release-config';
 import type { MobileTaskIdentity } from '@/lib/task-navigation';
 import { assistantTaskDraft, messageTaskDraft, type ReviewableMessageTaskDraft } from '@/lib/message-task-draft';
 import { threadConversationHref } from '@/lib/thread-navigation';
@@ -47,31 +56,15 @@ import { setActivePushContext } from '@/lib/push-presentation';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
-import { pendingMessageAcknowledgementKey, reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pending-messages';
+import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
-
-/** WhatsApp-style grouping gap: a longer pause re-states who is speaking. */
-const FIVE_MINUTES = 5 * 60 * 1000;
-const MessageListLayout = LinearTransition.duration(210);
-const PendingMessageEntering = FadeInUp.duration(170);
-const PendingMessageExiting = FadeOutUp.duration(120);
-const PendingMessageLayout = LinearTransition.duration(150);
-const SentMessageEntering = FadeIn.duration(120);
-const SentMessageExiting = FadeOutDown.duration(90);
-
-function dateSepLabel(ts: number) {
-  const d = new Date(ts);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
+import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
 
 export default function ConversationScreen() {
   const theme = useTheme();
-  const conversationHeaderTint = 'transparent';
+  const composerClosedOffset = useBottomTabBarInset();
+  const conversationHeaderTint = Platform.OS === 'android' ? theme.homeSurface : 'transparent';
   const { animatedStyle: channelHeaderPressStyle, onPressIn: channelHeaderPressIn, onPressOut: channelHeaderPressOut } = usePressFeedback({ pressedScale: 0.985 });
   const { animatedStyle: jumpButtonPressStyle, onPressIn: jumpButtonPressIn, onPressOut: jumpButtonPressOut } = usePressFeedback({ pressedScale: 0.96 });
   const reducedMotion = useReducedMotion();
@@ -80,7 +73,7 @@ export default function ConversationScreen() {
   const network = useNetworkState();
   const router = useRouter();
   const { trackUserId } = useTrackUser();
-  const releaseConfig = useReleaseConfig();
+  const { config: releaseConfig, isLoading: releaseConfigLoading } = useReleaseConfigState();
   const { groupId, projectId, companyId, membershipId, archive, messageId } = useLocalSearchParams<{ groupId: string; projectId: string; companyId?: string; membershipId?: string; archive?: string; messageId?: string }>();
 
   const sendMessage = useMutation(api.messages.send);
@@ -95,7 +88,8 @@ export default function ConversationScreen() {
   const createReport = useMutation(api.reports.create);
   const forwardMessage = useMutation(api.messages.forwardMessage);
   const createTask = useMutation(api.tasks.create);
-  const deleteMessage = useMutation(api.messages.remove);
+  const deleteMessages = useMutation(api.messages.removeMany);
+  const hideDeletedMessages = useMutation(api.messages.hideDeletedForMe);
   const editMessage = useMutation(api.messages.edit);
 
   const gid = groupId as Id<'groups'> | undefined;
@@ -201,7 +195,9 @@ export default function ConversationScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
-  const scrollToLatestAfterSendRef = useRef(false);
+  const scrollAfterSendMessageIdRef = useRef<string | null>(null);
+  const pinToLatestAfterSendRef = useRef(false);
+  const pinToLatestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
@@ -224,20 +220,41 @@ export default function ConversationScreen() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
-  const [androidSelectionMode, setAndroidSelectionMode] = useState(false);
+  const [messageSelectionMode, setMessageSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<Id<'messages'>>>(() => new Set());
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
   const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
   const exitMessageSelection = useCallback(() => {
-    setAndroidSelectionMode(false);
+    setMessageSelectionMode(false);
+    setSelectedMessageIds(new Set());
     setActionSheetOpen(false);
     setActionTarget(null);
   }, []);
+  const beginMessageSelection = useCallback((item: GroupedThreadItem) => {
+    if (item.kind !== 'message' || (readOnly && !item.item.message.deletedAt)) return;
+    hapticLight();
+    setSelectedMessageIds(new Set([item.item.message._id]));
+    setMessageSelectionMode(true);
+    setActionTarget(item);
+    setActionSheetOpen(false);
+  }, [readOnly]);
+  const toggleMessageSelection = useCallback((item: GroupedThreadItem) => {
+    if (item.kind !== 'message') return;
+    const id = item.item.message._id;
+    const next = new Set(selectedMessageIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedMessageIds(next);
+    setActionTarget(next.size ? item : null);
+    if (!next.size) setMessageSelectionMode(false);
+  }, [selectedMessageIds]);
   useEffect(() => {
-    if (Platform.OS !== 'android' || (!androidSelectionMode && !channelSearchOpen)) return;
+    if (Platform.OS !== 'android' || (!messageSelectionMode && !channelSearchOpen)) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (androidSelectionMode) {
+      if (messageSelectionMode) {
         exitMessageSelection();
       } else {
         setChannelSearchOpen(false);
@@ -246,7 +263,7 @@ export default function ConversationScreen() {
       return true;
     });
     return () => subscription.remove();
-  }, [androidSelectionMode, channelSearchOpen, exitMessageSelection]);
+  }, [messageSelectionMode, channelSearchOpen, exitMessageSelection]);
   const [editBusy, setEditBusy] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<DetailedMessage | null>(null);
   const [forwardBusyGroupId, setForwardBusyGroupId] = useState<Id<'groups'> | null>(null);
@@ -299,53 +316,27 @@ export default function ConversationScreen() {
     [pendingMessageIdsSignature],
   );
 
-  const threadItems = useMemo<GroupedThreadItem[]>(() => {
-    const uniqueMessages = [...new Map(
-      ((messages ?? []) as DetailedMessage[])
-        .filter((item) => !pendingMessageIds.has(item.message._id))
-        .map((item) => [item.message._id, item] as const),
-    ).values()];
-    const msgs = uniqueMessages.reverse().map((item) => ({
-      kind: 'message' as const, key: item.message._id, at: item.message.createdAt, item, isFirstInGroup: true,
-    }));
-    const uniqueStreams = [...new Map(
-      ((assistantStreams ?? []) as Doc<'assistantStreams'>[]).map((stream) => [stream._id, stream] as const),
-    ).values()];
-    const streams = uniqueStreams.map((stream) => ({
-      kind: 'assistant' as const, key: stream._id, at: stream.createdAt, stream, isFirstInGroup: true,
-    }));
-    const sorted: Array<{ kind: 'message'; key: string; at: number; item: DetailedMessage; isFirstInGroup: boolean } | { kind: 'assistant'; key: string; at: number; stream: Doc<'assistantStreams'>; isFirstInGroup: boolean }> =
-      [...msgs, ...streams];
-    // eslint-disable-next-line unicorn/no-array-sort -- reason: Copy first to preserve immutability while supporting the web ES2022 target.
-    sorted.sort((a, b) => a.at - b.at);
-
-    const result: GroupedThreadItem[] = [];
-    let lastDateStr = '';
-    let lastAuthorKey = '';
-    let lastAt = 0;
-    /** Anything between two messages — a date pill, an answer, a task card — starts a new group. */
-    let interrupted = true;
-
-    for (const raw of sorted) {
-      const dateStr = new Date(raw.at).toDateString();
-      if (dateStr !== lastDateStr) {
-        result.push({ kind: 'date-sep', key: `sep-${raw.at}`, at: raw.at, label: dateSepLabel(raw.at) });
-        lastDateStr = dateStr;
-        interrupted = true;
-      }
-
-      const authorKey = raw.kind === 'message' ? (raw.item.author?._id ?? 'anon') : '__assistant__';
-      const tooLong = raw.at - lastAt > FIVE_MINUTES;
-      const isFirstInGroup = interrupted || authorKey !== lastAuthorKey || tooLong;
-
-      result.push({ ...raw, isFirstInGroup });
-      lastAuthorKey = authorKey;
-      lastAt = raw.at;
-      interrupted = cardRowIds.has(raw.key);
-    }
-
-    return result;
-  }, [assistantStreams, cardRowIds, messages, pendingMessageIds]);
+  const threadItems = useMemo<GroupedThreadItem[]>(() => groupThreadTimeline({
+    assistantStreams: (assistantStreams ?? []) as Doc<'assistantStreams'>[],
+    cardRowIds,
+    deduplicateAssistantStreams: true,
+    messages: (messages ?? []) as DetailedMessage[],
+    missingAuthorKey: 'anon',
+    pendingMessageIds,
+  }), [assistantStreams, cardRowIds, messages, pendingMessageIds]);
+  const selectedMessages = useMemo(
+    () => threadItems.filter((item): item is Extract<GroupedThreadItem, { kind: 'message' }> =>
+      item.kind === 'message' && selectedMessageIds.has(item.item.message._id),
+    ),
+    [selectedMessageIds, threadItems],
+  );
+  const canDeleteSelectedForEveryone = !readOnly && selectedMessages.length > 0 && selectedMessages.every(({ item }) =>
+    !item.message.deletedAt &&
+    item.message.authorId === trackUserId &&
+    (!pmid || !item.message.authorProjectMemberId || item.message.authorProjectMemberId === pmid),
+  );
+  const canHideSelectedForMe = selectedMessages.length > 0 && selectedMessages.every(({ item }) => Boolean(item.message.deletedAt));
+  const canRemoveSelectedMessages = canDeleteSelectedForEveryone || canHideSelectedForMe;
   const draftReply = useMemo(() => {
     const pendingReplyId = composerDraft.draft.replyToMessageId;
     if (!pendingReplyId) return null;
@@ -377,22 +368,42 @@ export default function ConversationScreen() {
 
   /** The composer grows over the list when the keyboard opens; follow it down. */
   const pinToLatest = useCallback(() => {
-    if (!atBottomRef.current) return;
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    if (!atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+    const pin = () => {
+      const contentHeight = scrollMetricsRef.current.contentHeight;
+      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated: false, offset: contentHeight });
+      else listRef.current?.scrollToEnd({ animated: false });
+    };
+    pin();
+    requestAnimationFrame(pin);
   }, []);
-  const scrollToLatest = useCallback(() => {
+  const scrollToLatest = useCallback((animated = false) => {
     atBottomRef.current = true;
     setNewMessageCount(0);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      listRef.current?.scrollToEnd({ animated: !reducedMotion });
-    }));
-  }, [reducedMotion]);
+    if (!animated) setShowJumpToLatest(false);
+    const pin = () => {
+      const contentHeight = scrollMetricsRef.current.contentHeight;
+      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated, offset: contentHeight });
+      else listRef.current?.scrollToEnd({ animated });
+    };
+    pin();
+    if (!animated) {
+      requestAnimationFrame(pin);
+    }
+  }, []);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
-    atBottomRef.current = distanceFromBottom < 80;
+    atBottomRef.current = distanceFromBottom <= 80;
     if (atBottomRef.current) setNewMessageCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
+  }, []);
+  const stopFollowingAfterUserScroll = useCallback(() => {
+    atBottomRef.current = false;
+    pinToLatestAfterSendRef.current = false;
+    scrollAfterSendMessageIdRef.current = null;
+    if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
+    pinToLatestTimeoutRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -495,12 +506,18 @@ export default function ConversationScreen() {
 
   const buildMessageActions = useCallback((actionTarget: GroupedThreadItem) => {
     if (actionTarget.kind === 'date-sep') return [];
-    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return [];
+    const selectAction = actionTarget.kind === 'message' && (!readOnly || Boolean(actionTarget.item.message.deletedAt)) ? [{
+      label: 'Select message',
+      icon: 'check-box-outline' as const,
+      onPress: () => beginMessageSelection(actionTarget),
+    }] : [];
+    if (actionTarget.kind === 'message' && actionTarget.item.message.deletedAt) return selectAction;
     const existingThread = actionTarget.kind === 'message' ? actionTarget.item.channelThread : null;
     const copyText = actionTarget.kind === 'message'
       ? actionTarget.item.message.body.trim()
       : actionTarget.stream.status === 'failed' ? '' : actionTarget.stream.answer.trim();
     return [
+      ...selectAction,
       ...(copyText ? [{
         label: 'Copy message',
         icon: 'content-copy' as const,
@@ -515,7 +532,7 @@ export default function ConversationScreen() {
         icon: 'refresh' as const,
         onPress: () => requestTrackResponse(actionTarget.item.message._id, actionTarget.item.message.body),
       }] : []),
-      ...(releaseConfig.threads && actionTarget.kind === 'message' && existingThread && pid && gid ? [{
+      ...(canOpenExistingThread(releaseConfigLoading, releaseConfig.threads) && actionTarget.kind === 'message' && existingThread && pid && gid ? [{
         label: 'Open thread',
         icon: 'thread' as const,
         onPress: () => {
@@ -562,8 +579,11 @@ export default function ConversationScreen() {
         label: 'Edit message',
         icon: 'edit' as const,
         onPress: () => {
-          setEditTarget(actionTarget.item);
-          setEditBody(actionTarget.item.message.body);
+          const target = actionTarget.item;
+          const attachmentNames = target.attachments.map(({ attachment }) => attachment.filename);
+          const emptyAttachmentBody = target.attachments.length > 0 && isAutoAttachmentBody(target.message.body, attachmentNames);
+          setEditTarget(target);
+          setEditBody(emptyAttachmentBody ? '' : target.message.body);
         },
       }] : []),
       ...(!readOnly &&
@@ -574,32 +594,7 @@ export default function ConversationScreen() {
         label: 'Delete for everyone',
         icon: 'trash-can-outline' as const,
         destructive: true,
-        onPress: () => {
-          Alert.alert(
-            'Delete for everyone?',
-            "You can't undo deleting this message.",
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete for everyone',
-                style: 'destructive',
-                onPress: () => {
-                  setBusy(`delete-${actionTarget.item.message._id}`);
-                  void deleteMessage({
-                    messageId: actionTarget.item.message._id,
-                    actorId: trackUserId,
-                    actingCompanyId: cid,
-                    projectMemberId: pmid,
-                  }).then(() => {
-                    if (replyMessageId === actionTarget.item.message._id) setReplyTo(null);
-                  }).catch(() => {
-                    showToast({ title: 'Message not deleted', message: 'Check your connection and try again.', tone: 'error' });
-                  }).finally(() => setBusy(null));
-                },
-              },
-            ],
-          );
-        },
+        onPress: () => beginMessageSelection(actionTarget),
       }] : []),
       {
         label: 'Report',
@@ -607,8 +602,47 @@ export default function ConversationScreen() {
         onPress: () => { setReportError(null); setReportTarget(actionTarget); },
       },
     ];
-  }, [archiveContext, cid, copyMessageText, deleteMessage, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, requestTrackResponse, retryAssistantAnswer, router, setReplyTo, showToast, trackUserId]);
+  }, [archiveContext, beginMessageSelection, cid, copyMessageText, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, requestTrackResponse, retryAssistantAnswer, router, setReplyTo, showToast, trackUserId]);
   const messageActions = useMemo(() => actionTarget ? buildMessageActions(actionTarget) : [], [actionTarget, buildMessageActions]);
+
+  const deleteSelectedMessages = useCallback(() => {
+    if (!trackUserId || !canRemoveSelectedMessages || bulkDeleteBusy) return;
+    const messageIds = selectedMessages.map(({ item }) => item.message._id);
+    const selectedIds = new Set(messageIds);
+    const hideForMe = canHideSelectedForMe;
+    const title = hideForMe
+      ? messageIds.length === 1 ? 'Delete this message for me?' : `Delete ${messageIds.length} messages for me?`
+      : messageIds.length === 1 ? 'Delete this message for everyone?' : `Delete ${messageIds.length} messages for everyone?`;
+    const confirmLabel = hideForMe ? 'Delete for me' : 'Delete for everyone';
+    const detail = hideForMe
+      ? 'These deleted-message notices will be hidden only for you.'
+      : 'The selected message content and attachments will be removed for everyone. You can’t undo this.';
+    Alert.alert(title, detail, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: confirmLabel,
+        style: 'destructive',
+        onPress: () => {
+          setBulkDeleteBusy(true);
+          const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
+          const request = hideForMe ? hideDeletedMessages(scope) : deleteMessages(scope);
+          void request.then(() => {
+            if (replyMessageId && selectedIds.has(replyMessageId)) setReplyTo(null);
+            exitMessageSelection();
+            showToast({
+              title: hideForMe ? 'Hidden for you' : messageIds.length === 1 ? 'Message deleted' : 'Messages deleted',
+              message: hideForMe
+                ? `${messageIds.length} deleted ${messageIds.length === 1 ? 'message is' : 'messages are'} hidden only for you.`
+                : `${messageIds.length} ${messageIds.length === 1 ? 'message was' : 'messages were'} deleted for everyone.`,
+              tone: 'success',
+            });
+          }).catch(() => {
+            showToast({ title: 'Messages not deleted', message: 'Check your connection and try again.', tone: 'error' });
+          }).finally(() => setBulkDeleteBusy(false));
+        },
+      },
+    ]);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, trackUserId]);
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -631,13 +665,7 @@ export default function ConversationScreen() {
     }
   }
 
-  // Reconcile optimistic rows by message ID, so duplicate message text cannot hide a new send.
-  useEffect(() => {
-    if (!pendingMessages.length || !messages) return;
-    const messageItems = messages as DetailedMessage[];
-    const receivedIds = new Set(messageItems.map((item) => item.message._id));
-    setPendingMessages((prev) => reconcilePendingMessages(prev, receivedIds, receivedMessageAttachmentStates(messageItems)));
-  }, [messages, pendingMessages]);
+  usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
   useEffect(() => {
     if (!messages || !assistantStreams) return;
@@ -690,6 +718,7 @@ export default function ConversationScreen() {
 
   useEffect(() => () => {
     if (acknowledgeTimeoutRef.current) clearTimeout(acknowledgeTimeoutRef.current);
+    if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -761,9 +790,18 @@ export default function ConversationScreen() {
       sendSignatureRef.current = sendSignature;
     }
     const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
-    atBottomRef.current = true;
     if (pendingId) {
-      scrollToLatestAfterSendRef.current = true;
+      atBottomRef.current = true;
+      pinToLatestAfterSendRef.current = true;
+      if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
+      pinToLatestTimeoutRef.current = setTimeout(() => {
+        pinToLatestAfterSendRef.current = false;
+        if (scrollAfterSendMessageIdRef.current === pendingId) scrollAfterSendMessageIdRef.current = null;
+        pinToLatestTimeoutRef.current = null;
+      }, 900);
+      setNewMessageCount(0);
+      setShowJumpToLatest(false);
+      scrollAfterSendMessageIdRef.current = pendingId;
       setPendingMessages((prev) => [...prev, {
         attachments: payload.attachments,
         at: Date.now(),
@@ -851,7 +889,15 @@ export default function ConversationScreen() {
       }
       return result;
     } catch (failure) {
-      if (pendingId) setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
+      if (pendingId) {
+        if (scrollAfterSendMessageIdRef.current === pendingId) {
+          scrollAfterSendMessageIdRef.current = null;
+          pinToLatestAfterSendRef.current = false;
+          if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
+          pinToLatestTimeoutRef.current = null;
+        }
+        setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
+      }
       throw failure;
     } finally {
       setBusy(null);
@@ -950,40 +996,40 @@ export default function ConversationScreen() {
       <View>
         <ThreadRow
           highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
-          contextActions={Platform.OS === 'ios' && item.kind === 'message' && !item.item.message.deletedAt ? buildMessageActions(item) : undefined}
+          contextActions={Platform.OS === 'ios' && item.kind === 'message' ? buildMessageActions(item) : undefined}
           item={item}
           isFirstInGroup={item.isFirstInGroup}
           isOwnMessage={isOwnMessage}
-          selected={Platform.OS === 'android' && androidSelectionMode && actionTarget?.key === item.key}
+          selected={item.kind === 'message' && selectedMessageIds.has(item.item.message._id)}
+          selectionMode={messageSelectionMode}
+          onPressMessage={messageSelectionMode && item.kind === 'message' ? () => toggleMessageSelection(item) : undefined}
           readReceipts={readReceipts}
           onLongPress={() => {
-            if (item.kind === 'message' && item.item.message.deletedAt) return;
+            if (item.kind === 'message' && messageSelectionMode) {
+              toggleMessageSelection(item);
+              return;
+            }
             hapticLight();
             setActionTarget(item);
-            if (Platform.OS === 'android' && item.kind === 'message') {
-              setAndroidSelectionMode(true);
-              setActionSheetOpen(false);
-            } else {
-              setActionSheetOpen(true);
-            }
+            setActionSheetOpen(true);
           }}
-          onSwipeReply={readOnly ? undefined : () => {
+          onSwipeReply={readOnly || messageSelectionMode ? undefined : () => {
             hapticLight();
             if (item.kind === 'message') setReplyTo(item.item);
           }}
-          onSwipeForward={!readOnly && item.kind === 'message' && !item.item.message.deletedAt ? () => {
+          onSwipeForward={!readOnly && !messageSelectionMode && item.kind === 'message' && !item.item.message.deletedAt ? () => {
             hapticLight();
             setForwardError(null);
             setForwardTarget(item.item);
           } : undefined}
-          onSwipeReport={() => {
+          onSwipeReport={messageSelectionMode ? undefined : () => {
             hapticLight();
             setReportTarget(item);
           }}
-          onOpenThread={releaseConfig.threads && pid && gid && item.kind === 'message' && item.item.channelThread ? () => {
+          onOpenThread={!messageSelectionMode && canOpenExistingThread(releaseConfigLoading, releaseConfig.threads) && pid && gid && item.kind === 'message' && item.item.channelThread ? () => {
             router.push(threadConversationHref(pid, gid, item.item.channelThread!.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: archiveContext } : null) as never);
           } : undefined}
-          onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
+          onPressReply={!messageSelectionMode && item.kind === 'message' && item.item.replyTo ? () => {
             const quotedId = item.item.replyTo?.messageId;
             if (quotedId) scrollToMessage(quotedId);
           } : undefined}
@@ -999,7 +1045,7 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [actionTarget, androidSelectionMode, archiveContext, buildMessageActions, channelContext, cid, gid, highlightedMessageId, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, scrollToMessage, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
+  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToMessage, selectedMessageIds, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
@@ -1009,9 +1055,9 @@ export default function ConversationScreen() {
 
   const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
   const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
-  const headerSelectionActions = messageActions.filter((action) =>
-    ['Reply', 'Forward', 'Delete for everyone'].includes(action.label),
-  );
+  const headerSelectionActions = selectedMessages.length === 1
+    ? messageActions.filter((action) => ['Reply', 'Forward'].includes(action.label))
+    : [];
 
   return (
     <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface }]}>
@@ -1019,15 +1065,15 @@ export default function ConversationScreen() {
         options={{
           contentStyle: { backgroundColor: theme.homeSurface },
           headerShown: Platform.OS !== 'ios',
-          headerTransparent: false,
+          headerTransparent: true,
           headerBackVisible: false,
           headerBackTitle: '',
           headerBackButtonDisplayMode: 'minimal',
           headerBlurEffect: 'none',
-          headerBackground: () => <View pointerEvents="none" style={StyleSheet.absoluteFill} />,
-          headerLeft: () => androidSelectionMode ? <IconButton
+          headerBackground: () => <ChatHeaderBackground />,
+          headerLeft: () => messageSelectionMode ? <IconButton
             accessibilityLabel="Cancel message selection"
-            appearance="plain"
+            appearance="surface"
             icon="close"
             onPress={exitMessageSelection}
           /> : <Pressable
@@ -1047,11 +1093,11 @@ export default function ConversationScreen() {
           >
             <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
           </Pressable>,
-          headerRight: () => androidSelectionMode ? (
+          headerRight: () => messageSelectionMode ? (
             <View style={styles.headerActions}>
               {headerSelectionActions.map((action) => action.icon ? <IconButton
                 accessibilityLabel={action.label}
-                appearance="plain"
+                appearance="surface"
                 icon={action.icon}
                 key={action.label}
                 onPress={() => {
@@ -1059,18 +1105,19 @@ export default function ConversationScreen() {
                   action.onPress();
                 }}
               /> : null)}
-              <IconButton
-                accessibilityLabel="More message actions"
-                appearance="plain"
-                icon="dots-horizontal"
-                onPress={() => setActionSheetOpen(true)}
-              />
+              {canRemoveSelectedMessages ? <IconButton
+                accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
+                appearance="surface"
+                icon="trash-can-outline"
+                loading={bulkDeleteBusy}
+                onPress={deleteSelectedMessages}
+              /> : null}
             </View>
           ) : channelSearchOpen ? null : (
             <View style={styles.headerActions}>
               <IconButton
                 accessibilityLabel="Search messages in this Channel"
-                appearance="plain"
+                appearance="surface"
                 icon="search"
                 onPress={() => {
                   hapticLight();
@@ -1080,14 +1127,14 @@ export default function ConversationScreen() {
               />
               {!readOnly ? <IconButton
                 accessibilityLabel="Channel options"
-                appearance="plain"
+              appearance="surface"
                 icon="dots-horizontal"
                 onPress={() => { hapticLight(); setToolsOpen(true); }}
               /> : null}
             </View>
           ),
-          headerTitle: () => androidSelectionMode ? (
-            <ThemedText accessibilityLabel="1 message selected" type="title">1</ThemedText>
+          headerTitle: () => messageSelectionMode ? (
+            <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
           ) : channelSearchOpen ? (
             <View style={[styles.androidSearchField, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }]}>
               <PlatformIcon color={theme.textSecondary} name="search" size={18} />
@@ -1119,65 +1166,65 @@ export default function ConversationScreen() {
       />
 
       {Platform.OS === 'ios' ? <View style={[styles.iosHeader, { backgroundColor: conversationHeaderTint, paddingTop: insets.top }]}>
-        {channelSearchOpen ? <View style={styles.iosHeaderRow}>
-          <Pressable accessibilityLabel="Close message search" accessibilityRole="button" onPress={() => { setChannelSearchOpen(false); setChannelSearchText(''); }} style={styles.searchBackButton}>
-            <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
-          </Pressable>
-          <View style={[styles.iosSearchField, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }]}>
-            <PlatformIcon color={theme.textSecondary} name="search" size={17} />
-            <ThemedTextInput accessibilityLabel="Search messages in this Channel" autoCapitalize="none" autoCorrect={false} autoFocus maxLength={200} onChangeText={setChannelSearchText} placeholder="Search messages" returnKeyType="search" style={[styles.searchTextInput, { color: theme.text }]} value={channelSearchText} />
-            {channelSearchText ? <Pressable accessibilityLabel="Clear message search" accessibilityRole="button" hitSlop={8} onPress={() => setChannelSearchText('')}><PlatformIcon color={theme.textSecondary} name="close" size={17} /></Pressable> : null}
+        {messageSelectionMode ? <View style={styles.iosHeaderRow}>
+          <IconButton accessibilityLabel="Cancel message selection" appearance="glass" icon="close" onPress={exitMessageSelection} />
+          <View style={styles.iosHeaderTitle}>
+            <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
           </View>
+          <View style={styles.iosHeaderActions}>
+            {headerSelectionActions.map((action) => action.icon ? <IconButton
+              accessibilityLabel={action.label}
+              appearance="glass"
+              icon={action.icon}
+              key={action.label}
+              onPress={() => { exitMessageSelection(); action.onPress(); }}
+            /> : null)}
+            {canRemoveSelectedMessages ? <IconButton
+              accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
+              appearance="glass"
+              icon="trash-can-outline"
+              loading={bulkDeleteBusy}
+              onPress={deleteSelectedMessages}
+            /> : null}
+          </View>
+        </View> : channelSearchOpen ? <View style={styles.iosHeaderRow}>
+          <IconButton accessibilityLabel="Close message search" appearance="glass" icon="arrow-left" onPress={() => { setChannelSearchOpen(false); setChannelSearchText(''); }} />
+          <ConversationSearchPill onChangeText={setChannelSearchText} onClear={() => setChannelSearchText('')} query={channelSearchText} />
         </View> : <View style={styles.iosHeaderRow}>
-          <Pressable
+          <IconButton
             accessibilityLabel="Back to conversations"
-            accessibilityRole="button"
+            appearance="glass"
+            icon="arrow-left"
             onPress={() => {
-              hapticLight();
               if (router.canGoBack()) router.back();
               else router.replace(pid ? projectChannelsHref(pid, channelContext) as never : '/conversations' as never);
             }}
-            style={({ pressed }) => [styles.headerCircle, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder, opacity: pressed ? 0.76 : 1 }]}
-          >
-            <PlatformIcon color={theme.textSecondary} name="arrow-left" size={20} />
-          </Pressable>
+          />
           <View style={styles.iosHeaderTitle}>
-            <AnimatedPressable
-              accessibilityHint="Opens the Channel picker"
+            <ChannelPickerPill
               accessibilityLabel={`Choose Channel. Current Channel: ${activeGroup?.name ?? 'Conversation'}`}
-              accessibilityRole="button"
-              hitSlop={4}
-              onPressIn={channelHeaderPressIn}
-              onPressOut={channelHeaderPressOut}
+              colorKey={activeGroupMark?.markColorKey}
+              groupId={String(activeGroup?._id ?? gid)}
+              iconKey={activeGroupIconKey}
+              name={activeGroup?.name ?? 'Conversation'}
               onPress={() => { hapticLight(); setGroupSwitchOpen(true); }}
-              style={[styles.channelHeaderButton, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }, channelHeaderPressStyle]}
-            >
-              <ChannelHeaderIdentity
-                colorKey={activeGroupMark?.markColorKey}
-                groupId={String(activeGroup?._id ?? gid)}
-                iconKey={activeGroupIconKey}
-                key={String(activeGroup?._id ?? gid)}
-                name={activeGroup?.name ?? 'Conversation'}
-              />
-              <PlatformIcon color={theme.textSecondary} name="chevron-down" size={15} />
-            </AnimatedPressable>
+            />
           </View>
           <View style={styles.iosHeaderActions}>
             <IconButton
               accessibilityLabel="Search messages in this Channel"
-              appearance="plain"
+              appearance="glass"
               icon="search"
               onPress={() => {
-                hapticLight();
                 setChannelSearchOpen(true);
                 setChannelSearchText('');
               }}
             />
             {!readOnly ? <IconButton
               accessibilityLabel="Channel options"
-              appearance="plain"
+              appearance="glass"
               icon="dots-horizontal"
-              onPress={() => { hapticLight(); setToolsOpen(true); }}
+              onPress={() => setToolsOpen(true)}
             /> : null}
           </View>
         </View>}
@@ -1238,7 +1285,7 @@ export default function ConversationScreen() {
           style={styles.searchResultsScroll}
         />
       ) : (
-      <Animated.View layout={reducedMotion ? undefined : MessageListLayout} style={styles.flex}>
+      <Animated.View style={styles.flex}>
       <TaskLinkBatchProvider
         assistantStreamIds={taskLinkAssistantStreamIds}
         enabled={releaseConfig.tasks}
@@ -1247,15 +1294,21 @@ export default function ConversationScreen() {
       >
       <FlatList
           ref={listRef}
-          contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + TouchTarget + Spacing.four }]}
+          contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + Spacing.two }]}
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
           data={threadItems}
-          stickyHeaderIndices={stickyDateHeaderIndices(threadItems, hasMoreMessages)}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
-          onScrollToIndexFailed={({ index }) => requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 }))}
+          onScrollToIndexFailed={({ averageItemLength, index }) => requestAnimationFrame(() => {
+            if (index >= threadItems.length - 1) {
+              listRef.current?.scrollToOffset({ animated: false, offset: averageItemLength * index });
+              requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+              return;
+            }
+            listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 });
+          })}
           initialNumToRender={24}
           keyExtractor={(item) => item.key}
           maxToRenderPerBatch={16}
@@ -1263,6 +1316,7 @@ export default function ConversationScreen() {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
             updateJumpToLatest();
           }}
+          onScrollBeginDrag={stopFollowingAfterUserScroll}
           onScroll={({ nativeEvent }) => {
             scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
@@ -1281,11 +1335,8 @@ export default function ConversationScreen() {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
             updateJumpToLatest();
-            if (scrollToLatestAfterSendRef.current) {
-              scrollToLatestAfterSendRef.current = false;
-              requestAnimationFrame(scrollToLatest);
-            } else if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && wasAtBottom) {
-              listRef.current?.scrollToEnd({ animated: !reducedMotion });
+            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (wasAtBottom || pinToLatestAfterSendRef.current)) {
+              scrollToLatest();
             }
           }}
           removeClippedSubviews={false}
@@ -1312,22 +1363,20 @@ export default function ConversationScreen() {
           ) : null}
           ListFooterComponent={
             pendingMessages.length > 0 ? (
-              <Animated.View
-                entering={reducedMotion ? undefined : SentMessageEntering}
-                exiting={reducedMotion ? undefined : SentMessageExiting}
-                layout={reducedMotion ? undefined : PendingMessageLayout}
-              >
+              <View>
                 {pendingMessages.map((m) => (
                   <Animated.View
                     entering={reducedMotion ? undefined : PendingMessageEntering}
-                    exiting={reducedMotion ? undefined : PendingMessageExiting}
                     key={m.id}
-                    layout={reducedMotion ? undefined : PendingMessageLayout}
+                    onLayout={() => {
+                      if (scrollAfterSendMessageIdRef.current !== m.id) return;
+                      scrollToLatest();
+                    }}
                   >
-                  <PendingMessageBubble attachments={m.attachments} body={m.body} />
+                  <PendingMessageBubble at={m.at} attachments={m.attachments} body={m.body} offline={isOffline} />
                   </Animated.View>
                 ))}
-              </Animated.View>
+              </View>
             ) : null
           }
         />
@@ -1338,13 +1387,13 @@ export default function ConversationScreen() {
         <AnimatedPressable
           accessibilityLabel={`Jump to latest messages${newMessageCount ? `, ${newMessageCount} new messages` : ''}`}
           accessibilityRole="button"
-          entering={reducedMotion ? undefined : FadeInUp.duration(180)}
-          exiting={reducedMotion ? undefined : FadeOutDown.duration(130)}
+          entering={reducedMotion ? undefined : JumpToLatestEntering}
+          exiting={reducedMotion ? undefined : JumpToLatestExiting}
           onPressIn={jumpButtonPressIn}
           onPressOut={jumpButtonPressOut}
           onPress={() => {
             hapticLight();
-            scrollToLatest();
+            scrollToLatest(!reducedMotion);
           }}
           style={[styles.jumpToLatest, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline, bottom: composerOverlayHeight + Spacing.four }, jumpButtonPressStyle]}>
           <PlatformIcon color={theme.text} name="chevron-down" size={20} />
@@ -1353,33 +1402,37 @@ export default function ConversationScreen() {
       ) : null}
       </View>
 
-      {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <View
-        onLayout={({ nativeEvent }) => {
-          if (composerExpanded) return;
-          const height = Math.ceil(nativeEvent.layout.height);
-          setComposerOverlayHeight((current) => current === height ? current : height);
-        }}
-        style={[styles.composerOverlay, composerExpanded && { backgroundColor: theme.homeSurface }, composerExpanded && styles.composerExpandedOverlay]}>
-        {/* Keep the message list visible above the keyboard while typing. */}
-        <Composer
-          activeGroupName={activeGroup?.name ?? null}
-          busy={busy === 'send'}
-          expandOnKeyboard={false}
-          mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
-          mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
-          mentionCandidates={mentionCandidates}
-          onCancelReply={() => setReplyTo(null)}
-          onChangeText={setComposer}
-          onExpandedChange={setComposerExpanded}
-          onFocus={scrollToLatest}
-          onLoadMoreMentionCandidates={() => {
-            if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
+      {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <KeyboardStickyView
+        offset={{ closed: -composerClosedOffset, opened: 0 }}
+        style={styles.composerOverlay}>
+        <View
+          onLayout={({ nativeEvent }) => {
+            if (composerExpanded) return;
+            const height = Math.ceil(nativeEvent.layout.height);
+            setComposerOverlayHeight((current) => current === height ? current : height);
           }}
-          onSendMessage={handleSendMessage}
-          replyTo={replyTo}
-          value={composer}
-        />
-      </View>}
+          style={[composerExpanded && { backgroundColor: theme.homeSurface }, composerExpanded && styles.composerExpandedOverlay]}>
+          {/* Keep the message list visible above the keyboard while typing. */}
+          <Composer
+            activeGroupName={activeGroup?.name ?? null}
+            busy={busy === 'send'}
+            expandOnKeyboard={false}
+            mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
+            mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
+            mentionCandidates={mentionCandidates}
+            onCancelReply={() => setReplyTo(null)}
+            onChangeText={setComposer}
+            onExpandedChange={setComposerExpanded}
+            onFocus={scrollToLatest}
+            onLoadMoreMentionCandidates={() => {
+              if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
+            }}
+            onSendMessage={handleSendMessage}
+            replyTo={replyTo}
+            value={composer}
+          />
+        </View>
+      </KeyboardStickyView>}
 
       <OptionsSheet onClose={() => setGroupSwitchOpen(false)} title="Switch Channel" visible={groupSwitchOpen}>
         <SheetSection>
@@ -1405,7 +1458,7 @@ export default function ConversationScreen() {
         </SheetSection>
       </OptionsSheet>
 
-      <OptionsSheet onClose={() => setToolsOpen(false)} title={activeGroup?.name ? `#${activeGroup.name} notifications` : 'Notifications'} visible={toolsOpen}>
+      <OptionsSheet onClose={() => setToolsOpen(false)} title={activeGroup?.name ? `${activeGroup.name} notifications` : 'Notifications'} visible={toolsOpen}>
         <SheetSection>
           <SheetRow
             icon="bell-outline"
@@ -1489,18 +1542,6 @@ export default function ConversationScreen() {
   );
 }
 
-function ChannelHeaderIdentity({ colorKey, groupId, iconKey, name }: { colorKey?: string | null; groupId: string; iconKey?: string | null; name: string }) {
-  const reducedMotion = useReducedMotion();
-  return <Animated.View
-    entering={reducedMotion ? undefined : FadeInRight.duration(180)}
-    exiting={reducedMotion ? undefined : FadeOutLeft.duration(130)}
-    style={styles.channelIdentity}
-  >
-    <EntityMark colorKey={colorKey} iconKey={iconKey} id={groupId} kind="channel" name={name} size={24} />
-    <ThemedText numberOfLines={2} style={styles.channelTitle} type="title">{name}</ThemedText>
-  </Animated.View>;
-}
-
 const styles = StyleSheet.create({
   archiveBanner: { alignItems: 'center', gap: Spacing.one, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
   archiveDescription: { maxWidth: 420, textAlign: 'center' },
@@ -1514,8 +1555,6 @@ const styles = StyleSheet.create({
   channelSearchSubtitle: { marginTop: Spacing.half },
   channelSearchResultOwn: { alignSelf: 'flex-end', borderBottomRightRadius: Radius.small },
   channelSearchResultOther: { alignSelf: 'flex-start', borderBottomLeftRadius: Radius.small },
-  searchBackButton: { alignItems: 'center', borderRadius: Radius.pill, height: TouchTarget, justifyContent: 'center', width: TouchTarget },
-  iosSearchField: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flex: 1, flexDirection: 'row', gap: Spacing.two, height: 42, overflow: 'hidden', paddingHorizontal: Spacing.three },
   searchTextInput: { flex: 1, fontSize: 16, minWidth: 0, paddingHorizontal: 0, paddingVertical: 0 },
   searchResultsEmpty: { alignItems: 'center', flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.six, paddingVertical: Spacing.four },
   searchResultsList: { flexGrow: 1, gap: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
@@ -1532,6 +1571,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     boxShadow: '0 3px 10px rgba(0,0,0,0.14)',
+    elevation: 3,
     flexDirection: 'row',
     gap: Spacing.one,
     height: TouchTarget,
@@ -1540,17 +1580,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     position: 'absolute',
     right: Spacing.three,
+    zIndex: 3,
   },
   jumpToLatestCount: { textAlign: 'center' },
   loadMore: { alignItems: 'center', minHeight: TouchTarget, justifyContent: 'center', padding: Spacing.two },
   headerCircle: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: TouchTarget, justifyContent: 'center', overflow: 'hidden', width: TouchTarget },
-  iosHeaderActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.half },
+  iosHeaderActions: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   iosHeader: { flexShrink: 0 },
   iosHeaderRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, height: TouchTarget, paddingHorizontal: Spacing.three },
   iosHeaderTitle: { alignItems: 'center', flex: 1, minWidth: 0 },
-  channelHeaderButton: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: 280, minHeight: TouchTarget, paddingHorizontal: Spacing.three },
-  channelIdentity: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: Spacing.two, minWidth: 0 },
-  channelTitle: { flexShrink: 1, minWidth: 0 },
+  channelHeaderButton: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', flexShrink: 1, gap: Spacing.two, maxWidth: 280, minHeight: TouchTarget, minWidth: 0, overflow: 'hidden', paddingHorizontal: Spacing.three },
   retry: { alignItems: 'center', borderRadius: Radius.medium, justifyContent: 'center', minHeight: TouchTarget, marginTop: Spacing.three, paddingHorizontal: Spacing.four },
   screen: { flex: 1 },
   thread: { paddingBottom: Spacing.two, paddingTop: Spacing.two },

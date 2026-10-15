@@ -14,11 +14,11 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { SkeletonList } from '@/components/skeleton-row';
 import { TaskDueChip, TaskStateBanner, TaskStatusPill } from '@/components/task-ui';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
-import { MaxFontScale, MobileHeaderMetrics, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
+import { MobileHeaderMetrics, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useBottomTabContentInset } from '@/hooks/use-bottom-tab-inset';
 import { useTheme } from '@/hooks/use-theme';
+import { WorkspaceTopControls } from '@/components/workspace-top-controls';
 import { myTaskAttentionWeekItems } from '@/lib/my-task-attention';
 import { localTaskDate, parseTaskDate } from '@/lib/task-presentation';
 import { summarizeMyTaskCounts } from '@/lib/my-task-counts';
@@ -50,9 +50,11 @@ type Props = {
   onConfirmTaskStatus: () => void;
   onLoadMoreProjects: () => void;
   onOpenBoard: (board: BoardEntry) => void;
+  onCreateTaskInBoard: (board: BoardEntry) => void;
+  onEditBoardMark: (board: BoardEntry) => void;
   onOpenTask: (task: MyTask) => void;
   onSetTaskStatus: (task: MyTask, workflowStateId: string) => void;
-  onSelectCompany: (companyId: Id<'companies'>) => void;
+  onSelectCompany: (companyId: Id<'companies'> | null) => void;
 };
 
 type WorkspaceTaskRow = {
@@ -78,6 +80,7 @@ type WorkspaceBoardRow = {
   markIconKey?: string | null;
   assignedTaskCount: number;
   unreadCount: number;
+  board: BoardEntry;
   onOpen: () => void;
 };
 
@@ -110,19 +113,26 @@ export function MyTaskWorkspace({
   onConfirmTaskStatus,
   onLoadMoreProjects,
   onOpenBoard,
+  onCreateTaskInBoard,
+  onEditBoardMark,
   onOpenTask,
   onSetTaskStatus,
   onSelectCompany,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const bottomContentInset = useBottomTabContentInset();
+  // Clear the floating navigation and Create button without adding another
+  // tail gap below the final Board.
+  const bottomContentInset = useBottomTabContentInset(0);
   const today = localTaskDate();
   const dates = useMemo(() => weekDateKeys(today), [today]);
   const [search, setSearch] = useState('');
   const [statusTask, setStatusTask] = useState<MyTask | null>(null);
+  const [boardActionTarget, setBoardActionTarget] = useState<BoardEntry | null>(null);
+  const [pendingBoardAction, setPendingBoardAction] = useState<{ board: BoardEntry; action: 'create' | 'editMark' } | null>(null);
   const [companySheetOpen, setCompanySheetOpen] = useState(false);
   const previousBoardIconKeys = useRef(new Map<string, EntityMarkIconKey>());
+  const boardLongPressHandled = useRef(false);
 
   const allTasks = useMemo(() => uniqueMyTasks(assignedTasks), [assignedTasks]);
   const boardTaskCounts = useMemo(() => summarizeMyTaskCounts(allTasks, today).byBoard, [allTasks, today]);
@@ -172,31 +182,42 @@ export function MyTaskWorkspace({
     markIconKey: boardIconKeys.get(String(item.board._id)),
     assignedTaskCount: boardTaskCounts.get(String(item.board._id))?.assignedCount ?? 0,
     unreadCount: item.unreadCount,
+    board: item,
     onOpen: () => onOpenBoard(item),
   }));
   function renderTask(task: WorkspaceTaskRow) {
-    const taskLabel = `${task.title}. ${task.projectName}. ${task.statusLabel}. ${task.dueDate ? taskGroupLabel(task.dueDate, today, dates) : 'No due date'}`;
-    const titleContent = <>
-      <ThemedText numberOfLines={2} style={styles.compactTaskTitle} type="smallBold">{task.title}</ThemedText>
-      <View style={[styles.compactTaskArrow, { backgroundColor: theme.backgroundElevated, borderColor: theme.homeBorder }]}>
-        <PlatformIcon color={theme.textSecondary} name="chevron-right" size={16} />
-      </View>
-    </>;
-    return <View key={task.key} style={[styles.compactTaskRow, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
-      <Pressable
-        accessibilityHint="Opens the task"
-        accessibilityLabel={taskLabel}
-        accessibilityRole="button"
-        onPress={task.onOpen}
-        style={({ pressed }) => [styles.compactTaskTitleRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
-      >{titleContent}</Pressable>
-      <View style={styles.compactTaskMeta}>
-        <TaskStatusPill compact category={task.statusCategory} label={task.statusLabel} onPress={task.onStatusPress} />
-        <View style={styles.compactProjectPill}>
-          <EntityMark colorKey={task.projectMarkColorKey} iconKey={task.projectMarkIconKey} id={task.projectId} kind="project" name={task.projectName} size={15} />
-          <ThemedText numberOfLines={1} style={styles.compactProjectName} themeColor="textSecondary" type="caption">{task.projectName}</ThemedText>
+    const taskLabel = `Task: ${task.title}. Project: ${task.projectName}. Current status: ${task.statusLabel}. ${task.dueDate ? taskGroupLabel(task.dueDate, today, dates) : 'No due date'}`;
+    return <View key={task.key} style={styles.compactTaskRow}>
+      <View style={styles.compactTaskContent}>
+        <Pressable
+          accessible
+          accessibilityHint="Opens the task"
+          accessibilityLabel={taskLabel}
+          accessibilityRole="button"
+          onPress={task.onOpen}
+          style={({ pressed }) => [styles.compactTaskOpenButton, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}
+        >
+          <View style={styles.compactTaskOpenCopy}>
+            <ThemedText numberOfLines={2} style={styles.compactTaskTitle} type="smallBold">{task.title}</ThemedText>
+            <View style={styles.compactProjectContext}>
+              <EntityMark colorKey={task.projectMarkColorKey} iconKey={task.projectMarkIconKey} id={task.projectId} kind="project" name={task.projectName} size={15} />
+              <ThemedText numberOfLines={1} style={styles.compactProjectName} themeColor="textSecondary" type="caption">{task.projectName}</ThemedText>
+            </View>
+          </View>
+          <View style={[styles.compactTaskArrow, { backgroundColor: theme.backgroundElevated, borderColor: theme.homeBorder }]}>
+            <PlatformIcon color={theme.textSecondary} name="chevron-right" size={16} />
+          </View>
+        </Pressable>
+        <View style={styles.compactTaskMeta}>
+          <TaskStatusPill
+            accessibilityLabel={`Change status for ${task.title} in ${task.projectName}. Current status: ${task.statusLabel}`}
+            compact
+            category={task.statusCategory}
+            label={task.statusLabel}
+            onPress={task.onStatusPress}
+          />
+          <View style={styles.compactTaskDue}><TaskDueChip category={task.statusCategory} dueDate={task.dueDate} showNoDate /></View>
         </View>
-        <View style={styles.compactTaskDue}><TaskDueChip category={task.statusCategory} dueDate={task.dueDate} showNoDate /></View>
       </View>
     </View>;
   }
@@ -208,23 +229,55 @@ export function MyTaskWorkspace({
       : formattedCount;
     const taskLabel = `${formattedCount} assigned ${item.assignedTaskCount === 1 ? 'task' : 'tasks'}`;
     const unreadLabel = item.unreadCount ? `, ${item.unreadCount} unread notifications` : '';
-    const rowContent = <>
-      <View style={styles.boardMarkWrap}>
-        <EntityMark colorKey={item.markColorKey} iconKey={item.markIconKey} id={item.id} kind="board" name={item.name} size={entityDirectoryRow.iconSize} />
-        {item.assignedTaskCount > 0 ? <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.boardTaskBadge, { backgroundColor: theme.accentSoft, borderColor: theme.backgroundElevated }]}><ThemedText style={[styles.boardTaskCount, { color: theme.accentStrong }]} type="captionBold">{displayCount}</ThemedText></View> : null}
-      </View>
-      <View style={styles.boardCopy}>
-        <ThemedText numberOfLines={1} type="smallBold">{item.name}</ThemedText>
-        <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{item.projectName}</ThemedText>
-      </View>
-      <View style={styles.boardSignals}>
-        {item.unreadCount > 0 ? <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.boardUnreadDot, { backgroundColor: theme.accentStrong }]} /> : null}
-        <View style={[styles.boardArrow, { backgroundColor: theme.backgroundElevated, borderColor: theme.homeBorder }]}><PlatformIcon color={theme.textSecondary} name="chevron-right" size={16} /></View>
-      </View>
-    </>;
+    const actionActive = boardActionTarget?.board._id === item.board.board._id;
 
     return <View style={[styles.boardBlock, { borderBottomColor: theme.homeBorder }]}>
-      <Pressable accessibilityHint={`Opens ${item.name} and its tasks`} accessibilityLabel={`${item.name} Board, ${item.projectName} Project, ${taskLabel}${unreadLabel}`} accessibilityRole="button" onPress={item.onOpen} style={({ pressed }) => [styles.boardRow, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>{rowContent}</Pressable>
+      <Pressable
+        accessibilityHint={`Opens ${item.name} and its tasks. Long press for Board actions.`}
+        accessibilityLabel={`${item.name} Board, ${item.projectName} Project, ${taskLabel}${unreadLabel}`}
+        accessibilityRole="button"
+        android_ripple={{ color: theme.backgroundSelected }}
+        onLongPress={() => {
+          boardLongPressHandled.current = true;
+          setBoardActionTarget(item.board);
+        }}
+        onPress={() => {
+          if (boardLongPressHandled.current) {
+            boardLongPressHandled.current = false;
+            return;
+          }
+          item.onOpen();
+        }}
+        onPressIn={() => { boardLongPressHandled.current = false; }}
+        style={({ pressed }) => [
+          styles.boardRow,
+          pressed ? { backgroundColor: theme.backgroundSelected } : null,
+        ]}
+      >
+        {({ pressed }) => <>
+          <View style={styles.boardMarkWrap}>
+            <View style={[
+              styles.boardIconMask,
+              {
+                backgroundColor: actionActive ? theme.accentSoft : pressed ? theme.backgroundSelected : 'transparent',
+                borderColor: actionActive ? theme.accentStrong : theme.textTertiary,
+                borderWidth: actionActive ? 2 : pressed ? StyleSheet.hairlineWidth : 0,
+              },
+            ]}>
+              <EntityMark colorKey={item.markColorKey} iconKey={item.markIconKey} id={item.id} kind="board" name={item.name} size={entityDirectoryRow.iconSize} />
+            </View>
+            {item.assignedTaskCount > 0 ? <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.boardTaskBadge, { backgroundColor: theme.accentSoft, borderColor: theme.backgroundElevated }]}><ThemedText style={[styles.boardTaskCount, { color: theme.accentStrong }]} type="captionBold">{displayCount}</ThemedText></View> : null}
+          </View>
+          <View style={styles.boardCopy}>
+            <ThemedText numberOfLines={1} type="subtitle">{item.name}</ThemedText>
+            <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{item.projectName}</ThemedText>
+          </View>
+          <View style={styles.boardSignals}>
+            {item.unreadCount > 0 ? <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.boardUnreadDot, { backgroundColor: theme.accentStrong }]} /> : null}
+            <View style={[styles.boardArrow, { backgroundColor: theme.backgroundElevated, borderColor: theme.homeBorder }]}><PlatformIcon color={theme.textSecondary} name="chevron-right" size={16} /></View>
+          </View>
+        </>}
+      </Pressable>
     </View>;
   }
 
@@ -249,65 +302,50 @@ export function MyTaskWorkspace({
       ListEmptyComponent={<View style={styles.boardListEmpty}>{boardsLoading
         ? <SkeletonList count={3} label="Loading Boards" />
         : <EmptyState icon="view-board" title={search ? 'No matching Boards' : 'No Boards yet'} body={search ? 'Try a Project or Board name.' : 'Boards in your Projects will appear here.'} />}</View>}
-      ListFooterComponent={hasMoreProjects || isLoadingMoreProjects
-        ? <Pressable accessibilityRole="button" disabled={isLoadingMoreProjects} onPress={onLoadMoreProjects} style={[styles.loadMore, { borderColor: theme.homeBorder }]}>
+      ListFooterComponent={<View style={styles.listFooter}>
+        {hasMoreProjects || isLoadingMoreProjects ? <Pressable accessibilityRole="button" disabled={isLoadingMoreProjects} onPress={onLoadMoreProjects} style={[styles.loadMore, { borderColor: theme.homeBorder }]}>
           <ThemedText themeColor="textSecondary" type="captionBold">{isLoadingMoreProjects ? 'Loading Projects...' : 'Load more Projects'}</ThemedText>
-        </Pressable>
-        : null}
+        </Pressable> : null}
+        <View style={[styles.attentionFooter, { borderTopColor: theme.homeBorder }]}>
+          <View style={styles.attentionSection}>
+            <View style={styles.attentionHeading}>
+              <View style={styles.attentionTitle}><PlatformIcon color={theme.accentStrong} name="flag" size={18} /><ThemedText accessibilityRole="header" type="subtitle">Needs attention</ThemedText></View>
+              <ThemedText accessibilityLabel={`${liveTaskRows.length} tasks selected, up to 5 this week`} themeColor="textSecondary" type="captionBold">{liveTaskRows.length ? `${liveTaskRows.length} selected` : 'All clear'}</ThemedText>
+            </View>
+            {isLoading && !allTasks.length ? <ThemedText themeColor="textSecondary" type="caption">Loading assigned work…</ThemedText>
+              : liveTaskRows.length ? <View style={[styles.attentionList, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
+                {liveTaskRows.map((task, index) => <View key={task.key}>
+                  {renderTask(task)}
+                  {index < liveTaskRows.length - 1 ? <View style={[styles.attentionDivider, { backgroundColor: theme.homeBorder }]} /> : null}
+                </View>)}
+              </View>
+                : <View style={[styles.attentionEmpty, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
+                  <PlatformIcon color={theme.textTertiary} name="check-circle" size={16} />
+                  <ThemedText style={styles.attentionEmptyCopy} themeColor="textSecondary" type="caption">Urgent, high-priority, and overdue work will appear here.</ThemedText>
+                </View>}
+          </View>
+        </View>
+      </View>}
       ListHeaderComponent={<View style={styles.listHeader}>
         {isOffline ? <TaskStateBanner icon="cloud-off" message={allTasks.length ? 'Offline. Showing saved assignments.' : 'Offline. Reconnect to load assigned tasks and Boards.'} tone="offline" /> : null}
         {error ? <TaskStateBanner action={{ label: 'Dismiss', onPress: onDismissError }} icon="refresh" message={error} tone="danger" /> : null}
         {partialTasks ? <TaskStateBanner icon="information-outline" message="A Project has more than 500 assigned tasks. Its counts are partial." tone="offline" /> : null}
         {hasMoreProjects && !isLoadingMoreProjects ? <TaskStateBanner icon="information-outline" message="Counts include loaded Projects only. Load more Projects to update them." tone="offline" /> : null}
 
-        <View style={styles.globalHeading}>
-          <ThemedText accessibilityRole="header" numberOfLines={1} style={styles.pageTitle} type="display">My Tasks</ThemedText>
-          <Pressable
-            accessibilityHint="Opens the Company selector"
-            accessibilityLabel={`Switch Company. Current Company: ${companyName}`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: companyOptions.length === 0 }}
-            disabled={companyOptions.length === 0}
-            onPress={() => setCompanySheetOpen(true)}
-            style={({ pressed }) => [styles.companySwitchButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.homeSurface, borderColor: theme.homeBorder }]}
-          >
-            <EntityMark id={String(companyId ?? 'company')} imageUrl={companyLogoUrl ?? undefined} kind="company" name={companyName} size={26} />
-            <ThemedText numberOfLines={1} style={styles.companySwitchName} type="captionBold">{companyName}</ThemedText>
-            <PlatformIcon color={theme.textSecondary} name="chevron-down" size={14} weight="regular" />
-          </Pressable>
-        </View>
+        <WorkspaceTopControls
+          companyId={companyId ? String(companyId) : null}
+          companyLogoUrl={companyLogoUrl}
+          companyName={companyName}
+          disabled={false}
+          onSearchChange={setSearch}
+          onSwitchCompany={() => setCompanySheetOpen(true)}
+          search={search}
+          searchAccessibilityLabel="Search tasks and Boards"
+          searchPlaceholder="Search tasks and Boards"
+          title="My Tasks"
+        />
 
-        <View style={[styles.searchField, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }]}>
-          <PlatformIcon color={theme.textTertiary} name="search" size={17} />
-          <ThemedTextInput
-            accessibilityLabel="Search tasks and Boards"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardAppearance={theme.background === '#1b1917' ? 'dark' : 'light'}
-            maxFontSizeMultiplier={MaxFontScale}
-            onChangeText={setSearch}
-            placeholder="Search tasks and Boards"
-            placeholderTextColor={theme.textTertiary}
-            returnKeyType="search"
-            style={[styles.searchInput, { color: theme.text }]}
-            value={search}
-          />
-          {search ? <Pressable accessibilityLabel="Clear search" accessibilityRole="button" hitSlop={8} onPress={() => setSearch('')} style={styles.searchClear}>
-            <PlatformIcon color={theme.textSecondary} name="close" size={17} />
-          </Pressable> : null}
-        </View>
-
-        <View style={styles.attentionSection}>
-          <View style={styles.attentionHeading}>
-            <View style={styles.attentionTitle}><PlatformIcon color={theme.accentStrong} name="flag" size={18} /><ThemedText accessibilityRole="header" type="subtitle">Needs attention</ThemedText></View>
-            <ThemedText accessibilityLabel={`Up to 5 this week, ${liveTaskRows.length} tasks shown`} themeColor="textSecondary" type="captionBold">Up to 5 this week</ThemedText>
-          </View>
-          {isLoading && !allTasks.length ? <ThemedText themeColor="textSecondary" type="caption">Loading assigned work…</ThemedText>
-            : liveTaskRows.length ? liveTaskRows.map(renderTask)
-              : <ThemedText themeColor="textSecondary" type="caption">Urgent, high-priority, and overdue tasks due this week will appear here.</ThemedText>}
-        </View>
-
-        <View style={[styles.boardDirectory, { borderTopColor: theme.homeBorder }]}>
+        <View style={styles.boardDirectory}>
           <ThemedText accessibilityRole="header" style={styles.boardDirectoryHeading} type="subtitle">Boards</ThemedText>
         </View>
       </View>}
@@ -319,6 +357,7 @@ export function MyTaskWorkspace({
 
     <OptionsSheet onClose={() => setCompanySheetOpen(false)} title="Switch Company" visible={companySheetOpen}>
       <SheetSection title="Company workspace">
+        <SheetRow icon="person" label="Personal Projects" onPress={() => { onSelectCompany(null); setCompanySheetOpen(false); }} selected={companyId === null} />
         {companyOptions.map((company) => <SheetRow
           detail="Company conversations"
           key={company.id}
@@ -330,7 +369,52 @@ export function MyTaskWorkspace({
       </SheetSection>
     </OptionsSheet>
 
-    <OptionsSheet onClose={() => setStatusTask(null)} title={statusTask ? `Change status for ${statusTask.task.title} in ${statusTask.project.name}` : 'Change task status'} visible={Boolean(statusTask)}>
+    <OptionsSheet
+      onClose={() => setBoardActionTarget(null)}
+      onClosed={() => {
+        if (!pendingBoardAction) return;
+        const pending = pendingBoardAction;
+        setPendingBoardAction(null);
+        if (pending.action === 'create') onCreateTaskInBoard(pending.board);
+        else onEditBoardMark(pending.board);
+      }}
+      title="Board actions"
+      visible={Boolean(boardActionTarget)}
+    >
+      {boardActionTarget ? <>
+        <SheetNote>{boardActionTarget.board.name}</SheetNote>
+        <SheetSection title="Actions">
+          <SheetRow
+            accessibilityHint={`Starts a task in ${boardActionTarget.board.name}`}
+            icon="plus"
+            label="Create task in this Board"
+            onPress={() => {
+              setPendingBoardAction({ action: 'create', board: boardActionTarget });
+              setBoardActionTarget(null);
+            }}
+          />
+          {boardActionTarget.canManageMark ? <SheetRow
+            accessibilityHint={`Changes the icon and color for ${boardActionTarget.board.name}`}
+            icon="edit"
+            label="Edit Board mark"
+            onPress={() => {
+              setPendingBoardAction({ action: 'editMark', board: boardActionTarget });
+              setBoardActionTarget(null);
+            }}
+          /> : null}
+        </SheetSection>
+      </> : null}
+    </OptionsSheet>
+
+    <OptionsSheet onClose={() => setStatusTask(null)} title="Change task status" visible={Boolean(statusTask)}>
+      {statusTask ? <View
+        accessible
+        accessibilityLabel={`Task: ${statusTask.task.title}. Project: ${statusTask.project.name}`}
+        style={styles.statusTaskContext}
+      >
+        <ThemedText numberOfLines={1} type="captionBold">{statusTask.task.title}</ThemedText>
+        <ThemedText numberOfLines={2} themeColor="textSecondary" type="caption">{statusTask.project.name}</ThemedText>
+      </View> : null}
       {scopedBoard?.states.length ? <SheetSection title="Move to status">
         {scopedBoard.states.map((state) => <SheetRow accessibilityRole="radio" icon="view-column" key={state._id} label={state.name} selected={state._id === statusTask?.task.workflowStateId} onPress={() => {
           if (!statusTask) return;
@@ -358,30 +442,33 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   listContent: { flexGrow: 1 },
   listHeader: { gap: Spacing.three },
-  globalHeading: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between', minHeight: TouchTarget },
-  pageTitle: { flex: 1, flexShrink: 1, minWidth: 0 },
-  companySwitchButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', flexShrink: 1, gap: Spacing.two, height: TouchTarget, justifyContent: 'flex-start', maxWidth: '62%', minWidth: TouchTarget, paddingHorizontal: Spacing.two },
-  companySwitchName: { flexShrink: 1, minWidth: 0 },
+  listFooter: { gap: Spacing.three },
   attentionSection: { gap: Spacing.one },
   attentionHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 32 },
   attentionTitle: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
-  searchField: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, height: 44, minHeight: 44, paddingHorizontal: Spacing.three, width: '100%' },
-  searchInput: { ...Typography.body, flex: 1, minWidth: 0, paddingVertical: 0 },
-  searchClear: { alignItems: 'center', borderRadius: Radius.pill, height: 32, justifyContent: 'center', width: 32 },
-  compactTaskRow: { borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
-  compactTaskTitleRow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.small, flexDirection: 'row', gap: Spacing.two, minHeight: 36 },
-  compactTaskArrow: { alignItems: 'center', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexShrink: 0, height: 36, justifyContent: 'center', marginLeft: 'auto', width: 36 },
+  attentionList: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  attentionDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.two },
+  attentionEmpty: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, minHeight: 44, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  attentionEmptyCopy: { flex: 1, minWidth: 0 },
+  compactTaskRow: { minWidth: 0, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
+  compactTaskContent: { flex: 1, gap: Spacing.one, minWidth: 0 },
+  compactTaskOpenButton: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, flexDirection: 'row', gap: Spacing.two, minHeight: TouchTarget, minWidth: 0, paddingHorizontal: Spacing.one, paddingVertical: Spacing.one },
+  compactTaskOpenCopy: { flex: 1, gap: Spacing.half, minWidth: 0 },
+  compactTaskArrow: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, height: 36, justifyContent: 'center', width: 36 },
   compactTaskTitle: { flex: 1, minWidth: 0 },
   compactTaskMeta: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
-  compactProjectPill: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, gap: Spacing.one, maxWidth: 132, minHeight: 24, paddingHorizontal: 2 },
+  statusTaskContext: { gap: Spacing.half, paddingHorizontal: Spacing.one },
+  compactProjectContext: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },
   compactProjectName: { flexShrink: 1, minWidth: 0 },
   compactTaskDue: { flexShrink: 1, minWidth: 0 },
   loadMore: { alignItems: 'center', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, justifyContent: 'center', minHeight: TouchTarget },
-  boardDirectory: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.three },
+  boardDirectory: { paddingTop: Spacing.one },
+  attentionFooter: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: Spacing.one, paddingTop: Spacing.three },
   boardDirectoryHeading: { paddingBottom: Spacing.one },
   boardBlock: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: entityDirectoryRow.separatorPadding },
   boardRow: { ...entityDirectoryRowStyle, paddingRight: Spacing.three },
   boardMarkWrap: { flexShrink: 0, height: entityDirectoryRow.iconSize, position: 'relative', width: entityDirectoryRow.iconSize },
+  boardIconMask: { borderRadius: Radius.pill, height: entityDirectoryRow.iconSize, overflow: 'hidden', width: entityDirectoryRow.iconSize },
   boardCopy: { flex: 1, gap: entityDirectoryRow.copyGap, minWidth: 0 },
   boardSignals: { alignItems: 'center', flexDirection: 'row', flexShrink: 0, gap: Spacing.two },
   boardListEmpty: { paddingTop: Spacing.two },

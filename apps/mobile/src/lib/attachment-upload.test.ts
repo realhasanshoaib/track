@@ -51,6 +51,7 @@ describe('sendComposerMessage recovery', () => {
 
   it('retries only failed attachments against the accepted message', async () => {
     let shouldFail = true;
+    const originalFilename = 'Q3 Board Deck — FINAL (revised) v12 [approved by legal].pdf';
     const fetchFile = vi.fn().mockImplementation(() => Promise.resolve(new Response('file', { status: 200 })));
     vi.stubGlobal('fetch', fetchFile);
     const target = makeTarget({
@@ -66,7 +67,7 @@ describe('sendComposerMessage recovery', () => {
       }),
     });
     const first = await sendComposerMessage({
-      attachments: [makeFile('ok', 'ok.txt'), makeFile('retry', 'retry.txt')],
+      attachments: [makeFile('ok', originalFilename), makeFile('retry', 'retry.txt')],
       body: 'The caption stays on the original message',
       idempotencyKey: 'send-key',
       replyToMessageId: 'reply-1' as Id<'messages'>,
@@ -77,7 +78,7 @@ describe('sendComposerMessage recovery', () => {
     expect(first).toEqual({ failedIds: ['retry'], messageId: 'message-1' });
     expect(target.sendMessage).toHaveBeenCalledTimes(1);
     expect(target.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: [expect.objectContaining({ filename: 'ok.txt', uploadIntentId: 'intent-ok.txt' })],
+      attachments: [expect.objectContaining({ filename: originalFilename, uploadIntentId: `intent-${originalFilename}` })],
     }));
 
     shouldFail = false;

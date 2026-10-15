@@ -1,4 +1,5 @@
 import type { Id } from '../../../../convex/_generated/dataModel';
+import type { Href } from 'expo-router';
 import { representedContextQuery, type RepresentedProjectContext } from './company-navigation';
 
 export function threadConversationHref(
@@ -9,7 +10,7 @@ export function threadConversationHref(
   messageId?: Id<'messages'>,
 ) {
   const message = messageId ? `&messageId=${encodeURIComponent(messageId)}` : '';
-  return `/thread?projectId=${encodeURIComponent(projectId)}&groupId=${encodeURIComponent(groupId)}&threadId=${encodeURIComponent(threadId)}${representedContextQuery(context ?? null)}${message}`;
+  return `/thread?projectId=${encodeURIComponent(projectId)}&groupId=${encodeURIComponent(groupId)}&threadId=${encodeURIComponent(threadId)}${representedContextQuery(context ?? null)}${message}` as Href;
 }
 
 export function forwardedSourceHref(

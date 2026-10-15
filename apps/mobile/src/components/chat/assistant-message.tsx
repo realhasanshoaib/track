@@ -22,7 +22,7 @@ const VISIBLE_EVIDENCE = 3;
 
 type Props = {
   isFirstInGroup: boolean;
-  onLongPress: () => void;
+  onLongPress?: () => void;
   stream: Doc<'assistantStreams'>;
   timeLabel: string;
 };

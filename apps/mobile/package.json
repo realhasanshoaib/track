@@ -12,7 +12,7 @@
     "build": "expo export --platform all",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint .",
-    "test": "vitest run --config vitest.config.ts --passWithNoTests"
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@better-auth/expo": "1.6.25",

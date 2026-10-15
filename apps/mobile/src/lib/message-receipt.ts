@@ -2,6 +2,26 @@ import type { IconName } from '@/components/platform-icon';
 
 export type MessageReadReceipt = { readCount: number; recipientCount: number };
 
+export function messageDeliveryAccessibilityLabel(input: {
+  deliveryState?: 'sending' | 'waiting';
+  isDeleted?: boolean;
+  isOwnMessage: boolean;
+  readReceipt?: MessageReadReceipt;
+  timeLabel: string;
+}) {
+  const deliveryLabel = input.deliveryState === 'waiting'
+    ? 'Waiting for a connection'
+    : input.deliveryState === 'sending'
+      ? 'Sending'
+      : null;
+  if (deliveryLabel) return `${deliveryLabel}, started at ${input.timeLabel}`;
+
+  const sentLabel = `Sent at ${input.timeLabel}`;
+  return input.isOwnMessage && !input.isDeleted
+    ? `${sentLabel}. ${messageReceiptPresentation(input.readReceipt).accessibilityLabel}`
+    : sentLabel;
+}
+
 export function messageReceiptPresentation(receipt?: MessageReadReceipt): {
   accessibilityLabel: string;
   icon: Extract<IconName, 'check' | 'check-all'>;

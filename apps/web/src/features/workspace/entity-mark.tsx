@@ -98,6 +98,19 @@ export function EntityMark({ colorKey, iconKey, id, imageUrl, kind, name, size =
     >
       {kind === 'company' && imageUrl && !imageFailed
         ? <img alt="" height={Math.round(size * 0.72)} onError={() => setImageFailed(true)} src={imageUrl} width={Math.round(size * 0.72)} />
+        : identity.pattern
+          ? <span aria-hidden="true" style={{
+              display: 'grid',
+              gap: `${size * 0.035}px`,
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              height: `${size * 0.62}px`,
+              width: `${size * 0.62}px`,
+            }}>
+              {identity.pattern.map((filled, index) => <span key={index} style={{
+                backgroundColor: filled ? identity.palette.foreground : 'transparent',
+                borderRadius: `${Math.max(0.5, size * 0.02)}px`,
+              }} />)}
+            </span>
         : <Icon aria-hidden="true" size={Math.round(size * 0.48)} strokeWidth={2} />}
     </span>
   )

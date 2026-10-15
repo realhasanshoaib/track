@@ -259,7 +259,12 @@ export const getCurrentUser = query({
     const authUser = await getOptionalAuthUser(ctx)
     if (!authUser) return null
 
-    return await findTrackUserByAuth(ctx, authUser)
+    const user = await findTrackUserByAuth(ctx, authUser)
+    // An email match is a provisioning candidate, not a bound actor. Returning
+    // it early starts protected subscriptions before ensureCurrentUser finishes.
+    return user && (user.authUserId === authUser._id || user.googleSubject === authUser._id)
+      ? user
+      : null
   },
 })
 
