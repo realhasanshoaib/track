@@ -24,7 +24,9 @@ flowchart LR
 
 Each step keeps its place and source. A person can move forward to do work, then move back to see why the work exists.
 
-## Proof at a glance
+## Recorded verification
+
+These results describe the original review. Run the repository gate for the current worktree; the counts below are not a current test report.
 
 | Check | Result | Meaning |
 |---|---:|---|
@@ -33,31 +35,8 @@ Each step keeps its place and source. A person can move forward to do work, then
 | Tests | 279 / 279 passed (100%) | Shared, web, mobile, and Convex tests are green. |
 | Dependency audit | 0 known vulnerabilities | Production dependencies passed the audit. |
 | Production build | Passed | Web client, server, Nitro output, and mobile build step completed. |
-| Mobile evidence | 5 / 5 screenshots (100%) | Five real Android emulator views are included below. |
 
-## Mobile screenshots
-
-These are real Android emulator captures using demo data. They show the main paths a team member will review.
-
-### 1. Home
-
-![Track mobile Home](../pr/mobile/01-home.png)
-
-### 2. Projects
-
-![Track mobile Projects](../pr/mobile/02-projects.png)
-
-### 3. Project Task Board
-
-![Track mobile Task Board](../pr/mobile/03-task-board.png)
-
-### 4. Task Detail
-
-![Track mobile Task Detail](../pr/mobile/04-task-detail.png)
-
-### 5. Evidence
-
-![Track mobile Evidence](../pr/mobile/05-evidence.png)
+The original Android emulator review used demo data and covered Home, Projects, Project Task Board, Task Detail, and Evidence. Review screenshots and recordings are kept outside the source tree; automated browser evidence is retained as CI artifacts.
 
 ## Change map
 
@@ -66,10 +45,8 @@ These are real Android emulator captures using demo data. They show the main pat
 | Web | Shared Company, Project, task, thread, search, and evidence patterns | Easier desktop navigation and safer actions |
 | Mobile | Consistent screens, cards, sheets, task board, and Android navigation | Easier phone use and clearer work context |
 | Backend | Scoped task data, priority indexes, and cursor-safe filtering | Correct results as task lists grow |
-| Tests and docs | Regression tests, audit notes, design rules, and screenshots | Faster review and safer future changes |
+| Tests and docs | Regression tests, audit notes, and design rules | Faster review and safer future changes |
 
 ## Limits
 
-The screenshots prove the current emulator layout and working paths. They do not claim exact Figma pixel parity because the connected Figma session did not expose the reference file for reliable inspection.
-
-No password, token, or private credential is included in the screenshots.
+The original visual review did not establish exact Figma pixel parity because the connected Figma session did not expose the reference file for reliable inspection. Current layout and interaction behavior require a fresh application check.

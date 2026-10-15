@@ -1,27 +1,6 @@
 # Company Workspace review
 
-The screenshots show the running web app with disposable local Convex fixtures. The original directory captures use dark mode at 1600 × 900, and the navigation captures use the system light theme at 1440 × 900 and 390 × 844. The refined Settings captures use dark mode at 1280 × 900 and 390 × 844. They are not the supplied design references. The directory fixture has one company and one project, so screens without tasks or relationships show real empty states.
-
-| Screen | Screenshot |
-| --- | --- |
-| Overview | [Open screenshot](assets/company-workspace/overview.png) |
-| Projects | [Open screenshot](assets/company-workspace/projects.png) |
-| Global Tasks | [Open screenshot](assets/company-workspace/tasks.png) |
-| Threads | [Open screenshot](assets/company-workspace/threads.png) |
-| Relationships | [Open screenshot](assets/company-workspace/relationships.png) |
-| People | [Open screenshot](assets/company-workspace/people.png) |
-| Settings, refined dark desktop at 1280 px | [Open screenshot](assets/company-workspace/settings-refined-dark.png) |
-| Settings, refined mobile lower actions at 390 px | [Open screenshot](assets/company-workspace/settings-refined-mobile-bottom.png) |
-| Assign Project dialog, dark desktop | [Open screenshot](assets/company-workspace/settings-assign-dialog-dark.png) |
-| Mobile Overview, 390 px | [Open screenshot](assets/company-workspace/overview-mobile.png) |
-| Mobile Company navigation sheet | [Open screenshot](assets/company-workspace/navigation-mobile-sheet.png) |
-| Desktop Company sidebar | [Open screenshot](assets/company-workspace/navigation-desktop.png) |
-| Activity chart with a created task | [Open screenshot](assets/company-workspace/activity-chart-7-days.png) |
-| Overview with task activity, desktop | [Open screenshot](assets/company-workspace/overview-with-task.png) |
-| Overview with task activity, mobile | [Open screenshot](assets/company-workspace/overview-with-task-mobile.png) |
-| Overview at 1280 px with Company A data | [Open screenshot](assets/company-workspace/overview-1280-isolation.png) |
-| Create Company modal, desktop | [Open screenshot](assets/company-workspace/settings-create-company-dialog-desktop.png) |
-| Create Company modal, mobile | [Open screenshot](assets/company-workspace/settings-create-company-dialog-mobile.png) |
+This note records the original local review with disposable Convex fixtures. It is historical evidence, not verification of the current worktree. The review covered Overview, Projects, Tasks, Threads, Relationships, People, Settings, Company navigation, the activity chart, and Company dialogs across desktop and mobile widths. Screenshots and recordings are kept outside the source tree; automated browser evidence is retained as CI artifacts.
 
 The local Company Tasks route loaded after the `companyOverview:listTasks` function was deployed to the isolated backend. Every captured route had zero horizontal page overflow. The first seven-route sweep had no console or page errors. A later recapture logged one 401 resource response during sign-in; it did not recur on a repeated run, and its cause remains unproved. These local checks do not prove that an existing signed-in session against the shared development deployment has recovered.
 

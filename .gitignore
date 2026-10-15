@@ -47,14 +47,25 @@ apps/mobile/credentials.json
 
 # Local screenshots / scratch captures
 SCR-*.png
+/.tmp/
+/.codex-trash/
+.playwright-mcp/
 /device-current.png
 /tmp/
 /output/
 /pnpm
 /vite
+apps/mobile/*-window.xml
+apps/mobile/qa-*.xml
+apps/mobile/visual-review/
+apps/mobile/docs/mobile-screenshots/
+docs/pr/mobile/
+docs/review/assets/
 apps/mobile/c5441411-470e-445d-81fb-3e55e8014c0b (1).png
 apps/web/page-*.yml
-apps/web/.playwright-mcp/
+apps/web/Screenshot*.png
+apps/web/audit-*.png
+apps/web/workflow-*.png
 
 # Local agent skills and design-review material
 apps/mobile/.agents/

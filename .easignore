@@ -41,6 +41,26 @@ apps/mobile/credentials.json
 
 # Local screenshots / scratch captures
 SCR-*.png
+.tmp/
+.codex-trash/
+.playwright-mcp/
+tmp/
+output/
+artifacts/
+test-results/
+playwright-report/
+gate.report.json
+*.tsbuildinfo
+apps/mobile/.mobile-export-review/
+apps/mobile/*-window.xml
+apps/mobile/qa-*.xml
+apps/mobile/visual-review/
+apps/mobile/docs/mobile-screenshots/
+docs/pr/mobile/
+docs/review/assets/
+apps/web/Screenshot*.png
+apps/web/audit-*.png
+apps/web/workflow-*.png
 
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
