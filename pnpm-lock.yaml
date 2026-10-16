@@ -287,6 +287,9 @@ importers:
       dependency-cruiser:
         specifier: 18.2.0
         version: 18.2.0
+      js-yaml:
+        specifier: 4.3.2
+        version: 4.3.2
       oxfmt:
         specifier: 0.70.0
         version: 0.70.0
