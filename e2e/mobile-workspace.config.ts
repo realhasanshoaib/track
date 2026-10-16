@@ -12,7 +12,7 @@ export default defineConfig({
   outputDir: '../artifacts/mobile-regression/browser',
   reporter: [['list'], ['json', { outputFile: '../artifacts/mobile-regression/browser-results.json' }]],
   use: {
-    baseURL: 'http://localhost:8083',
+    baseURL: process.env.MOBILE_E2E_BASE_URL ?? 'http://localhost:8083',
     viewport: { width: 390, height: 844 },
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',

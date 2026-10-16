@@ -1,7 +1,7 @@
 import { Stack, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image as NativeImage, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image as NativeImage, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { Doc, Id } from '../../../../../convex/_generated/dataModel';
 import { Composer } from '@/components/composer';
@@ -11,6 +11,7 @@ import { MessageBubble, MessageBubbleFrame } from '@/components/chat/message-bub
 import { MessageText } from '@/components/chat/message-text';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
 import { ColoredAvatar } from '@/components/colored-avatar';
+import { IconButton } from '@/components/icon-button';
 import type { AttachmentWithUrl, DetailedMessage, ViewableImage } from '@/components/chat/types';
 import { DateSeparator, ThreadRow, type GroupedThreadItem } from '@/components/thread-row';
 import { PendingAttachmentStrip, type PendingAttachment } from '@/components/chat-attach-menu';
@@ -374,64 +375,7 @@ export default function AttachmentPreviewScreen() {
             onSwipeReply={() => undefined}
             variant="thread"
           />
-          <ThemedText style={styles.sectionLabel} type="captionBold">Multi-select bubbles</ThemedText>
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage
-            message={previewTextMessage('You', 'messages:preview-selected-text', 'Please confirm the Patient Portal handoff before Friday.')}
-            readReceipt={deliveryReceipt(state)}
-            selected
-            selectionMode
-            timeLabel="16:32"
-          />
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage={false}
-            message={previewTextMessage('Aleksandra Wiśniewska-Kowalczyk', 'messages:preview-selected-incoming', 'Could you confirm the Patient Portal handoff before Friday?')}
-            selected
-            selectionMode
-            timeLabel="16:32"
-          />
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage
-            message={previewAttachmentMessage('You', 'messages:preview-selected-image', 'Attached 1 image', [previewImageEntry])}
-            readReceipt={deliveryReceipt(state)}
-            selected
-            selectionMode
-            timeLabel="16:33"
-          />
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage
-            message={previewVoiceMessage('You', 'messages:preview-selected-voice')}
-            readReceipt={deliveryReceipt(state)}
-            selectionMode
-            timeLabel="16:34"
-          />
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage
-            message={previewAttachmentMessage('You', 'messages:preview-selected-file', 'Attached file', [previewLongFileEntry])}
-            readReceipt={deliveryReceipt(state)}
-            selected
-            selectionMode
-            timeLabel="16:35"
-          />
-          <MessageBubble
-            contextActions={[]}
-            isFirstInGroup
-            isOwnMessage
-            message={previewDeletedMessage('You', 'messages:preview-deleted')}
-            selected
-            selectionMode
-            timeLabel="16:36"
-          />
+          <SelectionLayoutPreview worst={state === 'worst'} />
           <ThemedText style={styles.sectionLabel} type="captionBold">Delivered image proportions</ThemedText>
           {extremeImages(previewUri).map((image) => <ImageAttachments images={[image]} key={image.id} />)}
         </> : null}
@@ -538,3 +482,57 @@ const styles = StyleSheet.create({
   toggleScroll: { maxWidth: '100%' },
   toggleButton: { alignItems: 'center', borderRadius: Radius.pill, justifyContent: 'center', minHeight: 36, paddingHorizontal: Spacing.two },
 });
+
+/** Uses the real message row and controls without authenticating or writing data. */
+function SelectionLayoutPreview({ worst }: { worst: boolean }) {
+  const theme = useTheme();
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [action, setAction] = useState('No selection action requested.');
+  const samples = [
+    { id: 'own-short', own: true, message: previewTextMessage('You', 'messages:layout-own-short', 'Hi') },
+    { id: 'other-short', own: false, message: previewTextMessage('Jo', 'messages:layout-other-short', 'OK') },
+    { id: 'own-portrait', own: true, message: previewAttachmentMessage('You', 'messages:layout-own-portrait', '', [{ attachment: { ...previewImageEntry.attachment, previewStatus: undefined, width: 900, height: 1600 }, url: previewUri }]) },
+    { id: 'other-landscape', own: false, message: previewAttachmentMessage(worst ? 'Aleksandra Wiśniewska-Kowalczyk' : 'Mateo Chen', 'messages:layout-other-landscape', '', [{ attachment: { ...previewImageEntry.attachment, previewStatus: undefined, width: 1600, height: 900 }, url: previewUri }]) },
+    { id: 'long-text', own: false, message: previewTextMessage(worst ? 'Aleksandra Wiśniewska-Kowalczyk' : 'Mateo Chen', 'messages:layout-long-text', worst ? worstComposerDraft : 'Please confirm the handoff before Friday.') },
+    { id: 'voice', own: true, message: previewVoiceMessage('You', 'messages:layout-voice') },
+    { id: 'file', own: true, message: previewAttachmentMessage('You', 'messages:layout-file', 'Attached file', [previewLongFileEntry]) },
+    { id: 'deleted', own: true, message: previewDeletedMessage('You', 'messages:layout-deleted') },
+  ];
+  const canDelete = selected.length > 0 && selected.every((id) => samples.find((sample) => sample.id === id)?.own);
+  const toggle = (id: string) => setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  const leaveSelection = () => { setSelectionMode(false); setSelected([]); };
+
+  return <View testID="chat-layout-preview">
+    <ThemedText style={styles.sectionLabel} type="captionBold">Selection and message layout</ThemedText>
+    <Pressable accessibilityRole="button" onPress={() => { if (selectionMode) leaveSelection(); else setSelectionMode(true); }} style={{ minHeight: 44, justifyContent: 'center' }}>
+      <ThemedText type="smallBold">{selectionMode ? 'Exit selection mode' : 'Enter selection mode'}</ThemedText>
+    </Pressable>
+    {selectionMode ? <View accessibilityLabel="Message selection toolbar" style={{ alignItems: 'center', flexDirection: 'row', gap: Spacing.two }}>
+      <IconButton accessibilityLabel="Cancel fixture selection" appearance={Platform.OS === 'ios' ? 'glass' : 'surface'} icon="close" onPress={leaveSelection} />
+      <View style={{ flex: 1 }} />
+      <IconButton accessibilityLabel="Forward selected fixture messages" appearance={Platform.OS === 'ios' ? 'glass' : 'surface'} disabled={!selected.length} icon="forward" onPress={() => setAction(`Forward requested for ${selected.length} messages.`)} />
+      <IconButton accessibilityLabel={`Delete ${selected.length} selected fixture messages`} appearance={Platform.OS === 'ios' ? 'glass' : 'surface'} count={selected.length} disabled={!canDelete} icon="trash-can-outline" onPress={() => setAction(`Delete requested for ${selected.length} messages.`)} />
+    </View> : null}
+    <ThemedText accessibilityLabel="Fixture selection action" style={{ color: theme.textSecondary }} type="caption">{action}</ThemedText>
+    <View style={{ marginHorizontal: -Spacing.four }}>
+      {samples.map((sample) => <View key={sample.id} testID={`chat-layout-${sample.id}`}>
+        <ThreadRow
+          contextActions={[{ icon: 'reply', label: 'Reply', onPress: () => setAction('Reply requested.') }]}
+          isFirstInGroup
+          isOwnMessage={sample.own}
+          item={previewThreadRowItem(sample.message, sample.id)}
+          onLongPress={() => { setSelectionMode(true); setSelected([sample.id]); }}
+          onPressMessage={() => toggle(sample.id)}
+          onSwipeForward={() => setAction('Forward requested.')}
+          onSwipeReply={() => setAction('Reply requested.')}
+          onSwipeReport={() => setAction('Report requested.')}
+          readReceipts={{ recipientCount: 2, readThroughSequences: [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER] }}
+          selected={selected.includes(sample.id)}
+          selectionMode={selectionMode}
+          variant="conversation"
+        />
+      </View>)}
+    </View>
+  </View>;
+}

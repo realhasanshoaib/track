@@ -180,7 +180,7 @@ function ToastHost({ item, onDismiss }: { item: AppToastItem; onDismiss: () => v
       opacity.set(withTiming(1, { duration: 120 }));
     });
 
-  return <View pointerEvents="box-none" style={[styles.viewport, { paddingTop: insets.top + Spacing.two }]}>
+  return <View pointerEvents="box-none" style={[styles.viewport, { paddingTop: insets.top + TouchTarget + Spacing.three }]}>
     <GestureDetector gesture={pan}>
       <Animated.View accessibilityLiveRegion="polite" style={[styles.toastShell, cardStyle]}>
         <ToastMaterial glassAvailable={glassAvailable} reduceTransparency={reduceTransparency} themeName={themeName} />

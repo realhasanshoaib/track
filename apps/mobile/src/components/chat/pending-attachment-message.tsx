@@ -52,7 +52,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
 
   return (
     <View style={styles.row}>
-      <MessageBubbleFrame hasMedia={hasImages} isOwnMessage wideText={body.length >= MESSAGE_WIDE_TEXT_MIN_LENGTH}>
+      <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage wideText={body.length >= MESSAGE_WIDE_TEXT_MIN_LENGTH}>
         {attachments.length === 0 ? (
           body ? <MessageText body={body} /> : null
         ) : <>
@@ -218,7 +218,7 @@ function formatPendingTime(at: number) {
 }
 
 const styles = StyleSheet.create({
-  body: { paddingHorizontal: 3 },
+  body: { marginTop: Spacing.one, paddingHorizontal: Spacing.two },
   deliveryMeta: { bottom: 7, position: 'absolute', right: 8 },
   fileCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
   fileContent: { flex: 1, gap: Spacing.half, minWidth: 0 },

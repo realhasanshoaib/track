@@ -37,6 +37,7 @@ export function MessageDeliveryMeta({
 
   return (
     <View
+      testID="message-delivery"
       accessibilityLabel={accessibilityLabel}
       accessible
       style={[styles.meta, imageTone && styles.metaOnMedia]}
@@ -52,7 +53,7 @@ export function MessageDeliveryMeta({
 }
 
 const styles = StyleSheet.create({
-  meta: { alignItems: 'center', flexDirection: 'row', gap: 0 },
+  meta: { alignItems: 'center', alignSelf: 'flex-end', flexDirection: 'row', justifyContent: 'flex-end', gap: 0 },
   metaOnMedia: { flexShrink: 0 },
   receipt: { marginLeft: Spacing.half },
   time: { alignSelf: 'center', fontSize: 10, fontVariant: ['tabular-nums'], lineHeight: 12 },

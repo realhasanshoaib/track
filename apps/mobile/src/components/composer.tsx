@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -137,7 +137,7 @@ function LevelBar({ color, index, level }: { color: string; index: number; level
   return <Animated.View style={[styles.bar, { backgroundColor: color }, style]} />;
 }
 
-export function Composer({
+function ComposerImpl({
   activeGroupName,
   busy,
   mentionCandidatesHasMore = false,
@@ -160,6 +160,7 @@ export function Composer({
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
   const submissionGate = useRef(createSubmissionGate());
+  const sendingRef = useRef(false);
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [caret, setCaret] = useState(0);
@@ -173,6 +174,7 @@ export function Composer({
   /** Set for one commit after inserting a mention, to place the caret after it. */
   const [selection, setSelection] = useState<{ end: number; start: number } | null>(null);
   const [sending, setSending] = useState(false);
+  const [draftValue, setDraftValue] = useState(value);
   const draftRevisionRef = useRef(0);
   const replyToRef = useRef(replyTo);
   replyToRef.current = replyTo;
@@ -187,9 +189,12 @@ export function Composer({
   const iosPillHeight = Math.min(MaxComposerHeight, Math.max(56, inputContentHeight + ComposerVerticalChrome));
 
   useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  useEffect(() => {
     onExpandedChange?.(inputExpanded);
-    if (keyboardReady) onFocus?.();
-  }, [inputExpanded, keyboardReady, onExpandedChange, onFocus]);
+  }, [inputExpanded, onExpandedChange]);
 
   const voice = useVoiceRecorder({
     onCapture: handleCapture,
@@ -203,14 +208,14 @@ export function Composer({
   const outcome = useSharedValue<VoiceGestureOutcome>(0);
   const micScale = useSharedValue(1);
 
-  const hasContent = Boolean(value.trim()) || attachments.length > 0;
+  const hasContent = Boolean(draftValue.trim()) || attachments.length > 0;
   const canSend = hasContent && !sending && !busy && !failedSubmission;
   const hasFailedSubmission = Boolean(failedSubmission);
   const attachmentsLocked = sending || Boolean(failedSubmission) || Boolean(retryMessageId);
   /** Keep the recording control mounted until the hold gesture has ended. */
   const showSend = mode === 'idle' && (hasContent || sending);
 
-  const mentionRange = mode === 'idle' ? findMentionQuery(value, caret) : null;
+  const mentionRange = mode === 'idle' ? findMentionQuery(draftValue, caret) : null;
   const mentions = mentionRange ? filterMentionCandidates(mentionCandidates, mentionRange.query) : [];
 
   const cancelHintStyle = useAnimatedStyle(() => ({
@@ -224,11 +229,16 @@ export function Composer({
   const micPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: micScale.value }] }));
 
   function reportProgress(id: string, progress: number) {
+    // Progress is rendered in the optimistic message while sending. Updating
+    // hidden composer chips would re-render the text input for every upload
+    // event and makes typing feel sticky on large files.
+    if (sendingRef.current) return;
     setAttachments((prev) => prev.map((item) => (item.id === id ? { ...item, progress } : item)));
   }
 
   function changeDraft(nextValue: string) {
     draftRevisionRef.current += 1;
+    setDraftValue(nextValue);
     onChangeText(nextValue);
   }
 
@@ -240,13 +250,16 @@ export function Composer({
   ) {
     const submissionToken = submissionGate.current.begin();
     if (!submissionToken) return;
+    const retainInputFocus = inputFocused || keyboardVisible;
     setNotice(null);
+    sendingRef.current = true;
     setSending(true);
     const replyId = replyToMessageId;
     const retryingAttachments = Boolean(retryMessageId);
     if (!retryingAttachments && draftRevisionRef.current === draftRevision) {
       // Keep the composer responsive while the optimistic bubble is sent.
       // Restore this exact draft if sending fails and the user hasn't typed again.
+      setDraftValue('');
       onChangeText('');
     }
     try {
@@ -258,7 +271,10 @@ export function Composer({
         reportProgress,
       });
       if (!result.messageId) throw new Error('message_send_without_id');
-      if (!retryingAttachments && draftRevisionRef.current === draftRevision) onChangeText('');
+      if (!retryingAttachments && draftRevisionRef.current === draftRevision) {
+        setDraftValue('');
+        onChangeText('');
+      }
       if (!retryingAttachments && replyId && replyToRef.current?.message._id === replyId) onCancelReply();
       if (result.failedIds.length === 0) {
         setAttachments([]);
@@ -277,15 +293,20 @@ export function Composer({
     } catch {
       setAttachments((prev) => prev.map((item) => ({ ...item, failed: true, progress: 0 })));
       if (!retryingAttachments) {
-        if (draftRevisionRef.current === draftRevision) onChangeText(body);
+        if (draftRevisionRef.current === draftRevision) {
+          setDraftValue(body);
+          onChangeText(body);
+        }
         setFailedSubmission({ attachments: files, body, draftRevision, replyToMessageId });
         setNotice('Message not sent. Your draft is saved.');
       } else {
         setNotice('Your message is sent. Retry the failed files or remove them.');
       }
     } finally {
+      sendingRef.current = false;
       setSending(false);
       submissionGate.current.finish(submissionToken);
+      if (retainInputFocus) requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -293,7 +314,7 @@ export function Composer({
     if (!canSend) return;
     hapticMedium();
     setCaret(0);
-    void submit(attachments, retryMessageId ? '' : value.trim(), replyTo?.message._id);
+    void submit(attachments, retryMessageId ? '' : draftValue.trim(), replyTo?.message._id);
   }
 
   function handleSelectionChange(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) {
@@ -305,7 +326,7 @@ export function Composer({
 
   function insertMention(candidate: MentionCandidate) {
     if (!mentionRange) return;
-    const next = applyMention(value, mentionRange, candidate.handle);
+    const next = applyMention(draftValue, mentionRange, candidate.handle);
             changeDraft(next.text);
     setCaret(next.caret);
     setSelection({ end: next.caret, start: next.caret });
@@ -317,7 +338,7 @@ export function Composer({
     if (failedSubmission) return;
     const next = [...attachments, file];
     setAttachments(next);
-    if (!busy && !sending) void submit(next, value.trim(), replyTo?.message._id);
+    if (!busy && !sending) void submit(next, draftValue.trim(), replyTo?.message._id);
   }
 
   function openMicrophoneSettings() {
@@ -539,7 +560,13 @@ export function Composer({
         ) : (
           <Animated.View
             layout={reducedMotion ? undefined : ComposerLayoutTransition}
-            style={[styles.messageField, inputExpanded && styles.expandedMessageField, Platform.OS === 'ios' && styles.iosMessageField, inputMultiline && styles.multilineMessageField]}
+            style={[
+              styles.messageField,
+              !isIOS && !inputExpanded && [styles.androidMessageField, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }],
+              inputExpanded && styles.expandedMessageField,
+              isIOS && styles.iosMessageField,
+              inputMultiline && styles.multilineMessageField,
+            ]}
           >
             {Platform.OS === 'ios' ? <IOSGlassContainer spacing={Spacing.two} style={[styles.iosActionGroup, inputExpanded && styles.expandedActionGroup]}>
               <Pressable
@@ -568,9 +595,9 @@ export function Composer({
             </Animated.View>}
             <Animated.View
               layout={reducedMotion ? undefined : ComposerLayoutTransition}
-              style={[styles.inputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
+              style={[styles.inputPill, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
             >
-              {Platform.OS === 'ios' && hasLiquidGlass ? (
+              {isIOS && hasLiquidGlass ? (
                 <GlassView
                   colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'}
                   glassEffectStyle="regular"
@@ -579,12 +606,12 @@ export function Composer({
                   style={[StyleSheet.absoluteFill, styles.inputPillGlass, inputMultiline && styles.multilineInputMaterial]}
                   tintColor={theme.backgroundElement}
                 />
-              ) : (
+              ) : isIOS || inputExpanded ? (
                 <View
                   pointerEvents="none"
                   style={[StyleSheet.absoluteFill, styles.inputPillFallback, inputMultiline && styles.multilineInputMaterial, { backgroundColor: theme.backgroundElement }]}
                 />
-              )}
+              ) : null}
               <ThemedTextInput
                 accessibilityLabel={`Message ${activeGroupName ?? 'channel'}`}
                 accessibilityHint="Type @Track to ask Track in this Project."
@@ -609,6 +636,7 @@ export function Composer({
                 onBlur={() => setInputFocused(false)}
                 onFocus={() => {
                   setInputFocused(true);
+                  onFocus?.();
                 }}
                 onSelectionChange={handleSelectionChange}
                 ref={inputRef}
@@ -617,10 +645,10 @@ export function Composer({
                 selectionHandleColor={theme.accent}
                 scrollEnabled
                 style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, styles.inputWithVoiceControl, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text }]}
-                value={value}
+                value={draftValue}
               />
               <View pointerEvents="box-none" style={styles.inputContentOverlay}>
-                {value.length === 0 ? <View pointerEvents="none" style={[styles.placeholderContainer, inputExpanded && styles.expandedPlaceholderContainer]}>
+                {draftValue.length === 0 && !inputFocused ? <View pointerEvents="none" style={[styles.placeholderContainer, inputExpanded && styles.expandedPlaceholderContainer]}>
                   <ThemedText accessible={false} numberOfLines={1} style={styles.placeholderText} themeColor="textTertiary" type="small">Message or ask @Track</ThemedText>
                 </View> : null}
                 <View pointerEvents="box-none" style={[styles.voiceOverlay, inputMultiline && styles.multilineVoiceOverlay]}>
@@ -633,11 +661,7 @@ export function Composer({
 
         {showSend ? (
           <View style={styles.actionSlot}>
-            <Animated.View
-              entering={reducedMotion ? undefined : ChatPartEntering}
-              exiting={reducedMotion ? undefined : ChatPartExiting}
-              style={styles.actionLayer}
-            >
+            <View style={styles.actionLayer}>
               <Pressable
                 accessibilityLabel={sending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
                 accessibilityRole="button"
@@ -654,7 +678,7 @@ export function Composer({
                   <PlatformIcon color={theme.accentInk} name="send" size={19} />
                 </Animated.View>
               </Pressable>
-            </Animated.View>
+            </View>
           </View>
         ) : mode !== 'idle' ? (
           <View style={styles.actionSlot}>
@@ -715,6 +739,8 @@ export function Composer({
   );
 }
 
+export const Composer = memo(ComposerImpl);
+
 const styles = StyleSheet.create({
   actionSlot: { height: TouchTarget, width: TouchTarget, flexShrink: 0 },
   actionLayer: { ...StyleSheet.absoluteFill },
@@ -737,6 +763,8 @@ const styles = StyleSheet.create({
   expandedMessageField: { alignItems: 'stretch', flex: 1, height: '100%', position: 'relative' },
   expandedRow: { alignItems: 'flex-end', flex: 1 },
   expandedSurface: { flex: 1 },
+  androidInputPill: { backgroundColor: 'transparent', borderRadius: 0, borderWidth: 0 },
+  androidMessageField: { borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.one },
   multilineInput: { flex: 0, maxHeight: MaxComposerTextHeight, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
   multilineInputMaterial: { borderRadius: Radius.large },
   multilineInputPill: { borderRadius: Radius.large, justifyContent: 'flex-start', maxHeight: MaxComposerHeight, paddingVertical: Spacing.two },
@@ -775,9 +803,8 @@ const styles = StyleSheet.create({
   inputPillGlass: { borderRadius: Radius.pill },
   iosComposerShell: {
     alignItems: 'center',
-    marginHorizontal: Spacing.three,
     minHeight: 60,
-    paddingHorizontal: Spacing.one,
+    paddingHorizontal: Spacing.three,
   },
   iosActionGroup: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   iosFallbackMaterial: { borderRadius: Radius.pill },
@@ -837,12 +864,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexDirection: 'row',
     gap: Spacing.two,
-    paddingLeft: Spacing.four,
-    paddingRight: Spacing.three,
+    paddingHorizontal: Spacing.three,
   },
   slideHint: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   sendState: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  surface: { gap: Spacing.two, paddingTop: Spacing.two },
+  surface: { gap: Spacing.two, paddingVertical: Spacing.two },
   iosSurface: { borderTopWidth: 0 },
   timer: { minWidth: 34 },
   voiceButton: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },

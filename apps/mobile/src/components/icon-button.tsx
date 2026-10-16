@@ -2,7 +2,8 @@ import { ActivityIndicator, StyleSheet } from 'react-native';
 
 import { IOSGlassMaterial } from '@/components/ios-glass-material';
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
-import { Radius, TouchTarget } from '@/constants/theme';
+import { ThemedText } from '@/components/themed-text';
+import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { hapticLight } from '@/lib/haptics';
@@ -10,6 +11,7 @@ import { hapticLight } from '@/lib/haptics';
 type Props = {
   accessibilityLabel: string;
   disabled?: boolean;
+  count?: number;
   icon: IconName;
   loading?: boolean;
   onPress: () => void;
@@ -22,6 +24,7 @@ type Props = {
 export function IconButton({
   accessibilityLabel,
   disabled = false,
+  count,
   icon,
   loading = false,
   onPress,
@@ -50,6 +53,7 @@ export function IconButton({
       }}
       style={[
         styles.button,
+        count !== undefined && styles.countButton,
         {
           backgroundColor: appearance === 'plain' || appearance === 'glass' ? 'transparent' : selected ? theme.accentSoft : theme.homeSurface,
           borderColor: appearance === 'plain' || appearance === 'glass' ? 'transparent' : theme.homeBorder,
@@ -59,6 +63,7 @@ export function IconButton({
       ]}>
       {appearance === 'glass' ? <IOSGlassMaterial style={styles.glassMaterial} /> : null}
       {loading ? <ActivityIndicator color={color} size="small" /> : <PlatformIcon color={color} name={icon} size={size} weight="medium" />}
+      {count !== undefined ? <ThemedText style={{ color }} type="captionBold">{count}</ThemedText> : null}
     </AnimatedPressable>
   );
 }
@@ -77,5 +82,12 @@ const styles = StyleSheet.create({
   glassMaterial: {
     borderCurve: 'continuous',
     borderRadius: Radius.pill,
+  },
+  countButton: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    minWidth: TouchTarget,
+    paddingHorizontal: Spacing.three,
+    width: 'auto',
   },
 });

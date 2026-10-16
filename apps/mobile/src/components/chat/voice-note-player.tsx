@@ -181,10 +181,27 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
   const senderAvatar = senderAvatarUrl ? (
     <Image accessibilityLabel={`${senderName} profile photo`} accessibilityRole="image" contentFit="cover" recyclingKey={senderAvatarUrl} source={{ uri: senderAvatarUrl }} style={styles.avatar} transition={120} />
   ) : <ColoredAvatar label={senderName} seed={senderName} size={AVATAR_SIZE} />;
+  const avatar = (
+    <View style={styles.avatarContainer}>
+      {senderAvatar}
+      {status.playing ? (
+        <Pressable
+          accessibilityLabel={`Playback speed ${speed} times`}
+          accessibilityRole="button"
+          hitSlop={6}
+          onLongPress={onLongPress}
+          onPress={cycleSpeed}
+          style={[styles.speed, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline }]}
+        >
+          <ThemedText style={[styles.speedText, { color: theme.textSecondary }]} type="captionBold">{`${speed}x`}</ThemedText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
     <View style={[styles.card, { backgroundColor: surface, borderColor: theme.hairline, width: playerWidth }]}>
-      {!isOwnMessage ? senderAvatar : null}
+      {!isOwnMessage ? avatar : null}
       <View style={styles.main}>
         <View style={styles.controlRow}>
           <Pressable
@@ -232,17 +249,12 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
           <ThemedText style={styles.duration} type="caption">
             {formatDuration((engaged ? elapsedSeconds : totalSeconds || 0) * 1000)}
           </ThemedText>
-          {status.playing ? (
-            <Pressable accessibilityLabel={`Playback speed ${speed} times`} accessibilityRole="button" hitSlop={6} onLongPress={onLongPress} onPress={cycleSpeed} style={styles.speed}>
-              <ThemedText style={[styles.speedText, { color: theme.textSecondary }]} type="captionBold">{`${speed}x`}</ThemedText>
-            </Pressable>
-          ) : null}
           <View style={styles.metaSpacer} />
           {deliveryMeta}
         </View>
       </View>
 
-      {isOwnMessage ? senderAvatar : null}
+      {isOwnMessage ? avatar : null}
     </View>
   );
 }
@@ -250,6 +262,7 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
 const styles = StyleSheet.create({
   bar: { borderRadius: Radius.pill, flex: 1, maxWidth: 4, minWidth: 2 },
   avatar: { borderRadius: Radius.pill, height: AVATAR_SIZE, width: AVATAR_SIZE },
+  avatarContainer: { height: AVATAR_SIZE, position: 'relative', width: AVATAR_SIZE },
   bars: { alignItems: 'center', alignSelf: 'stretch', flexDirection: 'row', gap: 2, height: 26, justifyContent: 'center' },
   card: { alignItems: 'center', borderCurve: 'continuous', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minHeight: 68, paddingHorizontal: 9, paddingVertical: 8 },
   controlRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, minWidth: 0 },
@@ -260,7 +273,7 @@ const styles = StyleSheet.create({
   metaSpacer: { flex: 1, minWidth: 6 },
   playButton: { alignItems: 'center', borderRadius: Radius.pill, height: PLAY_SIZE, justifyContent: 'center', width: PLAY_SIZE },
   playedClip: { bottom: 0, justifyContent: 'center', overflow: 'hidden', position: 'absolute', top: 0 },
-  speed: { borderRadius: Radius.pill, marginLeft: 5, paddingHorizontal: 3, paddingVertical: 1 },
+  speed: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, bottom: 0, minWidth: 24, paddingHorizontal: 3, position: 'absolute', right: 0 },
   speedText: { fontVariant: ['tabular-nums'] },
   track: { alignItems: 'center', flex: 1, height: 34, justifyContent: 'center', minWidth: 0 },
 });

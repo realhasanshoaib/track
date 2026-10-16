@@ -29,14 +29,15 @@ function getDraftEntry(scopeKey: string, scope: MobileComposerDraftScope): Draft
   return entry;
 }
 
-export function useComposerDraft(scope: MobileComposerDraftScope | null) {
+export function useComposerDraft(scope: MobileComposerDraftScope | null, options: { subscribeToChanges?: boolean } = {}) {
+  const subscribeToChanges = options.subscribeToChanges ?? true;
   const scopeKey = scope ? composerDraftKey(scope) : null;
   const subscribe = useCallback((listener: DraftListener) => {
-    if (!scope || !scopeKey) return () => {};
+    if (!subscribeToChanges || !scope || !scopeKey) return () => {};
     const entry = getDraftEntry(scopeKey, scope);
     entry.listeners.add(listener);
     return () => entry.listeners.delete(listener);
-  }, [scope, scopeKey]);
+  }, [scope, scopeKey, subscribeToChanges]);
   const getSnapshot = useCallback(() => {
     if (!scope || !scopeKey) return emptyDraft;
     return getDraftEntry(scopeKey, scope).draft;

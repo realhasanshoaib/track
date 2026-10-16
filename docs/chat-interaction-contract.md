@@ -231,6 +231,30 @@ acknowledgement, and history prepend on representative low- and high-refresh
 devices. No sustained frame-budget overrun or visually apparent dropped frame
 is allowed. Record device, OS, refresh rate, and trace with release evidence.
 
+## Message selection and layout
+
+- Selection exposes one checkbox per message row. Its checked state is announced,
+  its visual indicator occupies a leading column outside the bubble, and the full
+  row toggles it. Media, links, playback, and swipe actions do not intercept a
+  selection tap. Web keyboard users can toggle the focused row with Space or Enter.
+- The selected-message count appears inside the delete control. When the selected
+  messages cannot be deleted, the control stays disabled and retains the count;
+  the existing server permission checks remain authoritative.
+- iOS selection indicators and action pills use the shared rounded glass material,
+  including its fallback on older systems. Cancel/cross controls retain their
+  existing appearance.
+- Small text follows its sender's side within the bubble. Timestamps and read
+  receipts stay against the bubble's right inset.
+- Image-only messages have no vertical padding or border spacer around portrait
+  or landscape media. Sender names remain outside that image bubble; captions,
+  replies, and thread controls keep their separate content spacing.
+
+The development Attachment preview exercises normal and selection modes with
+short and long text, incoming and outgoing images, voice notes, files, and deleted
+messages. The mobile browser regression suite checks row interaction and geometry
+at 320, 390, and 834 CSS pixels in both themes. Browser checks do not establish
+native glass appearance or native gesture behavior on iOS or Android.
+
 ## Motion tokens
 
 | Interaction | Track target |

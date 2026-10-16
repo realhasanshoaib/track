@@ -6,7 +6,7 @@ import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, ty
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
 import * as Clipboard from 'expo-clipboard';
-import { KeyboardEvents, KeyboardStickyView } from 'react-native-keyboard-controller';
+import { KeyboardEvents, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { parseMentions, resolveDistinctChannelIconKeys } from '@track/shared';
 import { api } from '../../../../convex/_generated/api';
@@ -60,10 +60,12 @@ import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pen
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
+import { scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset } from '@/lib/chat-scroll-follow';
 
 export default function ConversationScreen() {
   const theme = useTheme();
   const composerClosedOffset = useBottomTabBarInset();
+  const keyboardHeight = useKeyboardState((state) => state.height);
   const conversationHeaderTint = Platform.OS === 'android' ? theme.homeSurface : 'transparent';
   const { animatedStyle: channelHeaderPressStyle, onPressIn: channelHeaderPressIn, onPressOut: channelHeaderPressOut } = usePressFeedback({ pressedScale: 0.985 });
   const { animatedStyle: jumpButtonPressStyle, onPressIn: jumpButtonPressIn, onPressOut: jumpButtonPressOut } = usePressFeedback({ pressedScale: 0.96 });
@@ -184,23 +186,31 @@ export default function ConversationScreen() {
       : 'skip',
   );
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
+  const pendingBulkHideAnchorRef = useRef<{
+    selectedIds: Set<Id<'messages'>>;
+    wasAtBottom: boolean;
+    wasFollowingLatest: boolean;
+    pinAfterSend: boolean;
+  } | null>(null);
   /** Tracks whether the reader is pinned to the newest message, so arriving messages never yank them off history. */
   const atBottomRef = useRef(true);
+  const followingLatestRef = useRef(!targetMessageId);
   const screenActiveRef = useRef(false);
   const viewedMessageIdRef = useRef<Id<'messages'> | null>(null);
   const acknowledgedMessageIdRef = useRef<Id<'messages'> | null>(null);
   const acknowledgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
   const [newMessageCount, setNewMessageCount] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const scrollAfterSendMessageIdRef = useRef<string | null>(null);
   const pinToLatestAfterSendRef = useRef(false);
-  const pinToLatestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
+  const viewportHeightBeforeKeyboardRef = useRef<number | null>(null);
   const knownMessageIdsRef = useRef<Set<Id<'messages'>> | null>(null);
   const knownAssistantStreamsRef = useRef<Map<Id<'assistantStreams'>, string> | null>(null);
   const newestFeedTimeRef = useRef(0);
@@ -212,6 +222,7 @@ export default function ConversationScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [creatingTaskKey, setCreatingTaskKey] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const pendingProgressStepRef = useRef(new Map<string, number>());
   const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
   const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -222,35 +233,43 @@ export default function ConversationScreen() {
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
   const [messageSelectionMode, setMessageSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<Id<'messages'>>>(() => new Set());
+  const selectedMessageIdsRef = useRef(selectedMessageIds);
+  selectedMessageIdsRef.current = selectedMessageIds;
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const bulkDeleteBusyRef = useRef(false);
   const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
   const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
   const exitMessageSelection = useCallback(() => {
     setMessageSelectionMode(false);
-    setSelectedMessageIds(new Set());
+    const next = new Set<Id<'messages'>>();
+    selectedMessageIdsRef.current = next;
+    setSelectedMessageIds(next);
     setActionSheetOpen(false);
     setActionTarget(null);
   }, []);
   const beginMessageSelection = useCallback((item: GroupedThreadItem) => {
     if (item.kind !== 'message' || (readOnly && !item.item.message.deletedAt)) return;
     hapticLight();
-    setSelectedMessageIds(new Set([item.item.message._id]));
+    const next = new Set([item.item.message._id]);
+    selectedMessageIdsRef.current = next;
+    setSelectedMessageIds(next);
     setMessageSelectionMode(true);
     setActionTarget(item);
     setActionSheetOpen(false);
   }, [readOnly]);
   const toggleMessageSelection = useCallback((item: GroupedThreadItem) => {
-    if (item.kind !== 'message') return;
+    if (item.kind !== 'message' || bulkDeleteBusyRef.current) return;
     const id = item.item.message._id;
-    const next = new Set(selectedMessageIds);
+    const next = new Set(selectedMessageIdsRef.current);
     if (next.has(id)) next.delete(id);
     else next.add(id);
+    selectedMessageIdsRef.current = next;
     setSelectedMessageIds(next);
     setActionTarget(next.size ? item : null);
     if (!next.size) setMessageSelectionMode(false);
-  }, [selectedMessageIds]);
+  }, []);
   useEffect(() => {
     if (Platform.OS !== 'android' || (!messageSelectionMode && !channelSearchOpen)) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -280,13 +299,15 @@ export default function ConversationScreen() {
     projectId: pid,
     groupId: gid,
   } : null, [cid, gid, pid, pmid, trackUserId]);
-  const composerDraft = useComposerDraft(composerDraftScope);
+  // The Composer keeps its active input locally and writes through to this
+  // scope; avoid rerendering the entire message screen for each character.
+  const composerDraft = useComposerDraft(composerDraftScope, { subscribeToChanges: false });
   const composer = composerDraft.draft.composer;
   const setComposer = useCallback((nextComposer: string) => {
     composerDraft.setDraft((current) => current.composer === nextComposer
       ? current
       : { ...current, composer: nextComposer });
-  }, [composerDraft]);
+  }, [composerDraft.setDraft]);
   const trackCardRow = useCallback((rowId: string, hasCards: boolean) => {
     setCardRowIds((prev) => {
       if (prev.has(rowId) === hasCards) return prev;
@@ -357,7 +378,7 @@ export default function ConversationScreen() {
     setReplySelection(nextReply && composerDraft.scopeKey
       ? { scopeKey: composerDraft.scopeKey, message: nextReply }
       : null);
-  }, [composerDraft]);
+  }, [composerDraft.scopeKey, composerDraft.setDraft]);
   // Lets a row jump to its quoted message without rebuilding every row when the thread grows.
   const threadItemsRef = useRef<GroupedThreadItem[]>(threadItems);
   useEffect(() => {
@@ -365,32 +386,51 @@ export default function ConversationScreen() {
   }, [threadItems]);
 
   const mentionCandidates = useMemo(() => buildMentionCandidates(memberItems), [memberItems]);
+  const cancelComposerReply = useCallback(() => setReplyTo(null), [setReplyTo]);
+  const loadMoreMentionCandidates = useCallback(() => {
+    if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
+  }, [projectMembersPage.loadMore, projectMembersPage.status]);
 
   /** The composer grows over the list when the keyboard opens; follow it down. */
   const pinToLatest = useCallback(() => {
-    if (!atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-    const pin = () => {
-      const contentHeight = scrollMetricsRef.current.contentHeight;
-      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated: false, offset: contentHeight });
-      else listRef.current?.scrollToEnd({ animated: false });
-    };
+    if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current);
     pin();
     requestAnimationFrame(pin);
   }, []);
   const scrollToLatest = useCallback((animated = false) => {
     atBottomRef.current = true;
+    followingLatestRef.current = true;
     setNewMessageCount(0);
     if (!animated) setShowJumpToLatest(false);
-    const pin = () => {
-      const contentHeight = scrollMetricsRef.current.contentHeight;
-      if (contentHeight > 0) listRef.current?.scrollToOffset({ animated, offset: contentHeight });
-      else listRef.current?.scrollToEnd({ animated });
-    };
+    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current, animated);
     pin();
     if (!animated) {
       requestAnimationFrame(pin);
     }
   }, []);
+  const focusComposerAtLatest = useCallback(() => {
+    // Opening the composer means composing from the newest message. Keep the
+    // list pinned through keyboard-driven viewport changes; user drag cancels it.
+    pinToLatestAfterSendRef.current = true;
+    followingLatestRef.current = true;
+    scrollToLatest();
+  }, [scrollToLatest]);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (keyboardHeight <= 0) {
+      const viewportHeight = scrollMetricsRef.current.viewportHeight;
+      if (viewportHeight > 0) viewportHeightBeforeKeyboardRef.current = viewportHeight;
+      setAndroidKeyboardInset(0);
+      return;
+    }
+    const shouldCompensate = shouldCompensateAndroidKeyboardInset(
+      keyboardHeight,
+      scrollMetricsRef.current.viewportHeight,
+      viewportHeightBeforeKeyboardRef.current,
+    );
+    setAndroidKeyboardInset(shouldCompensate ? keyboardHeight : 0);
+  }, [keyboardHeight]);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
     const distanceFromBottom = Math.max(0, contentHeight - offsetY - viewportHeight);
@@ -400,10 +440,9 @@ export default function ConversationScreen() {
   }, []);
   const stopFollowingAfterUserScroll = useCallback(() => {
     atBottomRef.current = false;
+    followingLatestRef.current = false;
     pinToLatestAfterSendRef.current = false;
     scrollAfterSendMessageIdRef.current = null;
-    if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
-    pinToLatestTimeoutRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -423,6 +462,8 @@ export default function ConversationScreen() {
       return;
     }
     if (targetMessageId !== handledTargetMessageIdRef.current) {
+      pinToLatestAfterSendRef.current = false;
+      followingLatestRef.current = false;
       handledTargetMessageIdRef.current = null;
       positionedTargetMessageIdRef.current = null;
     }
@@ -444,6 +485,9 @@ export default function ConversationScreen() {
   }, [highlightedMessageId]);
 
   const scrollToMessage = useCallback((messageId: Id<'messages'>) => {
+    pinToLatestAfterSendRef.current = false;
+    atBottomRef.current = false;
+    followingLatestRef.current = false;
     const index = threadItemsRef.current.findIndex((item) => item.kind === 'message' && item.item.message._id === messageId);
     if (index >= 0) {
       setHighlightedMessageId(messageId);
@@ -623,6 +667,18 @@ export default function ConversationScreen() {
         text: confirmLabel,
         style: 'destructive',
         onPress: () => {
+          if (hideForMe) {
+            pendingBulkHideAnchorRef.current = {
+              selectedIds,
+              wasAtBottom: atBottomRef.current,
+              wasFollowingLatest: followingLatestRef.current,
+              pinAfterSend: pinToLatestAfterSendRef.current,
+            };
+            atBottomRef.current = false;
+            followingLatestRef.current = false;
+            pinToLatestAfterSendRef.current = false;
+          }
+          bulkDeleteBusyRef.current = true;
           setBulkDeleteBusy(true);
           const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
           const request = hideForMe ? hideDeletedMessages(scope) : deleteMessages(scope);
@@ -637,12 +693,22 @@ export default function ConversationScreen() {
               tone: 'success',
             });
           }).catch(() => {
+            const pending = pendingBulkHideAnchorRef.current;
+            if (pending) {
+              atBottomRef.current = pending.wasAtBottom;
+              followingLatestRef.current = pending.wasFollowingLatest;
+              pinToLatestAfterSendRef.current = pending.pinAfterSend;
+            }
+            pendingBulkHideAnchorRef.current = null;
             showToast({ title: 'Messages not deleted', message: 'Check your connection and try again.', tone: 'error' });
-          }).finally(() => setBulkDeleteBusy(false));
+          }).finally(() => {
+            bulkDeleteBusyRef.current = false;
+            setBulkDeleteBusy(false);
+          });
         },
       },
     ]);
-  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, trackUserId]);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -666,6 +732,40 @@ export default function ConversationScreen() {
   }
 
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
+
+  const newestPendingMessageId = pendingMessages.at(-1)?.id;
+  useEffect(() => {
+    const pendingId = scrollAfterSendMessageIdRef.current;
+    if (!newestPendingMessageId || pendingId !== newestPendingMessageId) return;
+
+    // Wait until React Native has committed the optimistic footer row before
+    // measuring the list's new end. Repeat on the next frame because a keyboard
+    // resize and a row layout can land in separate native layout passes.
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (scrollAfterSendMessageIdRef.current === pendingId) scrollToLatest();
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [newestPendingMessageId, scrollToLatest]);
+
+  useEffect(() => {
+    const pendingId = scrollAfterSendMessageIdRef.current;
+    if (!pendingId || pendingMessages.some(({ id }) => id === pendingId)) return;
+    scrollAfterSendMessageIdRef.current = null;
+    scrollToLatest();
+  }, [pendingMessages, scrollToLatest]);
+
+  const newestFeedItemKey = threadItems.at(-1)?.key;
+  useEffect(() => {
+    if (pendingBulkHideAnchorRef.current) return;
+    if (!targetMessageId && (followingLatestRef.current || atBottomRef.current)) scrollToLatest();
+  }, [newestFeedItemKey, scrollToLatest, targetMessageId]);
+  useEffect(() => {
+    const pending = pendingBulkHideAnchorRef.current;
+    if (!pending || [...pending.selectedIds].some((id) => threadItems.some((item) => item.kind === 'message' && item.item.message._id === id))) return;
+    pendingBulkHideAnchorRef.current = null;
+  }, [threadItems]);
 
   useEffect(() => {
     if (!messages || !assistantStreams) return;
@@ -703,7 +803,7 @@ export default function ConversationScreen() {
         if (newIncomingMessages.length) hapticLight();
         if (newAssistantAnswers.length) hapticSuccess();
       }
-      if (!atBottomRef.current && (newIncomingMessages.length || newAssistantAnswers.length)) {
+      if (!followingLatestRef.current && !atBottomRef.current && (newIncomingMessages.length || newAssistantAnswers.length)) {
         setNewMessageCount((count) => count + newIncomingMessages.length + newAssistantAnswers.length);
       }
 
@@ -718,7 +818,6 @@ export default function ConversationScreen() {
 
   useEffect(() => () => {
     if (acknowledgeTimeoutRef.current) clearTimeout(acknowledgeTimeoutRef.current);
-    if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -790,15 +889,10 @@ export default function ConversationScreen() {
       sendSignatureRef.current = sendSignature;
     }
     const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
+    atBottomRef.current = true;
+    followingLatestRef.current = true;
+    pinToLatestAfterSendRef.current = true;
     if (pendingId) {
-      atBottomRef.current = true;
-      pinToLatestAfterSendRef.current = true;
-      if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
-      pinToLatestTimeoutRef.current = setTimeout(() => {
-        pinToLatestAfterSendRef.current = false;
-        if (scrollAfterSendMessageIdRef.current === pendingId) scrollAfterSendMessageIdRef.current = null;
-        pinToLatestTimeoutRef.current = null;
-      }, 900);
       setNewMessageCount(0);
       setShowJumpToLatest(false);
       scrollAfterSendMessageIdRef.current = pendingId;
@@ -824,6 +918,10 @@ export default function ConversationScreen() {
         reportProgress: (attachmentId, progress) => {
           payload.reportProgress(attachmentId, progress);
           if (!pendingId) return;
+          const visibleStep = Math.round(progress * 10);
+          const lastStep = pendingProgressStepRef.current.get(attachmentId);
+          if (progress > 0 && progress < 1 && lastStep === visibleStep) return;
+          pendingProgressStepRef.current.set(attachmentId, visibleStep);
           setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId
             ? { ...pending, attachments: pending.attachments?.map((file) => file.id === attachmentId ? { ...file, progress } : file) }
             : pending));
@@ -889,20 +987,24 @@ export default function ConversationScreen() {
       }
       return result;
     } catch (failure) {
+      pinToLatestAfterSendRef.current = false;
       if (pendingId) {
         if (scrollAfterSendMessageIdRef.current === pendingId) {
           scrollAfterSendMessageIdRef.current = null;
-          pinToLatestAfterSendRef.current = false;
-          if (pinToLatestTimeoutRef.current) clearTimeout(pinToLatestTimeoutRef.current);
-          pinToLatestTimeoutRef.current = null;
         }
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
       }
       throw failure;
     } finally {
+      if (!pendingId) pinToLatestAfterSendRef.current = false;
+      for (const attachment of payload.attachments) pendingProgressStepRef.current.delete(attachment.id);
       setBusy(null);
     }
   }
+
+  const composerSendHandlerRef = useRef(handleSendMessage);
+  composerSendHandlerRef.current = handleSendMessage;
+  const sendFromComposer = useCallback((payload: ComposerSubmission) => composerSendHandlerRef.current(payload), []);
 
   async function submitReport(reason: ReportReason, note: string) {
     if (!trackUserId || !pid || !reportTarget || reportTarget.kind === 'date-sep' || busy === 'report') return;
@@ -993,16 +1095,19 @@ export default function ConversationScreen() {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
     const isOwnMessage = item.kind === 'message' && item.item.author?._id === trackUserId;
     return (
-      <View>
+      <View onLayout={() => {
+        if (item.key !== newestFeedItemKey || (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current)) return;
+        requestAnimationFrame(() => scrollToLatest());
+      }}>
         <ThreadRow
           highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
-          contextActions={Platform.OS === 'ios' && item.kind === 'message' ? buildMessageActions(item) : undefined}
+          contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
           item={item}
           isFirstInGroup={item.isFirstInGroup}
           isOwnMessage={isOwnMessage}
-          selected={item.kind === 'message' && selectedMessageIds.has(item.item.message._id)}
+          selected={item.kind === 'message' && selectedMessageIdsRef.current.has(item.item.message._id)}
           selectionMode={messageSelectionMode}
-          onPressMessage={messageSelectionMode && item.kind === 'message' ? () => toggleMessageSelection(item) : undefined}
+          onPressMessage={messageSelectionMode ? toggleMessageSelection : undefined}
           readReceipts={readReceipts}
           onLongPress={() => {
             if (item.kind === 'message' && messageSelectionMode) {
@@ -1045,7 +1150,7 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToMessage, selectedMessageIds, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
+  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, newestFeedItemKey, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToLatest, scrollToMessage, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
@@ -1105,13 +1210,15 @@ export default function ConversationScreen() {
                   action.onPress();
                 }}
               /> : null)}
-              {canRemoveSelectedMessages ? <IconButton
+              <IconButton
+                count={selectedMessages.length}
+                disabled={!canRemoveSelectedMessages}
                 accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
                 appearance="surface"
                 icon="trash-can-outline"
                 loading={bulkDeleteBusy}
                 onPress={deleteSelectedMessages}
-              /> : null}
+              />
             </View>
           ) : channelSearchOpen ? null : (
             <View style={styles.headerActions}>
@@ -1134,7 +1241,7 @@ export default function ConversationScreen() {
             </View>
           ),
           headerTitle: () => messageSelectionMode ? (
-            <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
+            <View />
           ) : channelSearchOpen ? (
             <View style={[styles.androidSearchField, { backgroundColor: conversationHeaderTint, borderColor: theme.homeBorder }]}>
               <PlatformIcon color={theme.textSecondary} name="search" size={18} />
@@ -1169,7 +1276,7 @@ export default function ConversationScreen() {
         {messageSelectionMode ? <View style={styles.iosHeaderRow}>
           <IconButton accessibilityLabel="Cancel message selection" appearance="glass" icon="close" onPress={exitMessageSelection} />
           <View style={styles.iosHeaderTitle}>
-            <ThemedText accessibilityLabel={`${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} selected`} type="title">{selectedMessages.length}</ThemedText>
+            <View />
           </View>
           <View style={styles.iosHeaderActions}>
             {headerSelectionActions.map((action) => action.icon ? <IconButton
@@ -1179,13 +1286,15 @@ export default function ConversationScreen() {
               key={action.label}
               onPress={() => { exitMessageSelection(); action.onPress(); }}
             /> : null)}
-            {canRemoveSelectedMessages ? <IconButton
+            <IconButton
+              count={selectedMessages.length}
+              disabled={!canRemoveSelectedMessages}
               accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
               appearance="glass"
               icon="trash-can-outline"
               loading={bulkDeleteBusy}
               onPress={deleteSelectedMessages}
-            /> : null}
+            />
           </View>
         </View> : channelSearchOpen ? <View style={styles.iosHeaderRow}>
           <IconButton accessibilityLabel="Close message search" appearance="glass" icon="arrow-left" onPress={() => { setChannelSearchOpen(false); setChannelSearchText(''); }} />
@@ -1294,7 +1403,8 @@ export default function ConversationScreen() {
       >
       <FlatList
           ref={listRef}
-          contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + Spacing.two }]}
+          extraData={selectedMessageIds}
+          contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + (Platform.OS === 'ios' ? keyboardHeight : androidKeyboardInset) + Spacing.two }]}
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
           data={threadItems}
@@ -1313,8 +1423,27 @@ export default function ConversationScreen() {
           keyExtractor={(item) => item.key}
           maxToRenderPerBatch={16}
           onLayout={({ nativeEvent }) => {
+            const wasAtBottom = atBottomRef.current;
+            if (Platform.OS === 'android') {
+              if (keyboardHeight <= 0) {
+                viewportHeightBeforeKeyboardRef.current = nativeEvent.layout.height;
+              } else {
+                setAndroidKeyboardInset(shouldCompensateAndroidKeyboardInset(
+                  keyboardHeight,
+                  nativeEvent.layout.height,
+                  viewportHeightBeforeKeyboardRef.current,
+                ) ? keyboardHeight : 0);
+              }
+            }
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
             updateJumpToLatest();
+            if (!pendingBulkHideAnchorRef.current) {
+              scheduleLatestScrollAfterViewportLayout({
+                followingLatest: followingLatestRef.current,
+                pinAfterSend: pinToLatestAfterSendRef.current,
+                wasAtBottom,
+              }, scrollToLatest);
+            }
           }}
           onScrollBeginDrag={stopFollowingAfterUserScroll}
           onScroll={({ nativeEvent }) => {
@@ -1335,7 +1464,8 @@ export default function ConversationScreen() {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
             updateJumpToLatest();
-            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (wasAtBottom || pinToLatestAfterSendRef.current)) {
+            if (pendingBulkHideAnchorRef.current) return;
+            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
               scrollToLatest();
             }
           }}
@@ -1403,8 +1533,9 @@ export default function ConversationScreen() {
       </View>
 
       {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <KeyboardStickyView
-        offset={{ closed: -composerClosedOffset, opened: 0 }}
-        style={styles.composerOverlay}>
+        enabled={Platform.OS === 'ios'}
+        offset={{ closed: Platform.OS === 'ios' ? -composerClosedOffset : 0, opened: 0 }}
+        style={[styles.composerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
         <View
           onLayout={({ nativeEvent }) => {
             if (composerExpanded) return;
@@ -1420,14 +1551,12 @@ export default function ConversationScreen() {
             mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
             mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
             mentionCandidates={mentionCandidates}
-            onCancelReply={() => setReplyTo(null)}
+            onCancelReply={cancelComposerReply}
             onChangeText={setComposer}
             onExpandedChange={setComposerExpanded}
-            onFocus={scrollToLatest}
-            onLoadMoreMentionCandidates={() => {
-              if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
-            }}
-            onSendMessage={handleSendMessage}
+            onFocus={focusComposerAtLatest}
+            onLoadMoreMentionCandidates={loadMoreMentionCandidates}
+            onSendMessage={sendFromComposer}
             replyTo={replyTo}
             value={composer}
           />

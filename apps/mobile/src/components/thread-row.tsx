@@ -1,6 +1,6 @@
 import { parseMentions } from '@track/shared';
 import type { FunctionReturnType } from 'convex/server';
-import { useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -60,11 +60,11 @@ type Props = {
   readReceipts?: { recipientCount: number; readThroughSequences: number[] };
   selected?: boolean;
   selectionMode?: boolean;
-  onPressMessage?: () => void;
+  onPressMessage?: (item: GroupedThreadItem) => void;
   variant?: 'conversation' | 'thread';
 };
 
-export function ThreadRow({
+export const ThreadRow = memo(function ThreadRow({
   highlighted = false,
   item,
   isFirstInGroup,
@@ -89,6 +89,12 @@ export function ThreadRow({
   const actionWidth = useSharedValue(0);
   const replyProgress = useSharedValue(0);
   const trayOpenAtStart = useSharedValue(false);
+  useEffect(() => {
+    if (!selectionMode) return;
+    actionWidth.value = 0;
+    replyProgress.value = 0;
+    setActionsExposed(false);
+  }, [actionWidth, replyProgress, selectionMode]);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
   const inlinePlayback = item.kind === 'message' && !item.item.message.deletedAt
     && hasPlayableAudioAttachment(item.item.attachments);
@@ -110,7 +116,7 @@ export function ThreadRow({
     selectionMode={selectionMode}
     contextActions={selectionMode ? undefined : contextActions}
     onLongPress={Platform.OS === 'android' || (Platform.OS === 'ios' && contextActions?.length && !inlinePlayback) ? undefined : onLongPress}
-    onPressSelection={onPressMessage}
+    onPressSelection={onPressMessage ? () => onPressMessage(item) : undefined}
     onOpenForwardSource={onOpenForwardSource}
     onForwardMedia={onSwipeForward}
     onOpenThread={onOpenThread}
@@ -126,7 +132,7 @@ export function ThreadRow({
   const messageContent = messageBubble ?? assistantBubble;
 
   const gesture = Gesture.Pan()
-    .enabled(Boolean(onSwipeReply || hasSwipeActions))
+    .enabled(!selectionMode && Boolean(onSwipeReply || hasSwipeActions))
     .activeOffsetX([-SWIPE_ACTIVATION_DISTANCE, SWIPE_ACTIVATION_DISTANCE])
     .failOffsetY([-SWIPE_VERTICAL_FAILURE_DISTANCE, SWIPE_VERTICAL_FAILURE_DISTANCE])
     .onBegin(() => {
@@ -182,7 +188,7 @@ export function ThreadRow({
     });
 
   const longPressGesture = Gesture.LongPress()
-    .enabled(Platform.OS === 'android')
+    .enabled(!selectionMode && Platform.OS === 'android')
     .minDuration(500)
     .maxDistance(16)
     .onStart(() => scheduleOnRN(onLongPress));
@@ -198,10 +204,10 @@ export function ThreadRow({
   }));
   const messageSwipeStyle = useAnimatedStyle(() => ({
     transform: [{
-      translateX: -actionWidth.value - interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_ACTION_GAP], 'clamp'),
+      translateX: selectionMode ? 0 : -actionWidth.value - interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_ACTION_GAP], 'clamp'),
     }],
   }));
-  const actionTray = hasSwipeActions ? <Animated.View
+  const actionTray = !selectionMode && hasSwipeActions ? <Animated.View
     accessibilityElementsHidden={!actionsExposed}
     accessibilityLabel="Message actions"
     importantForAccessibility={actionsExposed ? 'auto' : 'no-hide-descendants'}
@@ -238,6 +244,19 @@ export function ThreadRow({
       </View>
     </GestureDetector>
   );
+}, areThreadRowPropsEqual);
+
+function areThreadRowPropsEqual(previous: Props, next: Props) {
+  if (!previous.selectionMode || !next.selectionMode) return false;
+  return previous.item === next.item
+    && previous.highlighted === next.highlighted
+    && previous.isFirstInGroup === next.isFirstInGroup
+    && previous.isOwnMessage === next.isOwnMessage
+    && previous.readReceipts === next.readReceipts
+    && previous.selected === next.selected
+    && previous.selectionMode === next.selectionMode
+    && previous.onPressMessage === next.onPressMessage
+    && previous.variant === next.variant;
 }
 
 export function DateSeparator({ label }: { label: string }) {
@@ -307,7 +326,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   groupStart: {
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.two,
   },
   grouped: {
     paddingTop: 2,

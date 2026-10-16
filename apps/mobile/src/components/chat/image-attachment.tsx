@@ -7,8 +7,8 @@ import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 
 import { ImageViewer } from '@/components/chat/image-viewer';
 import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
+import { MESSAGE_MAX_WIDTH_RATIO } from '@/components/chat/message-layout';
 import { chatImageAspectRatio } from '@/lib/chat-image-layout';
-import { MESSAGE_SELECTION_RAIL_WIDTH } from '@/components/chat/message-layout';
 import type { ViewableImage } from '@/components/chat/types';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -45,7 +45,9 @@ type Props = {
 export function ImageAttachments({ deliveryAccessibilityLabel, deliveryMeta, images, onLongPress, selectionMode = false }: Props) {
   const { width } = useWindowDimensions();
   const [openImage, setOpenImage] = useState<ViewableImage | null>(null);
-  const maxWidth = Math.max(0, Math.min(width * 0.72, 320) - (selectionMode ? MESSAGE_SELECTION_RAIL_WIDTH : 0));
+  // The selection rail sits outside the message/media frame. Preserve the
+  // same media dimensions when the checkbox appears to avoid a visible resize.
+  const maxWidth = Math.min(width * 0.72, 320, width * MESSAGE_MAX_WIDTH_RATIO);
 
   function open(image: ViewableImage) {
     hapticLight();
@@ -59,7 +61,7 @@ export function ImageAttachments({ deliveryAccessibilityLabel, deliveryMeta, ima
   const lastTile = visible[visible.length - 1];
 
   return (
-    <View style={styles.wrap}>
+    <View pointerEvents={selectionMode ? 'none' : 'auto'} style={styles.wrap}>
       {visible.length === 1 ? (
         <SingleImage
           image={visible[0]}

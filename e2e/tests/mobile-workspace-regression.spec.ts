@@ -1,5 +1,128 @@
 import { expect, test, type Page } from '@playwright/test'
 
+for (const width of [320, 390, 834]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`chat message layout and selection stay usable at ${width}px in ${colorScheme}`, async ({ page }) => {
+      // Eight message types, selection, keyboard input, and media round trips.
+      test.setTimeout(60_000)
+      const errors: string[] = []
+      page.on('pageerror', (error) => errors.push(error.message))
+      await page.setViewportSize({ width, height: 844 })
+      await page.emulateMedia({ colorScheme })
+      await openFixture(page, 'attachment-preview?data=worst')
+      await expect(page.getByLabel('Loading Track', { exact: true })).toHaveCount(0)
+      const fixture = page.getByTestId('chat-layout-preview')
+      for (const id of ['own-portrait', 'other-landscape']) {
+        await page.getByTestId(`chat-layout-${id}`).scrollIntoViewIfNeeded()
+        await expect.poll(() => page.getByTestId(`chat-layout-${id}`).locator('img').evaluateAll((images) =>
+          images.some((image) => (image as HTMLImageElement).naturalWidth > 0),
+        )).toBe(true)
+      }
+      await expect(fixture.getByRole('checkbox')).toHaveCount(0)
+
+      for (const id of ['own-short', 'other-short']) {
+        const sample = page.getByTestId(`chat-layout-${id}`)
+        const bubble = await sample.getByTestId('message-bubble').boundingBox()
+        const receipt = await sample.getByTestId('message-delivery').boundingBox()
+        const text = await sample.getByText(id === 'own-short' ? 'Hi' : 'OK', { exact: true }).boundingBox()
+        expect(bubble && receipt && text).toBeTruthy()
+        expect(receipt!.x + receipt!.width).toBeLessThanOrEqual(bubble!.x + bubble!.width)
+        expect(bubble!.x + bubble!.width - receipt!.x - receipt!.width).toBeLessThanOrEqual(12)
+        if (id === 'own-short') expect(text!.x + text!.width).toBeGreaterThan(bubble!.x + bubble!.width / 2)
+        else expect(text!.x).toBeLessThan(bubble!.x + bubble!.width / 2)
+      }
+
+      async function assertImageFits(id: string) {
+        const sample = page.getByTestId(`chat-layout-${id}`)
+        const { bubble, image } = await sample.evaluate((root) => {
+          const bubble = root.querySelector('[data-testid="message-bubble"]')!
+          const image = bubble.querySelectorAll('img')
+          return { bubble: bubble.getBoundingClientRect().toJSON(), image: image[image.length - 1].getBoundingClientRect().toJSON() }
+        })
+        expect(bubble && image).toBeTruthy()
+        expect(Math.abs(bubble!.y - image!.y)).toBeLessThanOrEqual(1)
+        expect(Math.abs(bubble!.y + bubble!.height - image!.y - image!.height)).toBeLessThanOrEqual(1)
+        expect(image!.x).toBeGreaterThanOrEqual(0)
+        expect(image!.x + image!.width).toBeLessThanOrEqual(width + 1)
+      }
+      for (const id of ['own-portrait', 'other-landscape']) await assertImageFits(id)
+
+      await fixture.getByRole('button', { name: 'Enter selection mode', exact: true }).click()
+      const deletePill = fixture.getByRole('button', { name: /^Delete \d+ selected fixture messages$/ })
+      await expect(deletePill).toBeDisabled()
+      await expect(deletePill.getByText('0', { exact: true })).toBeVisible()
+      const ownRow = page.getByTestId('chat-layout-own-short').getByRole('checkbox')
+      const ownBounds = await ownRow.boundingBox()
+      expect(ownBounds).not.toBeNull()
+      expect(ownBounds!.height).toBeGreaterThanOrEqual(44)
+      // The far right gutter is outside the bubble and checkbox visual.
+      await ownRow.click({ position: { x: ownBounds!.width - 2, y: ownBounds!.height / 2 } })
+      await expect(ownRow).toBeChecked()
+      await expect(deletePill.getByText('1', { exact: true })).toBeVisible()
+      await expect(deletePill).toBeEnabled()
+      if (width === 390 && colorScheme === 'light') {
+        const path = test.info().outputPath('selection-layout.png')
+        await fixture.getByRole('button', { name: 'Exit selection mode', exact: true }).scrollIntoViewIfNeeded()
+        await page.screenshot({ path })
+        await test.info().attach('selection-layout', { path, contentType: 'image/png' })
+      }
+      await ownRow.focus()
+      await page.keyboard.press('Space')
+      await expect(ownRow).not.toBeChecked()
+      await expect(deletePill.getByText('0', { exact: true })).toBeVisible()
+      await ownRow.focus()
+      await page.keyboard.press('Enter')
+      await expect(ownRow).toBeChecked()
+      await page.keyboard.press('Enter')
+      await expect(ownRow).not.toBeChecked()
+      await ownRow.click()
+      const incomingRow = page.getByTestId('chat-layout-other-short').getByRole('checkbox')
+      await incomingRow.click()
+      await expect(deletePill.getByText('2', { exact: true })).toBeVisible()
+      await expect(deletePill).toBeDisabled()
+      await incomingRow.click()
+      await expect(deletePill.getByText('1', { exact: true })).toBeVisible()
+      await expect(deletePill).toBeEnabled()
+      await ownRow.click()
+
+      for (const id of ['own-short', 'other-short', 'own-portrait', 'other-landscape', 'long-text', 'voice', 'file', 'deleted']) {
+        const sample = page.getByTestId(`chat-layout-${id}`)
+        const row = sample.getByRole('checkbox')
+        const indicator = await sample.getByTestId('message-selection-indicator').boundingBox()
+        const bubble = await sample.getByTestId('message-bubble').boundingBox()
+        expect(indicator && bubble).toBeTruthy()
+        expect(indicator!.x + indicator!.width).toBeLessThanOrEqual(bubble!.x)
+        // Clicking the middle of media/file/text content must toggle the row once.
+        const rowBounds = await row.boundingBox()
+        await row.click({ position: { x: bubble!.x + bubble!.width / 2 - rowBounds!.x, y: bubble!.y + bubble!.height / 2 - rowBounds!.y } })
+        await expect(row).toBeChecked()
+        await row.click({ position: { x: 2, y: 2 } })
+        await expect(row).not.toBeChecked()
+      }
+      for (const id of ['own-portrait', 'other-landscape']) await assertImageFits(id)
+      await expect(page.getByRole('button', { name: 'Close image', exact: true })).toHaveCount(0)
+      await fixture.getByRole('button', { name: 'Cancel fixture selection', exact: true }).click()
+      await expect(fixture.getByRole('checkbox')).toHaveCount(0)
+      await page.getByTestId('chat-layout-own-portrait').getByRole('button', { name: /^Image / }).click()
+      await expect(page.getByRole('button', { name: 'Close image', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Close image', exact: true }).click()
+      const voiceSample = page.getByTestId('chat-layout-voice')
+      await expect(voiceSample.getByRole('button', { name: 'Play voice note', exact: true })).toBeEnabled()
+      await voiceSample.getByRole('button', { name: 'Play voice note', exact: true }).click()
+      await expect(voiceSample.getByRole('button', { name: 'Pause voice note', exact: true })).toBeVisible()
+      await voiceSample.getByRole('button', { name: 'Pause voice note', exact: true }).click()
+      if (width === 390 && colorScheme === 'light') {
+        const path = test.info().outputPath('normal-layout.png')
+        await fixture.getByRole('button', { name: 'Enter selection mode', exact: true }).scrollIntoViewIfNeeded()
+        await page.screenshot({ path })
+        await test.info().attach('normal-layout', { path, contentType: 'image/png' })
+      }
+      await assertNoPageOverflow(page)
+      expect(errors).toEqual([])
+    })
+  }
+}
+
 async function openFixture(page: Page, path: string) {
   await page.goto(`/dev/${path}`, { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('button').first()).toBeVisible()

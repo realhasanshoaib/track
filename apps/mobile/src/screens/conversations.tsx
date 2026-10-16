@@ -371,12 +371,14 @@ function ConversationListRow({ item, onActions, onChannel, onMessage, project }:
   </Pressable>;
   if (item.type === 'channel') {
     const channel = item.channel;
+    const channelArchived = project.membership.status === 'archived' || channel.group.status === 'archived';
     const target = channelActionTarget(project, channel);
-    return <View style={[styles.channelBlock, { borderBottomColor: theme.homeBorder }]}><Pressable accessibilityActions={[{ name: 'showActions', label: 'Show Channel actions' }]} accessibilityHint="Tap to open. Touch and hold or use the Channel actions menu to show options." accessibilityLabel={`${channel.group.name} Channel${channel.unreadCount ? `, ${channel.unreadCount} unread` : ''}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} delayLongPress={360} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'showActions') onActions(target); }} onLongPress={() => { setLongPressed(true); onActions(target); }} onPressOut={() => setLongPressed(false)} onPress={() => onChannel(channel.group._id)} style={({ pressed }) => [styles.channelRow, { backgroundColor: longPressed ? theme.accentSoft : pressed ? theme.backgroundSelected : 'transparent' }]}>
+    return <View style={[styles.channelBlock, { borderBottomColor: theme.homeBorder }]}><Pressable accessibilityActions={[{ name: 'showActions', label: 'Show Channel actions' }]} accessibilityHint="Tap to open. Touch and hold or use the Channel actions menu to show options." accessibilityLabel={`${channel.group.name} Channel${channelArchived ? ', archived' : ''}${channel.unreadCount ? `, ${channel.unreadCount} unread` : ''}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} delayLongPress={360} onAccessibilityAction={(event) => { if (event.nativeEvent.actionName === 'showActions') onActions(target); }} onLongPress={() => { setLongPressed(true); onActions(target); }} onPressOut={() => setLongPressed(false)} onPress={() => onChannel(channel.group._id)} style={({ pressed }) => [styles.channelRow, { backgroundColor: longPressed ? theme.accentSoft : pressed ? theme.backgroundSelected : 'transparent' }]}>
       <ChannelIcon id={String(channel.group._id)} channel={channel.group} iconKey={item.iconKey} name={channel.group.name} unreadCount={channel.unreadCount} />
       <View style={styles.channelCopy}>
         <View style={styles.channelTopLine}>
           <ThemedText numberOfLines={1} style={[styles.rowTitle, styles.channelName]} type="subtitle">{channel.group.name}</ThemedText>
+          {channelArchived ? <View style={[styles.archivedChannelPill, { backgroundColor: theme.accentSoft }]}><ThemedText style={{ color: theme.accentStrong }} type="captionBold">Archived</ThemedText></View> : null}
           {channel.lastMessage ? <ThemedText style={styles.channelDate} themeColor="textTertiary" type="caption">{conversationTime(channel.lastMessage.createdAt)}</ThemedText> : null}
         </View>
         <ThemedText numberOfLines={2} style={styles.channelPreview} themeColor="textSecondary" type="caption">{channel.lastMessage?.body?.trim() || 'No messages yet'}</ThemedText>
@@ -448,6 +450,7 @@ function ChannelIcon({ channel, id, iconKey, name, unreadCount }: { channel?: Ch
 
 const styles = StyleSheet.create({
   archiveLabel: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  archivedChannelPill: { alignSelf: 'center', borderRadius: Radius.pill, flexShrink: 0, paddingHorizontal: Spacing.two, paddingVertical: Spacing.half },
   channelBlock: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: entityDirectoryRow.separatorPadding },
   channelIcon: { alignItems: 'center', borderRadius: Radius.pill, height: searchResultChannelIconSize, justifyContent: 'center', width: searchResultChannelIconSize },
   channelIconWrap: { borderRadius: Radius.pill, flexShrink: 0, height: channelIconSize, position: 'relative', width: channelIconSize },
