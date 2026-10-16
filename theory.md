@@ -1,112 +1,80 @@
-# Track: the product theory
+# Q9 Chat: the product theory
 
-Track keeps Project conversation and task management together so teams do not
-have to reconstruct decisions between chat and a separate work tracker.
-Conversation supplies context; tasks turn agreed work into something actionable.
-Boards, lists, task details, Channels, and threads are views of that same work,
-not independent copies that need reconciling.
+Q9 Chat is where a team talks. Version 1 has one job: a team chat that is calm,
+fast and reliable enough that a team moves its daily conversation to it from
+WhatsApp. The first team is Q9. The repository and internal identifiers keep the
+name Track.
 
-This document owns the model and its reasons. `tracker.yaml` describes implemented
-outcomes and remaining work. `design.md` describes how the model should feel on
-screen. Source and tests establish behavior; deployment evidence establishes
-what is live.
+This document owns the model and its reasons. `tracker.yaml` describes the
+observable outcomes and remaining work. `design.md` describes how the model
+should feel on screen. Source and tests establish behavior; deployment evidence
+establishes what is live.
 
-## Companies and Projects
+## Why chat comes first
 
-A **Company** is the organizational umbrella. A **Project** is the shared work
-context, with one owning Company and, when needed, collaborating Companies.
-Internal work does not require a partner relationship. Adding collaboration
-should not require moving or duplicating the Project's conversations and tasks.
+A team moves only when talking here is better than talking where it already is.
+Agents, tasks and integrations become valuable after the team's conversation
+lives here, because that conversation is the team's context. So version 1 earns
+the move with the chat itself. Everything else is built on top of it later.
 
-A person can represent different Company memberships. The acting membership
-changes the authority and audience of an action, not just its label. Navigation
-must preserve that context rather than infer it from whichever Company happens
-to be selected elsewhere.
+The codebase follows the same rule. Code that does not serve the chat is
+removed rather than kept switched off, so every chat change stays cheap. Git
+history keeps what was removed.
 
-Ownership assignment and transfer are explicit decisions approved by the
-participating Companies. Older Projects without confirmed ownership remain
-reachable through their existing memberships. Selecting a Company is neither
-an ownership claim nor permission to access a Project. An owning Company must
-transfer ownership before leaving a Project that other participants will retain.
+## Groups
 
-## Channels and threads
+A **group** is the only container. A person sees the groups they belong to and
+nothing else. A conversation between two people is a group of two. People from
+another company join a group like any other member, and leaving a group ends
+access to it.
 
-A **Channel** is an explicitly joined conversation space inside a Project.
-Project or Company visibility is not blanket access to every Channel. A
-**thread** focuses discussion inside one Channel and inherits its access
-boundary; it is not a private messaging system outside the Project.
+Membership is the whole permission model: a member can read and write the
+group's history, and a former member cannot.
 
-Following and unread state help people return to relevant work. Read state means
-what someone actually viewed, not everything the server has made available.
-Older conversation must remain reachable, including the context around a source
-message that is no longer in the newest page.
+## Messages
 
-Archiving ends ordinary participation without erasing history. Read-only views
-must communicate that distinction rather than leave a composer that cannot
-succeed. Reopening and other lifecycle controls follow the participant's authority.
+A message can carry text, images, files or a voice note. A **reply** quotes the
+original message inline in the same group. Tapping the quote jumps to the
+original, even when it is far back in the history. There are no side threads.
 
-## Tasks and evidence
+A sent message appears immediately and is never lost or doubled. A retry repeats
+the same message; it never creates a second one. Unsent text stays with its own
+group and never moves into another.
 
-A **task** describes work someone can act on. It may be created manually or from
-conversation. A **board** organizes tasks through a workflow; boards, lists,
-notifications, and details must agree about ownership and state.
+## Calm
 
-A **reference** links a task or assistant answer to supporting material. Tasks
-derived from conversation retain links to the messages and evidence behind
-them. Seeing a task is not permission to reveal every referenced conversation.
-Search, source jumps, and previews preserve the original material's access
-boundary and explain unavailable evidence without leaking it.
+Q9 Chat interrupts a person only when something needs them: a mention, a reply
+to their message, or any message in a group they chose to hear everything from.
+Everything else waits quietly as an unread count. Read state means what a person
+actually saw, not what the server delivered.
 
-Collaborative work must not destroy a person's unfinished contribution. Realtime
-updates should reveal conflicting task edits without silently replacing local
-work. Navigation and retry should preserve unsent text in its own conversation
-scope, never carry it into another identity, membership, Channel, or thread.
+Opening a group shows what is new since the person last looked, then lets them
+continue from there. The look is quiet as well: calm surfaces, one deep Q9 cyan
+for actions, and bright color only for small signals.
 
-Retries represent the same intent, not an instruction to create another message
-or task. Attachment completion belongs to that message intent. Assistant work
-is separate so an answer failure does not make a person resend a human message.
+## Fast and reliable
 
-## Assistance and memory
+Opening a group shows its newest messages without waiting. Older history loads
+as the person scrolls, and the cost of a screen depends on what is on it, not on
+the size of the whole history. The phone and web apps offer the same journeys
+and stay in step: what a person read or wrote on one is current on the other.
 
-`@track` helps people understand and act on references they can access. An
-assistant answer is not itself a durable work item. Proposed task extraction
-or assignment remains human-confirmed rather than turning a model's suggestion
-into an unreviewed commitment.
+## Version 1 journeys
 
-Imported memory belongs to a Project or Channel. Retrieval, assistant runs, and
-source previews retain that scope; a convenient search or shared cache must not
-turn private context into Project-wide knowledge. Progress and retry states
-should make an assistant's work understandable without presenting uncertain
-output as a completed action.
+1. Sign in and land in your groups.
+2. Create a group and add people.
+3. Open a group and see what is new since you last looked.
+4. Send text, an image, a file or a voice note.
+5. Reply by quoting a message, and jump from the quote to the original.
+6. Find an old message with search.
+7. Get notified only when something needs you, and open the notification
+   straight at the message.
+8. Mute or leave a group.
 
-## Leaving a Project
+Each journey works on the phone and on the web.
 
-An exiting Company needs its permitted history without ongoing access to later
-work. Its archive is a frozen view, not continuing membership. Each person's
-Channel visibility still matters; an archive must not combine everyone's access
-into a wider audience.
+## Later
 
-A consistent cutoff matters more than an apparently uninterrupted capture. A
-short, explicit write pause prevents different batches from describing different
-versions of the Project. Reads remain available. Failed capture must support
-retry or cancellation; verified capture releases the pause. The remaining
-participants continue working while the exiting Company retains only its frozen
-view, including the ownership identity at that cutoff.
-
-## Scope and tradeoffs
-
-Company collaboration, tasks, and threads can be disabled independently without
-erasing stored work or its authorization and cleanup obligations. Feature
-availability is a server decision, not permission for the client to bypass
-those boundaries.
-
-Work should scale with what a person is viewing rather than total Project
-history. Paging and bounded archive operations support that goal; architectural
-complexity is justified by an actual boundary or workload, not a hypothetical
-future scale.
-
-Direct messages outside Projects and Channels, Records, Draft Records, general
-AI review queues, and record exports are outside this model. Reintroducing them
-requires a product decision. Video calls and transcripts are possible future
-evidence sources, not approved conferencing work. Preserve extensible,
-permission-aware evidence without speculative meeting infrastructure.
+Tasks, the built-in agent, people's own agents, integrations and an API and MCP
+server for agents come after the team has moved. The apps use only the backend
+API that those agents will use later, so adding them needs no second system.

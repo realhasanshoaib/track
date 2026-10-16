@@ -7,7 +7,9 @@
   Do not treat missing checks as product defects.
 - `design.md` owns the Stitch-compatible design system. Use it for interface changes.
 - Keep pure domain rules in `packages/shared`; Convex owns authorization and
-  persistence. Preserve represented Company, Project, and Channel scope throughout.
+  persistence. Group membership is the access boundary; preserve it throughout.
+- The product is called Q9 Chat on screen; the repository, packages, bundle IDs
+  and Convex identifiers keep the name Track.
 - Keep Convex schema/generated API and the TanStack route tree aligned with changes.
 - Run [verification](README.md#verification); do not expand debt baselines to
   accept new violations. Load affected application flows and check their consoles.

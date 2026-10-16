@@ -11,11 +11,10 @@ export const states = {
   working: "Working",
 };
 export const areas = {
-  platform: "Platform",
-  collaboration: "Company collaboration",
+  groups: "Groups",
   conversation: "Conversation",
-  tasks: "Tasks",
-  assistant: "Assistant",
+  notifications: "Notifications",
+  platform: "Platform",
   release: "Verification and release",
 };
 export const priorities = {

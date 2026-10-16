@@ -33,7 +33,7 @@ const textLines = (text, prefix = "", continuation = " ".repeat(prefix.length)) 
 
 export const renderMarkdown = ({ outcomes, principle, sizing }) => {
   const lines = [
-    "# Track: what works and what remains",
+    "# Q9 Chat: what works and what remains",
     "",
     ...textLines(principle),
     "",
@@ -108,12 +108,12 @@ const evidenceHtml = (item) => {
 };
 
 export const renderHtml = (tracker) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Track delivery</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Q9 Chat delivery</title>
 <style>
 :root{color-scheme:light;--ink:#1b1917;--muted:#6b655c;--paper:#faf9f7;--line:#e3dfd7;--accent:#8a6400}
 *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:880px;margin:auto;padding:48px 24px 96px}a{color:var(--accent)}h1{font-size:2.5rem;line-height:1.1;margin:12px 0 24px}h2{margin-top:52px;border-bottom:1px solid var(--line);padding-bottom:12px}h3{font-size:1.18rem;margin:0 0 10px}h4{font-size:1rem}p{margin:12px 0}.eyebrow,.meta{color:var(--muted);font-size:.86rem}.eyebrow{letter-spacing:.12em;text-transform:uppercase}.card{overflow-wrap:anywhere;border:1px solid var(--line);border-radius:12px;background:white;padding:24px;margin:20px 0}.card[data-state=blocked]{border-inline-start:4px solid #a66a35}.card[data-state=unknown]{border-inline-start:4px solid #85847a}.meta{font-weight:600}label{display:block;font-weight:600;margin:24px 0 6px}input{width:100%;padding:12px;font:inherit;border:1px solid var(--line);border-radius:8px;background:white}input:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:3px}details{margin-top:20px;border-top:1px solid var(--line);padding-top:14px;font-size:.9rem}summary{cursor:pointer;font-weight:600}code{overflow-wrap:anywhere;font-size:.82em}li+li{margin-top:6px}[hidden]{display:none!important}.empty{padding:24px 0}@media(max-width:520px){main{padding:28px 16px 64px}.card{padding:18px}h1{font-size:2rem}}@media print{input,label,.search-count{display:none}details{display:block}.card{break-inside:avoid}}
 </style></head><body><main>
-<p class="eyebrow">Track · Delivery</p><h1>What works. What remains.</h1>
+<p class="eyebrow">Q9 Chat · Delivery</p><h1>What works. What remains.</h1>
 <p>Read the outcomes below, or open <a href="tracker-human.md">the Markdown view</a>. Edit <a href="tracker.yaml">tracker.yaml</a> and run <code>pnpm generate:tracker</code> to update these views.</p>
 <p class="meta">${html(tracker.principle)}</p>
 <p>${html(tracker.sizing)}</p>
