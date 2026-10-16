@@ -1,131 +1,83 @@
 # Track
 
-Track organizes realtime conversation, tasks, references, and permission-aware
-AI assistance under Companies and Projects. A Company is the umbrella: each
-Project has one owning Company and can include collaborating Companies in the
-same workspace. An internal Project does not require a partner relationship;
-collaboration can be added later without duplicating conversations or tasks.
+Project conversation, tasks, and evidence-grounded assistance in one workspace.
 
-Company relationships, explicitly joined Channels, immutable Company exit
-archives, and guided transitions preserve access boundaries. Older Projects
-remain accessible through their existing memberships until ownership is
-explicitly assigned; ownership is never inferred from the selected Company.
-Ownership confirmation for an existing multi-Company Project requires approval
-from every current participating Company. Later transfers are initiated by the
-owning Company and use the same approval boundary; an owning Company must
-transfer ownership before exiting a Project that retains other participants.
-Channel threads add named focused conversations, follow and unread state,
-manual lifecycle controls, scoped search, and web and mobile flows.
+- [theory.md](theory.md): the model, vocabulary, reasons, and scope.
+- [Human tracker](tracker-human.md) · [searchable browser view](tracker-human.html):
+  generated from [tracker.yaml](tracker.yaml), the single editable outcome source.
+- [design.md](design.md): the Google Stitch-compatible design system.
 
-Task management adds scoped Project and Channel boards, configurable workflows,
-task details and lists, conversation evidence, human-reviewed AI suggestions,
-search, notifications, and essential native workflows. Boards, lists, details,
-conversations, and threads are views of the same Project work. Task management
-also preserves compatibility with older Projects and does not require Channel
-threads or Company collaboration to be enabled.
+## Reading the tracker
 
-Company collaboration, task management, and Channel threads are enabled by
-default through independent server-authoritative controls. An exact `false`
-environment override disables any one capability without changing the others.
-Clients keep gated surfaces hidden until that server projection is available.
+Run `pnpm serve:tracker` for a read-only browser at `http://127.0.0.1:4174`.
+It reads the current YAML on each request. Set `TRACKER_PORT` if that port is in use.
+After editing `tracker.yaml`, run `pnpm generate:tracker` to refresh both saved
+views. `pnpm check:tracker` rejects stale views; `pnpm test:tracker` checks the
+schema, generation, escaping, and read-only serving boundaries.
 
-## Requirements
+## Development
 
-- Node.js 24 or newer.
-- pnpm 12.8.1 through Corepack.
-- A Convex project.
-- OAuth credentials for enabled providers.
-- An OpenRouter API key for AI features.
-
-Cloudflare and Expo accounts are needed only for their deployment paths.
-
-## Local web setup
+Use Node 24 and the pnpm version pinned in `package.json`. Start from a development
+Convex project; [.env.example](.env.example) describes provider configuration.
 
 ```bash
-git clone https://github.com/hhushhas/track.git
-cd track
 corepack enable
 pnpm install --frozen-lockfile
 pnpm convex:dev
 ```
 
-Keep `pnpm convex:dev` running. In another terminal:
+Convex writes development selectors to `.env.local`; add the remaining values
+without overwriting them with placeholders. Keep Convex running. In another
+terminal, configure development-only redirects/helpers and start the web client:
 
 ```bash
 pnpm exec convex env set SITE_URL http://localhost:3000 --deployment dev
 pnpm exec convex env set BETTER_AUTH_URL http://localhost:3000 --deployment dev
 pnpm exec convex env set DEV_AUTH_BYPASS 1 --deployment dev
-```
-
-These variables are for the development deployment only. The first two keep
-email sign-in redirects on the local web app, and the last enables the local
-development auth helpers. If the demo sign-in button is enabled, its
-`VITE_DEV_AUTH_BYPASS` values belong in `.env.local` and should use a
-development-only password.
-
-Then start the web app:
-
-```bash
 pnpm --filter @track/web dev
 ```
 
-Open `http://localhost:3000`. Convex creates the development deployment values in `.env.local`. Add the remaining auth, AI, and optional integration values documented in `.env.example`; do not copy the placeholder Convex deployment values over the generated values.
-
-Company collaboration is enabled when `TRACK_COMPANY_MODEL_ENABLED` is absent or
-set to `true`. Set it to `false` on the Convex deployment to disable Company
-surfaces. The flag is server-authoritative and independent from
-`TRACK_THREADS_ENABLED` and `TRACK_TASKS_ENABLED`. Archive, Company-exit,
-redaction, account-deletion, and cleanup enforcement remains server-side while
-Company creation surfaces are disabled.
-
-Task routes, controls, and new-message detection are enabled when
-`TRACK_TASKS_ENABLED` is absent or set to `true`. Set it to `false` to disable
-them. The flag is independent from Company and thread flags; existing
-conversation remains usable when tasks are disabled.
-
-Channel threads are enabled when `TRACK_THREADS_ENABLED` is absent or set to
-`true`. Set it to `false` to disable them. Threads remain fully usable when
-Company collaboration or task management is disabled. The server flag hides
-thread discovery, routes, creation, search, and ordinary delivery when off while
-retaining lifecycle and cleanup enforcement for persisted data.
-
-## Local mobile setup
-
-Create the ignored operator configuration once:
-
-```bash
-cp apps/mobile/app.example.json apps/mobile/app.json
-cp apps/mobile/eas.example.json apps/mobile/eas.json
-pnpm --filter @track/mobile dev
-```
-
-Set the `EXPO_PUBLIC_*` values from `.env.example` for the development environment. Native OAuth, push, and store builds also require operator-owned provider configuration.
+Keep demo-sign-in credentials development-only and services on localhost.
+For mobile, copy `apps/mobile/app.example.json` and `eas.example.json` to their
+ignored `app.json` and `eas.json` counterparts, point `EXPO_PUBLIC_*` values at
+development, then run `pnpm --filter @track/mobile dev`.
 
 ## Verification
 
+Run the standards gate and application checks before handoff:
+
 ```bash
+pnpm gate
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm audit --prod
 pnpm build
-pnpm gate
-pnpm e2e
-pnpm perf:fixture
-pnpm perf:build
 ```
 
-CI runs the same repository gate after a frozen install, plus the isolated
-browser journeys and performance budgets. The mobile `build` script records
-that release builds are handled by EAS; web client, SSR, and Worker output is
-built locally.
+Both gates check the tracker first. `pnpm gate` then runs change-aware standards
+checks; `pnpm gate:full` runs all configured standards lanes.
+Neither replaces the application checks. Fix failures or report the exact
+blocker; do not remove or weaken tests or grow debt baselines to pass.
 
-## Configuration and safety
+For application changes, verify the affected flow and browser console. Install
+Chromium with `pnpm exec playwright install chromium`, then use `pnpm e2e` for
+the real client and isolated local Convex fixture. `pnpm perf:fixture` measures
+browser operations; `pnpm perf:build` measures the completed web build. Reports
+live under `artifacts/performance`; CI preserves failed browser evidence. These
+fixture timings are not production field measurements.
 
-- Copy `wrangler.example.toml` to ignored `wrangler.toml` for Cloudflare variables.
-- Copy `convex.prod.env.example` to ignored `convex.prod.env` for the production deployment selector.
-- Keep credentials in `.env.local`, `.credentials/`, EAS, Convex, Cloudflare, or another provider secret store.
-- Never commit deployment identifiers, credentials, personal data, working logs, crash reports, or store-submission material.
-- Report security vulnerabilities through GitHub private vulnerability reporting.
+Maestro flows are opt-in: use `maestro test e2e/maestro/` with an installed app and
+signed-in simulator/device. The mobile package's build script is not a native
+release build; release builds use EAS. [.github/workflows/ci.yml](.github/workflows/ci.yml)
+owns the automated matrix.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution expectations. Track is licensed under the [MIT License](./LICENSE).
+## Operator configuration
+
+The `.example` files own local and provider setup. Keep credentials and deployment
+selectors in ignored operator files or provider secret stores. Feature controls
+are server-authoritative; repository defaults are not proof of live settings.
+Production access, migrations, and deployment require explicit authorization.
+Existing archive-search migration work is tracked in `tracker.yaml`.
+
+[MIT License](LICENSE) · [Code of conduct](CODE_OF_CONDUCT.md).
