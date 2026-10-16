@@ -26,7 +26,6 @@ import {
   createCompanyProjectMembership,
   requireEligibleCompanyUser,
 } from './lib/companyProjectLifecycle'
-import { removeTaskMemberFromScope } from './lib/taskLifecycle'
 
 const initialMember = v.object({
   userId: v.id('users'),
@@ -647,9 +646,6 @@ export const updateMember = mutation({
       )
     }
     if (args.status === 'removed' || args.status === 'suspended') {
-      await removeTaskMemberFromScope(ctx, {
-        projectId: args.projectId, projectMemberId: target._id,
-      })
       const channels = await ctx.db
         .query('groupMembers')
         .withIndex('by_project_member_status', (q) => q.eq('projectMemberId', target._id).eq('status', 'active'))

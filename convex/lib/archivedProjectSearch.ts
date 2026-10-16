@@ -1,4 +1,3 @@
-import { resolveReleaseFeatureFlag } from '@track/shared/feature-flags'
 
 import type { Doc, Id } from '../_generated/dataModel'
 import type { QueryCtx } from '../_generated/server'
@@ -8,22 +7,10 @@ import {
   getArchivedMemberSnapshot,
   getArchivedThreadSnapshot,
 } from './projectExitArchive'
-import { searchArchivedTasks, type taskArchiveSummary } from './taskData'
 
 function preview(value: string, fallback: string) {
   const compact = value.replace(/\s+/g, ' ').trim()
   return compact ? compact.slice(0, 160) : fallback
-}
-
-export function archivedTaskSearchHit(view: ReturnType<typeof taskArchiveSummary>) {
-  const task = view.task
-  return {
-    createdAt: task.createdAt, groupId: task.groupId,
-    groupName: task.groupId ? 'Channel task' : 'Project task',
-    id: String(task._id), kind: 'task' as const,
-    preview: `${view.state?.name ?? 'Archived status'} · ${task.priority}${task.dueDate ? ` · due ${task.dueDate}` : ''}`,
-    subtitle: view.board?.name ?? 'Archived board', taskKey: task.publicKey, title: task.title,
-  }
 }
 
 export async function searchNormalizedProjectArchive(
@@ -44,7 +31,7 @@ export async function searchNormalizedProjectArchive(
   if (!operation || operation.projectId !== entitlement.projectId
     || operation.projectCompanyId !== entitlement.projectCompanyId) throw new Error('archive_snapshot_unavailable')
 
-  // Project-wide search needs the Channel ACL, not the archive's message/task payloads.
+  // Project-wide search needs the Channel ACL, not the archive's message payloads.
   const visibility = await ctx.db.query('projectExitChannelVisibility').withIndex('by_operation_member', (q) =>
     q.eq('operationId', operationId).eq('projectMemberId', projectMember._id)).collect()
   const channelIds = visibility.map((row) => row.groupId)
@@ -73,7 +60,7 @@ export async function searchNormalizedProjectArchive(
     memberCache.set(memberId, result)
     return result
   }
-  const [messageRows, fileRows, channelRows, threadRows, taskViews] = await Promise.all([
+  const [messageRows, fileRows, channelRows, threadRows] = await Promise.all([
     includes('messages') && channelIds.length
       ? ctx.db.query('messages').withSearchIndex('search_body_by_project', (q) =>
           q.search('body', term).eq('projectId', entitlement.projectId))
@@ -103,9 +90,6 @@ export async function searchNormalizedProjectArchive(
       ? ctx.db.query('projectExitSnapshotStaging').withSearchIndex('search_name_by_operation', (q) =>
           q.search('searchText', term).eq('operationId', operationId).eq('scope', 'thread')
             .eq('projectMemberId', projectMember._id)).take(limit)
-      : [],
-    includes('tasks') && resolveReleaseFeatureFlag(process.env.TRACK_TASKS_ENABLED)
-      ? searchArchivedTasks(ctx, { entitlement, projectMember }, term, limit)
       : [],
   ])
   const messages = await Promise.all(messageRows.map(async (message) => {
@@ -162,7 +146,6 @@ export async function searchNormalizedProjectArchive(
   return {
     messages: messages.filter((row) => row !== null),
     files: files.filter((row) => row !== null), groups,
-    tasks: taskViews.map(archivedTaskSearchHit),
     threads: threads.filter((row) => row !== null),
   }
 }

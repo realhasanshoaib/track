@@ -1,6 +1,4 @@
 import { mutation } from './_generated/server'
-import { createUniqueTaskPublicKey } from './lib/taskData'
-import { getOrCreateDefaultBoard } from './taskBoards'
 
 const hour = 60 * 60 * 1000
 
@@ -35,23 +33,12 @@ const channelMessages = [
 ]
 
 const threadReplies = [
-  { author: 1, hoursAgo: 25, body: 'Yes. Lead with faster handoffs, then support it with the shared task context.' },
+  { author: 1, hoursAgo: 25, body: 'Yes. Lead with faster handoffs, then support it with the shared conversation context.' },
   { author: 2, hoursAgo: 24, body: 'I agree. The customer proof point is fewer status meetings after the launch.' },
   { author: 3, hoursAgo: 23, body: 'That framing also gives us room to mention the mobile workflow without overloading the banner.' },
   { author: 0, hoursAgo: 21, body: 'Decision made. Leo owns the final copy and Priya will validate it in the preview.' },
   { author: 1, hoursAgo: 19, body: 'Done. The final headline is in the review board and ready for approval.' },
 ]
-
-const seededTasks = [
-  { title: 'Instrument launch funnel metrics', description: 'Add activation and first-task metrics to the launch dashboard.', assignee: 3, state: 'Backlog', priority: 'medium', messageIndex: undefined },
-  { title: 'Publish launch release notes', description: 'Turn the approved draft into the customer-facing release notes.', assignee: 1, state: 'To do', priority: 'high', messageIndex: 10 },
-  { title: 'Verify notification copy on Android', description: 'Confirm the notification title and body remain readable on the release build.', assignee: 2, state: 'To do', priority: 'medium', messageIndex: undefined },
-  { title: 'Fix stale project switcher after invite', description: 'Refresh the selected project after an invite is accepted without a browser reload.', assignee: 3, state: 'In progress', priority: 'urgent', messageIndex: 7 },
-  { title: 'Finalize release banner copy', description: 'Use the approved faster-handoffs headline and attach the final visual review.', assignee: 1, state: 'In progress', priority: 'high', messageIndex: 12 },
-  { title: 'Run launch-day support rotation', description: 'Keep the support owner and escalation path visible throughout launch morning.', assignee: 0, state: 'In progress', priority: 'high', messageIndex: undefined },
-  { title: 'Refresh onboarding screenshots', description: 'Replace the old project view screenshots in the onboarding checklist.', assignee: 2, state: 'Done', priority: 'low', messageIndex: undefined },
-  { title: 'Retire the legacy announcement draft', description: 'Close the old announcement that no longer matches the launch positioning.', assignee: 0, state: 'Canceled', priority: 'none', messageIndex: undefined },
-] as const
 
 export const seedLaunchWeek = mutation({
   args: {},
@@ -88,16 +75,14 @@ export const seedLaunchWeek = mutation({
       .collect())
       .find((group) => group.name === 'launch-week' && !group.archivedAt)
     if (existingChannel) {
-      const [messages, tasks, thread] = await Promise.all([
+      const [messages, thread] = await Promise.all([
         ctx.db.query('messages').withIndex('by_group_created_at', (query) => query.eq('groupId', existingChannel._id)).collect(),
-        ctx.db.query('tasks').withIndex('by_project_archived', (query) => query.eq('projectId', project._id).eq('archivedAt', undefined)).collect(),
         ctx.db.query('channelThreads').withIndex('by_group_status_updated_at', (query) => query.eq('groupId', existingChannel._id).eq('status', 'active')).first(),
       ])
       return {
         alreadySeeded: true,
         channelId: existingChannel._id,
         messageCount: messages.filter((message) => !message.channelThreadId).length,
-        taskCount: tasks.filter((task) => task.createIdempotencyKey?.startsWith('demo-launch-week-task-')).length,
         threadId: thread?._id,
       }
     }
@@ -230,68 +215,13 @@ export const seedLaunchWeek = mutation({
     }
     await ctx.db.patch(channelId, { nextChannelSequence: channelMessages.length + threadReplies.length })
 
-    const board = await getOrCreateDefaultBoard(ctx, {
-      projectId: project._id,
-      groupId: channelId,
-      projectMemberId: projectMember._id,
-      channelName: 'launch-week',
-    })
-    const workflowStates = await ctx.db
-      .query('taskWorkflowStates')
-      .withIndex('by_board_rank', (query) => query.eq('boardId', board._id))
-      .collect()
-    for (const [index, task] of seededTasks.entries()) {
-      const assignee = seededMembers[task.assignee]
-      const workflowState = workflowStates.find((state) => state.name === task.state)
-      if (!assignee || !workflowState) throw new Error('demo_seed_task_configuration_missing')
-      const createdAt = now - (18 - index) * hour
-      const taskId = await ctx.db.insert('tasks', {
-        projectId: project._id,
-        publicKey: await createUniqueTaskPublicKey(ctx, project._id),
-        boardId: board._id,
-        groupId: channelId,
-        workflowStateId: workflowState._id,
-        rank: String(index + 1).padStart(4, '0'),
-        title: task.title,
-        description: task.description,
-        searchText: `${task.title} ${task.description}`.toLowerCase(),
-        assigneeProjectMemberId: assignee.member._id,
-        priority: task.priority,
-        createdByProjectMemberId: projectMember._id,
-        revision: 1,
-        terminalAt: workflowState.category === 'completed' || workflowState.category === 'canceled' ? createdAt : undefined,
-        createIdempotencyKey: `demo-launch-week-task-${index + 1}`,
-        createdAt,
-        updatedAt: createdAt,
-      })
-      if (task.messageIndex === undefined) continue
-      const messageId = messageIds[task.messageIndex]
-      if (!messageId) throw new Error('demo_seed_task_message_missing')
-      await ctx.db.insert('taskReferences', {
-        projectId: project._id,
-        taskId,
-        type: 'message',
-        groupId: channelId,
-        messageId,
-        quote: channelMessages[task.messageIndex].body,
-        availability: 'available',
-        isPrimary: true,
-        actorProjectMemberId: projectMember._id,
-        rank: '0001',
-        createdAt,
-        updatedAt: createdAt,
-      })
-    }
-
     return {
       alreadySeeded: false,
       projectId: project._id,
       channelId,
-      boardId: board._id,
       threadId,
       messageCount: channelMessages.length,
       threadReplyCount: threadReplies.length,
-      taskCount: seededTasks.length,
     }
   },
 })

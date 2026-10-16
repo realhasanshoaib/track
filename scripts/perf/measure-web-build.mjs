@@ -34,7 +34,7 @@ const report = {
   javascriptBytes: javascript.reduce((total, asset) => total + asset.bytes, 0),
   largestJavascriptBytes: Math.max(...javascript.map((asset) => asset.bytes), 0),
   stylesheetBytes: stylesheets.reduce((total, asset) => total + asset.bytes, 0),
-  routes: Object.fromEntries(['workspace', 'tasks', 'sign-in', 'about'].map((route) => [
+  routes: Object.fromEntries(['workspace', 'sign-in', 'about'].map((route) => [
     route,
     assets.filter((asset) => asset.path.toLowerCase().includes(route)).reduce((total, asset) => total + asset.bytes, 0),
   ])),

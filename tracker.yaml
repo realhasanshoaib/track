@@ -13,24 +13,6 @@ sizing: >-
   before sizing. Working entries have no remaining work to size. Waiting does not increase
   size. Revisit estimates when the work is inspected.
 outcomes:
-  - id: platform.remove_tasks
-    title: Remove tasks and boards
-    area: platform
-    state: planned
-    priority: P0
-    size: M
-    size_reason: Tasks are self-contained apart from message links and notifications.
-    summary: >-
-      Tasks, boards, suggestions, reminders and task notifications are still in the backend and
-      both apps. Version 1 is chat only.
-    remaining:
-      - Delete task code, tables, routes and screens in both apps.
-      - Remove task links from messages, search and notifications.
-    theory: theory.md#later
-    code:
-      - convex/tasks.ts
-      - convex/taskBoards.ts
-
   - id: conversation.quote_replies_only
     title: Replies quote a message, without side threads
     area: conversation
@@ -241,12 +223,12 @@ outcomes:
     state: planned
     priority: P1
     size: M
-    size_reason: The harnesses exist; the tests must move from projects and tasks to the eight journeys.
+    size_reason: The harnesses exist; the tests must move from project flows to the eight journeys.
     summary: >-
-      Playwright and Maestro harnesses drive the real apps, but their tests cover projects and tasks,
+      Playwright and Maestro harnesses drive the real apps, but their remaining tests cover project flows,
       and earlier runs were not repeatably green.
     remaining:
-      - Replace project and task tests with the eight chat journeys on web and phone.
+      - Replace project tests with the eight chat journeys on web and phone.
       - Get a repeatably green run against the isolated backend.
     theory: theory.md#version-1-journeys
     code:

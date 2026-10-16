@@ -10,8 +10,8 @@ import type { GroupReference } from './group-types'
 import { getAvatarTone, getInitials } from './identity'
 import { MarkdownText } from './markdown'
 import { VoiceNotePlayer, isAudioAttachment } from './voice-notes'
-import { MessageInlineTasks } from '#/features/tasks/ConversationTaskActions'
-import type { TaskIdentity } from '#/features/tasks/task-types'
+
+
 import { threadHref } from '#/features/threads/thread-navigation'
 import type { RepresentedThreadContext } from '#/features/threads/thread-navigation'
 
@@ -80,7 +80,6 @@ export function MessageRow({
   activeGroupId,
   busyAction,
   canDeleteMessages,
-  canCreateTasks,
   canForwardMessages = true,
   canReply,
   currentUserId,
@@ -89,7 +88,6 @@ export function MessageRow({
   item,
   avatarUrl,
   mentionGroups,
-  identity,
   onDeleteMessage,
   onForwardMessage,
   onOpenGroup,
@@ -101,7 +99,6 @@ export function MessageRow({
   activeGroupId: Id<'groups'> | null
   busyAction: string | null
   canDeleteMessages: boolean
-  canCreateTasks?: boolean
   canForwardMessages?: boolean
   canReply?: boolean
   currentUserId: Id<'users'>
@@ -110,7 +107,6 @@ export function MessageRow({
   item: GroupMessageItem
   avatarUrl?: string | null
   mentionGroups: Map<string, GroupReference>
-  identity?: TaskIdentity
   onDeleteMessage: (messageId: Id<'messages'>) => Promise<boolean>
   onForwardMessage: (input: {
     sourceMessageId: Id<'messages'>
@@ -153,10 +149,9 @@ export function MessageRow({
           activeGroupId={activeGroupId}
           busyAction={busyAction}
           canForward={canForward}
-          canCreateTasks={canCreateTasks}
+
           canReply={canReply}
           groups={groups}
-          identity={identity}
           item={item}
           canDelete={canDeleteMessages && item.message.authorId === currentUserId}
           onDeleteMessage={onDeleteMessage}
@@ -280,7 +275,7 @@ export function MessageRow({
             })}
           </div>
         ) : null}
-        <MessageInlineTasks identity={identity} message={item.message} />
+
       </Card>
     </article>
   )

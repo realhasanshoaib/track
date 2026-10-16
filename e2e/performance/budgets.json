@@ -2,7 +2,6 @@
   "schemaVersion": 2,
   "fixture": {
     "routeNavigationMs": 5000,
-    "taskRouteMs": 5000,
     "sendAcknowledgementMs": 5000,
     "scrollInteractionMs": 1200,
     "resourceBytes": 5000000

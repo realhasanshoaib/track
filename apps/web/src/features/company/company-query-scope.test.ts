@@ -8,7 +8,6 @@ import {
 } from "./company-project-context";
 import {
   getCompanyProjectConversationSearch,
-  getCompanyProjectTaskSearch,
 } from "./company-project-links";
 import { formatCompanyError, formatSnapshotError } from "./company-errors";
 
@@ -104,12 +103,6 @@ describe("Company query scope", () => {
       companyId: "active-company",
       groupId: "channel-a",
       membershipId: "member-a",
-    });
-    expect(getCompanyProjectTaskSearch(context)).toEqual({
-      actingCompanyId: "active-company",
-      groupId: "channel-a",
-      projectMemberId: "member-a",
-      view: "board",
     });
   });
 });

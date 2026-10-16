@@ -5,7 +5,7 @@ import { internalMutation, internalQuery, query } from './_generated/server'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { retryDelayMs } from './lib/pushDelivery'
 
-const sourceKind = v.union(v.literal('message'), v.literal('task'), v.literal('test'))
+const sourceKind = v.union(v.literal('message'), v.literal('test'))
 const terminalContent = { title: 'Track', body: '' }
 
 export const recordEvent = internalMutation({

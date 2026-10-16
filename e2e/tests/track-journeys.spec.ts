@@ -47,11 +47,6 @@ test('sign-in bootstrap and conversation write stay on the seeded project', asyn
 
   const sourceMessage = page.locator('article.track-message-row').filter({ hasText: 'E2E source message: assign an owner before launch.' }).first()
   await expect(sourceMessage).toBeVisible()
-  const sourceTaskLink = sourceMessage.locator('.task-inline-cards > a').filter({ hasText: 'E2E source-linked task' }).first()
-  await expect(sourceTaskLink).toBeVisible()
-  await expect(sourceTaskLink.getByText('E2E source-linked task', { exact: true })).toBeVisible()
-  await expect(sourceTaskLink).toContainText('Linked to this Channel message')
-
   const body = `browser journey message ${Date.now()}`
   const composer = page.getByPlaceholder('Message browser-journeys...')
   await composer.fill(body)
@@ -68,25 +63,6 @@ test('project switching preserves the access scope boundary', async ({ page }, t
   await expect(page.getByText('Secondary project scope stays isolated.', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('E2E source message: assign an owner before launch.', { exact: true })).toHaveCount(0)
   await capture(page, testInfo, 'project-scope')
-})
-
-test('task board route exposes the seeded source-linked task', async ({ page }, testInfo) => {
-  await signIn(page)
-
-  const tasksLink = page.getByRole('link', { name: /Tasks.*Boards, my tasks, inbox/ }).first()
-  await expect(tasksLink).toBeVisible()
-  await tasksLink.click()
-  await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(/\/tasks\?/)
-  const boardCard = page.locator('article.task-card').filter({ hasText: 'E2E source-linked task' }).first()
-  await expect(boardCard).toBeVisible({ timeout: 30_000 })
-  const boardTask = boardCard.locator('button.task-card-open')
-  await expect(boardTask).toContainText('E2E source-linked task')
-  await boardTask.click()
-  const taskDetail = page.locator('[data-slot="sheet-content"]').filter({ has: page.getByRole('heading', { name: 'Evidence' }) }).first()
-  await expect(taskDetail).toBeVisible({ timeout: 30_000 })
-  const evidenceSection = taskDetail.locator('section.task-detail-section').filter({ has: page.getByRole('heading', { name: 'Evidence', exact: true }) }).first()
-  await expect(evidenceSection).toContainText('E2E source message: assign an owner before launch.')
-  await capture(page, testInfo, 'task-board')
 })
 
 test('archived channel renders as a read-only evidence surface', async ({ page }, testInfo) => {

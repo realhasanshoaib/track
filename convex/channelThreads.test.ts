@@ -13,97 +13,19 @@ const modules = (import.meta as ImportMeta & {
 type TestBackend = ReturnType<typeof convexTest>
 
 const originalCompanyFlag = process.env.TRACK_COMPANY_MODEL_ENABLED
-const originalTasksFlag = process.env.TRACK_TASKS_ENABLED
 const originalThreadsFlag = process.env.TRACK_THREADS_ENABLED
 
 beforeEach(() => {
   process.env.TRACK_COMPANY_MODEL_ENABLED = 'false'
-  process.env.TRACK_TASKS_ENABLED = 'false'
   process.env.TRACK_THREADS_ENABLED = 'true'
 })
 
 afterEach(() => {
   process.env.TRACK_COMPANY_MODEL_ENABLED = originalCompanyFlag
-  process.env.TRACK_TASKS_ENABLED = originalTasksFlag
   process.env.TRACK_THREADS_ENABLED = originalThreadsFlag
 })
 
 describe('Channel threads', () => {
-  it('fails closed across thread and task releases', async () => {
-    process.env.TRACK_TASKS_ENABLED = 'true'
-    const { groupId, owner, projectId, t } = await seedLegacyChannel()
-    const actor = asUser(t, owner)
-    const scanFrom = Date.now() - 1_000
-    const threadId = await actor.mutation(api.channelThreads.create, {
-      creatorId: owner,
-      groupId,
-      idempotencyKey: 'combined-thread',
-      name: 'Combined behavior',
-      projectId,
-    })
-    const messageId = await actor.mutation(api.messages.send, {
-      authorId: owner,
-      body: 'Turn this focused decision into tracked work.',
-      channelThreadId: threadId,
-      groupId,
-      idempotencyKey: 'combined-thread-message',
-      projectId,
-    })
-    const created = await actor.mutation(api.tasks.create, {
-      projectId,
-      groupId,
-      title: 'Track the focused decision',
-      priority: 'none',
-      references: [{ type: 'message', messageId, isPrimary: true }],
-      idempotencyKey: 'combined-thread-task',
-    })
-
-    expect(await actor.query(api.tasks.listForMessage, { messageId })).toHaveLength(1)
-    expect(await actor.query(api.tasks.getByKey, {
-      projectId,
-      publicKey: created.publicKey,
-    })).toMatchObject({
-      references: [{ availability: 'available', channelThreadId: threadId }],
-    })
-
-    process.env.TRACK_THREADS_ENABLED = 'false'
-    expect(await actor.query(api.channelThreads.list, { groupId, userId: owner })).toEqual([])
-    await expect(actor.mutation(api.channelThreads.create, {
-      creatorId: owner,
-      groupId,
-      idempotencyKey: 'disabled-create',
-      name: 'Hidden thread',
-      projectId,
-    })).rejects.toThrow('threads_disabled')
-    expect(await actor.query(api.tasks.listForMessage, { messageId })).toEqual([])
-    const tasksOnlyDetail = await actor.query(api.tasks.getByKey, {
-      projectId,
-      publicKey: created.publicKey,
-    })
-    expect(tasksOnlyDetail?.references[0]).toMatchObject({ availability: 'unavailable' })
-    expect(tasksOnlyDetail?.references[0]?.quote).toBeUndefined()
-    expect(await actor.mutation(api.taskDetection.requestHistoryScan, {
-      projectId,
-      groupId,
-      from: scanFrom,
-      to: Date.now() + 1_000,
-    })).toBeNull()
-    await expect(actor.mutation(api.tasks.create, {
-      projectId,
-      groupId,
-      title: 'Do not expose disabled thread evidence',
-      priority: 'none',
-      references: [{ type: 'message', messageId, isPrimary: true }],
-      idempotencyKey: 'disabled-thread-task',
-    })).rejects.toThrow('task_reference_invalid')
-
-    process.env.TRACK_TASKS_ENABLED = 'false'
-    process.env.TRACK_THREADS_ENABLED = 'true'
-    expect(await actor.query(api.channelThreads.get, { threadId, userId: owner }))
-      .toMatchObject({ thread: { _id: threadId } })
-    await expect(actor.query(api.taskBoards.list, { projectId }))
-      .rejects.toThrow('tasks_disabled')
-  })
   it('preserves channel sequence and converges create/send retries', async () => {
     {
       const { groupId, owner, ownerMembershipId, projectId, t } = await seedLegacyChannel()
@@ -634,23 +556,14 @@ describe('Channel threads', () => {
   })
 
   it('enforces deletion authority and cleans thread, evidence, attachment, and Project rows', async () => {
-    process.env.TRACK_TASKS_ENABLED = 'true'
     const { groupId, member, owner, projectId, t } = await seedLegacyChannel()
     const ownerActor = asUser(t, owner)
     const messageId = await ownerActor.mutation(api.messages.send, {
       authorId: owner,
-      body: 'Delete this source after creating the task.',
+      body: 'Delete this source.',
       groupId,
       idempotencyKey: 'deletable-message',
       projectId,
-    })
-    const task = await ownerActor.mutation(api.tasks.create, {
-      projectId,
-      groupId,
-      title: 'Keep the work, lose the source',
-      priority: 'none',
-      references: [{ type: 'message', messageId, isPrimary: true }],
-      idempotencyKey: 'deletable-message-task',
     })
     await expect(asUser(t, member).mutation(api.messages.remove, {
       actorId: member,
@@ -664,14 +577,6 @@ describe('Channel threads', () => {
     })
 
     expect(await t.run(async (ctx) => await ctx.db.get(messageId))).toBeNull()
-    const taskDetail = await ownerActor.query(api.tasks.getByKey, {
-      projectId,
-      publicKey: task.publicKey,
-    })
-    expect(taskDetail).toMatchObject({
-      references: [{ availability: 'unavailable' }],
-    })
-    expect(taskDetail?.references[0]).not.toHaveProperty('quote')
     const deletionAudit = await t.run(async (ctx) =>
       await ctx.db
         .query('auditEvents')

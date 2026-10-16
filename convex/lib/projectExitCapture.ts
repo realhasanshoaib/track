@@ -1,14 +1,13 @@
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 
-import { captureTaskExitStagingBatch } from './taskLifecycle'
 
 const memberBatchSize = 25
 const channelBatchSize = 50
 const threadBatchSize = 25
 
 export type ExitCaptureCursor =
-  | { phase: 'members' | 'channels' | 'tasks'; cursor: string | null }
+  | { phase: 'members' | 'channels'; cursor: string | null }
   | {
       phase: 'threads'
       memberCursor: string | null
@@ -118,7 +117,7 @@ function normalizeSnapshotSearchText(value: string) {
   return value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
-function snapshotSearchText(row: ExitSnapshotRow) {
+function snapshotSearchText(row: ExitSnapshotRow): string | undefined {
   if (row.payload.kind === 'channel' || row.payload.kind === 'thread') {
     return normalizeSnapshotSearchText(row.payload.snapshot.name)
   }
@@ -126,7 +125,7 @@ function snapshotSearchText(row: ExitSnapshotRow) {
 }
 
 function isPhase(value: unknown): value is ExitCaptureCursor['phase'] {
-  return value === 'members' || value === 'channels' || value === 'tasks' || value === 'threads'
+  return value === 'members' || value === 'channels' || value === 'threads'
 }
 
 function isExitCaptureCursor(value: unknown): value is ExitCaptureCursor {
@@ -390,8 +389,8 @@ async function captureThreads(
   if (!memberId) {
     if (cursor.memberDone) {
       return {
-        cursor: encodeCursor({ phase: 'tasks', cursor: null }),
-        nextPhase: 'tasks' as const,
+        cursor: null,
+        nextPhase: 'complete' as const,
         stagedCount,
       }
     }
@@ -406,8 +405,8 @@ async function captureThreads(
       .paginate({ cursor: memberCursor, numItems: 1 })
     if (memberPage.page.length === 0) {
       return {
-        cursor: encodeCursor({ phase: 'tasks', cursor: null }),
-        nextPhase: 'tasks' as const,
+        cursor: null,
+        nextPhase: 'complete' as const,
         stagedCount,
       }
     }
@@ -504,8 +503,8 @@ async function captureThreads(
   }
   if (cursor.memberDone) {
     return {
-      cursor: encodeCursor({ phase: 'tasks', cursor: null }),
-      nextPhase: 'tasks' as const,
+      cursor: null,
+      nextPhase: 'complete' as const,
       stagedCount,
     }
   }
@@ -533,22 +532,6 @@ export async function captureExitBatch(
     case 'channels': {
       const result = await captureChannels(ctx, input, cursor.cursor)
       return { ...result, phase: result.nextPhase, cursor: result.cursor }
-    }
-    case 'tasks': {
-      const result = await captureTaskExitStagingBatch(ctx, {
-        projectCompanyId: input.projectCompanyId,
-        projectId: input.projectId,
-        operationId: input.operationId,
-        cutoff: input.cutoff,
-        cursor: cursor.cursor,
-      })
-      return {
-        phase: result.done ? 'complete' as const : 'tasks' as const,
-        cursor: result.done
-          ? null
-          : encodeCursor({ phase: 'tasks', cursor: result.cursor }),
-        stagedCount: result.stagedCount,
-      }
     }
     case 'threads': {
       const result = await captureThreads(ctx, input, participation, cursor)

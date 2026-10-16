@@ -7,11 +7,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from '#/components/ui/input'
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from '#/components/ui/popover'
 import { Textarea } from '#/components/ui/textarea'
-import type { TaskIdentity } from '#/features/tasks/task-types'
+
 import type { GroupMessageItem, ReplyToMessagePreview } from '../thread-item-components'
 import { getGroupAvatar } from '../group-avatar'
 import type { GroupReference } from '../group-types'
-import { CreateTaskFromMessage } from '#/features/tasks/ConversationTaskActions'
+
 
 export function MessageActions({
   activeGroupId,
@@ -19,9 +19,7 @@ export function MessageActions({
   canDelete,
   canForward,
   canReply = true,
-  canCreateTasks = true,
   groups,
-  identity,
   item,
   onDeleteMessage,
   onForwardMessage,
@@ -32,9 +30,7 @@ export function MessageActions({
   canDelete: boolean
   canForward: boolean
   canReply?: boolean
-  canCreateTasks?: boolean
   groups: Array<GroupReference>
-  identity?: TaskIdentity
   item: GroupMessageItem
   onDeleteMessage: (messageId: Id<'messages'>) => Promise<boolean>
   onForwardMessage: (input: {
@@ -65,7 +61,7 @@ export function MessageActions({
         item={item}
         onForwardMessage={onForwardMessage}
       />
-      {canCreateTasks ? <CreateTaskFromMessage identity={identity} message={item.message} /> : null}
+
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

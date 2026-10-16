@@ -5,8 +5,6 @@ import { mutation, query } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { canRoleJoinDefaultGroup, requireProjectManager, requireProjectMember, requireProjectOwner } from './lib/permissions'
-import { invalidateTaskEvidence } from './lib/taskEvidence'
-import { deleteTaskProjectData } from './lib/taskLifecycle'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
 import { assertProjectSnapshotWritable, readProjectSnapshotState } from './lib/projectSnapshotLock'
 
@@ -269,9 +267,6 @@ export const remove = mutation({
 
     const projectAttachments = attachments.filter((attachment) => attachment.projectId === args.projectId)
     await Promise.all(projectAttachments.map((attachment) => ctx.storage.delete(attachment.storageId).catch(() => undefined)))
-    for (const message of messages) await invalidateTaskEvidence(ctx, { messageId: message._id })
-    for (const attachment of projectAttachments) await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
-    await deleteTaskProjectData(ctx, args.projectId)
     for (const row of groupNotificationSettings) {
       if (groupIds.has(row.groupId)) await ctx.db.delete(row._id)
     }

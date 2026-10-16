@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/empty-state';
 import { MessageActions } from '@/components/message-actions';
 import { OptionsSheet, SheetInput, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
-import { TaskInlineCards } from '@/components/task-inline-cards';
+
 import { ThreadRow, type DetailedMessage, type GroupedThreadItem, resolveMentionIds, resolveMentionProjectMemberIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -24,11 +24,11 @@ import { hapticLight } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfig } from '@/lib/release-config';
-import type { MobileTaskIdentity } from '@/lib/task-navigation';
+
 import { threadConversationHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
-import { TaskLinkBatchProvider } from '@/lib/task-link-context';
+
 
 export default function ThreadScreen() {
   const theme = useTheme();
@@ -87,7 +87,7 @@ export default function ThreadScreen() {
   const setStatus = useMutation(api.channelThreads.setStatus);
   const rename = useMutation(api.channelThreads.rename);
   const createReport = useMutation(api.reports.create);
-  const createTask = useMutation(api.tasks.create);
+
   const deleteMessage = useMutation(api.messages.remove);
   const sendSignatureRef = useRef<string | null>(null);
   const [replySelection, setReplySelection] = useState<{ scopeKey: string; message: DetailedMessage } | null>(null);
@@ -123,11 +123,7 @@ export default function ThreadScreen() {
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
   const mentionCandidates = useMemo(() => buildMentionCandidates(memberItems), [memberItems]);
   const readOnly = archive === '1' || navigation?.archived === true || thread?.thread.status === 'archived';
-  const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
-    archived: readOnly,
-    companyId: cid,
-    membershipId: pmid,
-  } : null, [cid, pmid, readOnly]);
+
 
   useEffect(() => {
     if (thread) setRenameValue(thread.thread.name);
@@ -299,25 +295,6 @@ export default function ThreadScreen() {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
       ...(!readOnly ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
-      ...(!readOnly && releaseConfig.tasks ? [{
-        label: 'Create task',
-        icon: 'plus' as const,
-        onPress: () => {
-          if (!pid || !gid) return;
-          const source = actionTarget.item.message.body;
-          const reference = { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true };
-          void createTask({
-            projectId: pid,
-            groupId: gid,
-            title: source.trim().slice(0, 180) || 'Follow up',
-            priority: 'none',
-            references: [reference],
-            idempotencyKey: `${actionTarget.key}:${Date.now()}`,
-            actingCompanyId: cid,
-            projectMemberId: pmid,
-          });
-        },
-      }] : []),
       ...(!readOnly &&
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
@@ -367,7 +344,7 @@ export default function ThreadScreen() {
         });
       } },
     ];
-  }, [actionTarget, cid, createReport, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, replyMessageId, setReplyTo, trackUserId]);
+  }, [actionTarget, cid, createReport, deleteMessage, pid, pmid, readOnly, replyMessageId, setReplyTo, trackUserId]);
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
     if (item.kind === 'date-sep') return null;
@@ -379,13 +356,9 @@ export default function ThreadScreen() {
         onLongPress={() => { hapticLight(); setActionTarget(item); setActionsOpen(true); }}
         onSwipeReply={readOnly ? undefined : () => setReplyTo(item.item)}
       />
-      {releaseConfig.tasks && pid ? <TaskInlineCards
-        identity={taskIdentity}
-        messageId={item.item.message._id}
-        projectId={pid}
-      /> : null}
+
     </>;
-  }, [pid, readOnly, releaseConfig.tasks, setReplyTo, taskIdentity, trackUserId]);
+  }, [readOnly, setReplyTo, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -442,7 +415,7 @@ export default function ThreadScreen() {
     return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Thread' }} /><EmptyState body="Opening the authorized conversation…" icon="forum-outline" title="Loading thread" /></ThemedView>;
   }
   const source = thread.source
-  const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
+
 
   return (
     <ThemedView style={styles.screen}>
@@ -464,11 +437,7 @@ export default function ThreadScreen() {
       {notice ? <ThemedText accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.success }]} type="small">{notice}</ThemedText> : null}
       {error ? <ThemedText accessibilityLiveRegion="assertive" style={[styles.error, { color: theme.danger }]} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
       {readOnly ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Archived thread</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">This conversation is read-only.</ThemedText></View> : null}
-      <TaskLinkBatchProvider
-        enabled={releaseConfig.tasks}
-        identity={taskIdentity}
-        messageIds={taskLinkMessageIds}
-      >
+
       <FlatList
           contentContainerStyle={styles.list}
           style={styles.flex}
@@ -496,7 +465,7 @@ export default function ThreadScreen() {
           renderItem={renderItem}
           viewabilityConfig={viewabilityConfig}
         />
-      </TaskLinkBatchProvider>
+
       {!readOnly ? <Composer
         activeGroupName={thread.thread.name}
         busy={busy}

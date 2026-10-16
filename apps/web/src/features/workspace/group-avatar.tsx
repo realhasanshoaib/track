@@ -89,7 +89,7 @@ const groupAvatarRules: GroupAvatarRule[] = [
   { keywords: ['web', 'website', 'landing', 'site'], Icon: Globe2, tone: 'sky' },
   { keywords: ['api', 'integration', 'sync', 'connector'], Icon: Cpu, tone: 'violet' },
   { keywords: ['meeting', 'standup', 'sync', 'weekly'], Icon: CalendarDays, tone: 'stone' },
-  { keywords: ['task', 'action', 'todo', 'follow up'], Icon: TicketCheck, tone: 'green' },
+  { keywords: ['action', 'todo', 'follow up'], Icon: TicketCheck, tone: 'green' },
   { keywords: ['procurement', 'supplier', 'purchase'], Icon: ShoppingCart, tone: 'amber' },
   { keywords: ['logistics', 'delivery', 'shipping', 'fleet'], Icon: Truck, tone: 'orange' },
   { keywords: ['hr', 'people', 'recruiting', 'hiring'], Icon: UserRoundCheck, tone: 'rose' },

@@ -99,7 +99,6 @@ export function WorkspaceDialogs({
               <label className="track-dialog-field">
                 <span>Project name</span>
                 <Input
-                  autoFocus
                   onChange={(event) => setProjectName(event.currentTarget.value)}
                   value={projectName}
                 />
@@ -143,7 +142,6 @@ export function WorkspaceDialogs({
               <label className="track-dialog-field">
                 <span>Group name</span>
                 <Input
-                  autoFocus
                   onChange={(event) => setGroupName(event.currentTarget.value)}
                   value={groupName}
                 />
@@ -176,7 +174,6 @@ export function WorkspaceDialogs({
               <label className="track-dialog-field">
                 <span>Email</span>
                 <Input
-                  autoFocus
                   onChange={(event) => setInviteEmail(event.currentTarget.value)}
                   type="email"
                   value={inviteEmail}

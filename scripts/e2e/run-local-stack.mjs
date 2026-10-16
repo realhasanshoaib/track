@@ -61,7 +61,6 @@ writeFileSync(convexEnvFile, [
   `SITE_URL=${siteUrl}`,
   `BETTER_AUTH_URL=${siteUrl}`,
   'TRACK_COMPANY_MODEL_ENABLED=false',
-  'TRACK_TASKS_ENABLED=true',
   'TRACK_THREADS_ENABLED=true',
 ].join('\n') + '\n')
 

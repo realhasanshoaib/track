@@ -41,37 +41,6 @@ export function messagePushCopy(input: {
   return { title: 'Track', body: `New message from ${sender} in ${location}` }
 }
 
-export function taskPushCopy(input: {
-  eventKind: string
-  projectName: string
-  publicKey: string
-  taskTitle: string
-  previewMode: 'full' | 'context' | 'hidden'
-}) {
-  const event = input.eventKind.replaceAll('_', ' ')
-  if (input.previewMode === 'hidden') return { title: 'Track', body: `New task ${event}` }
-  const project = safePushLabel(input.projectName, 'a Project')
-  const publicKey = safePushLabel(input.publicKey, 'task')
-  const verb = input.eventKind === 'assignment'
-    ? 'You were assigned'
-    : input.eventKind === 'assignment_lost'
-      ? 'Assignment changed for'
-      : input.eventKind === 'mention'
-        ? 'You were mentioned on'
-        : input.eventKind === 'due_soon'
-          ? 'Due soon'
-          : input.eventKind === 'overdue'
-            ? 'Overdue'
-          : 'Task updated'
-  if (input.previewMode === 'full') {
-    return {
-      title: safePushLabel(`${publicKey} · ${project}`, 'Track task'),
-      body: safePushBody(`${verb}: ${input.taskTitle}`, `${verb} ${publicKey}`),
-    }
-  }
-  return { title: 'Track', body: `${verb} ${publicKey} in ${project}` }
-}
-
 export function retryDelayMs(attemptNumber: number) {
   return Math.min(30_000, 1_000 * 2 ** Math.max(0, attemptNumber - 1))
 }

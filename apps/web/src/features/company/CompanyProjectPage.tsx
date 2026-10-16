@@ -559,7 +559,7 @@ export function CompanyProjectPage({
         <CompanyProjectNavigation
           actingCompanyId={actingCompanyId}
           activeArea="company"
-          tasksEnabled={releaseConfig.tasks}
+
         />
         <section className="company-hub">
           <header className="company-hub-header">
@@ -675,7 +675,6 @@ export function CompanyProjectPage({
         projectMemberId={projectMemberId}
         readOnly={readOnly}
         releaseConfig={{
-          tasks: releaseConfig.tasks,
           threads: releaseConfig.threads,
         }}
         replyToMessage={replyToMessage}

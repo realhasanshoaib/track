@@ -5,8 +5,6 @@ import { companyCoreTables } from './schema/companyCoreTables'
 import { companyProjectTables } from './schema/companyProjectTables'
 import { messageUploadTables } from './schema/messageUploadTables'
 import { projectExitTables } from './schema/projectExitTables'
-import { taskAutomationTables } from './schema/taskAutomationTables'
-import { taskCoreTables } from './schema/taskCoreTables'
 import {
   channelStatus,
   companyProjectRole,
@@ -39,12 +37,6 @@ const groupNotificationMode = v.union(
   v.literal('all'),
   v.literal('mentions'),
   v.literal('none'),
-)
-
-const taskPushNotificationMode = v.union(
-  v.literal('important'),
-  v.literal('all'),
-  v.literal('muted'),
 )
 
 const pushPermissionState = v.union(
@@ -82,9 +74,6 @@ const contentReportTargetType = v.union(
   v.literal('message'),
   v.literal('attachment'),
   v.literal('voice_note'),
-  v.literal('task'),
-  v.literal('task_comment'),
-  v.literal('task_suggestion'),
 )
 
 const contentReportReason = v.union(
@@ -186,8 +175,6 @@ export default defineSchema({
   ...companyProjectTables,
   ...projectExitTables,
   ...messageUploadTables,
-  ...taskCoreTables,
-  ...taskAutomationTables,
 
   users: defineTable({
     googleSubject: v.string(),
@@ -495,7 +482,6 @@ export default defineSchema({
   notificationSettings: defineTable({
     userId: v.id('users'),
     globalMode: notificationMode,
-    taskMode: v.optional(taskPushNotificationMode),
     previewMode: v.optional(v.union(v.literal('full'), v.literal('context'), v.literal('hidden'))),
     soundEnabled: v.optional(v.boolean()),
     badgesEnabled: v.optional(v.boolean()),
@@ -568,7 +554,7 @@ export default defineSchema({
     .index('by_native_token', ['nativePushToken']),
 
   pushDeliveryIntents: defineTable({
-    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('test')),
+    sourceKind: v.union(v.literal('message'), v.literal('test')),
     sourceId: v.string(),
     eventKind: v.string(),
     recipientUserId: v.id('users'),
@@ -597,7 +583,7 @@ export default defineSchema({
     .index('by_created_at', ['createdAt']),
 
   pushNotificationEvents: defineTable({
-    sourceKind: v.union(v.literal('message'), v.literal('task'), v.literal('test')),
+    sourceKind: v.union(v.literal('message'), v.literal('test')),
     sourceId: v.string(),
     eventKind: v.string(),
     eligibleRecipientCount: v.number(),
@@ -630,9 +616,6 @@ export default defineSchema({
     targetType: contentReportTargetType,
     targetMessageId: v.optional(v.id('messages')),
     targetAttachmentId: v.optional(v.id('attachments')),
-    targetTaskId: v.optional(v.id('tasks')),
-    targetTaskCommentId: v.optional(v.id('taskComments')),
-    targetTaskSuggestionId: v.optional(v.id('taskSuggestions')),
     reason: contentReportReason,
     note: v.optional(v.string()),
     status: v.union(

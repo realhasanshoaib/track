@@ -6,7 +6,6 @@ import {
 
 export const releaseFeatureEnvironmentVariables = {
   companyModel: 'TRACK_COMPANY_MODEL_ENABLED',
-  tasks: 'TRACK_TASKS_ENABLED',
   threads: 'TRACK_THREADS_ENABLED',
 } as const
 
@@ -23,7 +22,6 @@ export function readReleaseFeatureFlags(
 ): ReleaseFeatureFlags {
   return {
     companyModel: parseReleaseFeatureFlag(environment.TRACK_COMPANY_MODEL_ENABLED),
-    tasks: parseReleaseFeatureFlag(environment.TRACK_TASKS_ENABLED),
     threads: parseReleaseFeatureFlag(environment.TRACK_THREADS_ENABLED),
   }
 }
@@ -32,7 +30,6 @@ export const getReleaseConfig = query({
   args: {},
   handler: () => readReleaseFeatureFlags({
     TRACK_COMPANY_MODEL_ENABLED: process.env.TRACK_COMPANY_MODEL_ENABLED,
-    TRACK_TASKS_ENABLED: process.env.TRACK_TASKS_ENABLED,
     TRACK_THREADS_ENABLED: process.env.TRACK_THREADS_ENABLED,
   }),
 })

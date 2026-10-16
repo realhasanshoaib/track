@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { messagePushCopy, safePushLabel, taskPushCopy } from './pushDelivery'
+import { messagePushCopy, safePushLabel } from './pushDelivery'
 
 describe('privacy-safe push delivery helpers', () => {
-  it('keeps message and task previews scoped to the selected privacy mode', () => {
+  it('keeps message previews scoped to the selected privacy mode', () => {
     const messageCases = [
       {
         input: {
@@ -40,17 +40,6 @@ describe('privacy-safe push delivery helpers', () => {
       expect(messagePushCopy(testCase.input)).toEqual(testCase.expected)
     }
 
-    expect(taskPushCopy({
-      eventKind: 'assignment', projectName: 'Mobile release', publicKey: 'T-184',
-      taskTitle: 'Prepare the confidential launch', previewMode: 'context',
-    })).toEqual({ title: 'Track', body: 'You were assigned T-184 in Mobile release' })
-    expect(taskPushCopy({
-      eventKind: 'assignment', projectName: 'Mobile release', publicKey: 'T-184',
-      taskTitle: 'Prepare the confidential launch', previewMode: 'full',
-    })).toEqual({
-      title: 'T-184 · Mobile release',
-      body: 'You were assigned: Prepare the confidential launch',
-    })
     expect(safePushLabel(' Launch\n readiness ', 'Channel')).toBe('Launch readiness')
   })
 })

@@ -60,15 +60,6 @@
   },
   {
     "type": "module",
-    "from": "apps/mobile/src/components/task-detail-types.ts",
-    "to": "apps/mobile/src/components/task-detail-types.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
     "from": "apps/mobile/src/hooks/use-color-scheme.ts",
     "to": "apps/mobile/src/hooks/use-color-scheme.ts",
     "rule": {
@@ -143,15 +134,6 @@
     "type": "module",
     "from": "apps/mobile/src/lib/platform-storage.ts",
     "to": "apps/mobile/src/lib/platform-storage.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
-    "from": "apps/mobile/src/lib/task-navigation.ts",
-    "to": "apps/mobile/src/lib/task-navigation.ts",
     "rule": {
       "severity": "warn",
       "name": "no-orphans"

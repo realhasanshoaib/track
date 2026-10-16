@@ -1,20 +1,16 @@
-import { resolveReleaseFeatureFlag } from '@track/shared/feature-flags'
 import { v } from 'convex/values'
 
 import type { Id } from './_generated/dataModel'
 import { query } from './_generated/server'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-import { createTaskRequestScope } from './lib/taskPolicy'
+import { searchNormalizedProjectArchive } from './lib/archivedProjectSearch'
 import { threadsEnabled } from './lib/channelThreadPolicy'
-import { searchArchivedTasks } from './lib/taskData'
-import { archivedTaskSearchHit, searchNormalizedProjectArchive } from './lib/archivedProjectSearch'
 
 const searchScope = v.union(
   v.literal('all'),
   v.literal('messages'),
   v.literal('files'),
   v.literal('groups'),
-  v.literal('tasks'),
   v.literal('threads'),
 )
 
@@ -75,7 +71,6 @@ export const project = query({
         files: [],
         groups: [],
         messages: [],
-        tasks: [],
         threads: [],
       }
     }
@@ -264,49 +259,6 @@ export const project = query({
           title: group.name,
         }))
 
-    const tasksIncluded = resolveReleaseFeatureFlag(process.env.TRACK_TASKS_ENABLED) && enabled(filter, 'tasks')
-    const entitlement = access.companyAccess?.entitlement
-    const archivedTaskViews = tasksIncluded && entitlement && access.companyAccess
-      ? await searchArchivedTasks(ctx, {
-          entitlement, projectMember: access.companyAccess.projectMember,
-        }, term, perSectionLimit)
-      : []
-    const taskCandidates = tasksIncluded && !entitlement
-      ? await ctx.db.query('tasks').withSearchIndex('search_tasks', (q) =>
-          q.search('searchText', term).eq('projectId', args.projectId),
-        ).take(perSectionLimit * 4)
-      : []
-    const taskScope = taskCandidates.length
-      ? await createTaskRequestScope(ctx, access.actor, args.projectId, args)
-      : null
-    const taskResults = archivedTaskViews.map(archivedTaskSearchHit)
-    for (const task of taskCandidates) {
-      if (task.archivedAt || !taskScope) continue
-      if (task.groupId) {
-        if (!visibleGroupIds.has(String(task.groupId))) continue
-        const taskAccess = await taskScope.forGroup(task.groupId)
-        if (!taskAccess.capabilities.canReadChannel) continue
-      }
-      const [board, state, assignee] = await Promise.all([
-        ctx.db.get(task.boardId),
-        ctx.db.get(task.workflowStateId),
-        task.assigneeProjectMemberId ? ctx.db.get(task.assigneeProjectMemberId) : null,
-      ])
-      if (!board || !state) continue
-      taskResults.push({
-        createdAt: task.createdAt,
-        groupId: task.groupId,
-        groupName: task.groupId ? 'Channel task' : 'Project task',
-        id: String(task._id),
-        kind: 'task' as const,
-        preview: `${state.name} · ${task.priority}${task.dueDate ? ` · due ${task.dueDate}` : ''}`,
-        subtitle: `${board.name}${assignee ? ' · assigned' : ''}`,
-        taskKey: task.publicKey,
-        title: task.title,
-      })
-      if (taskResults.length >= perSectionLimit) break
-    }
-
     const channelThreads = !cutoff && threadsEnabled() && enabled(filter, 'threads')
       && visibleGroupIdValues.length > 0
       ? await ctx.db
@@ -366,7 +318,6 @@ export const project = query({
       files: fileResults,
       groups: groupResults,
       messages: messageResults,
-      tasks: taskResults,
       threads: threadResults,
     }
   },

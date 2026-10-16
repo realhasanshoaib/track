@@ -14,7 +14,6 @@ import {
   requireCompanyProjectManager,
   resolveCompanyProjectAccess,
 } from './lib/companyPolicy'
-import { removeTaskMemberFromScope } from './lib/taskLifecycle'
 
 async function activeChannelParticipantIds(ctx: MutationCtx, groupId: Id<'groups'>) {
   const memberships = await ctx.db.query('groupMembers')
@@ -386,9 +385,6 @@ export const updateOwnCompanyMember = mutation({
         isSteward: args.active && args.steward,
         endedAt: args.active ? undefined : now,
         updatedAt: now,
-      })
-      if (!args.active) await removeTaskMemberFromScope(ctx, {
-        projectId: args.projectId, groupId: args.groupId, projectMemberId: target._id,
       })
       await recordChannelParticipantChange(ctx, args.groupId, previousParticipantIds, now)
       return membership._id

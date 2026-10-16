@@ -115,7 +115,7 @@ beforeEach(() => {
 })
 
 describe('workspace profile boundary', () => {
-  it.each(['/workspace', '/workspace/company', '/workspace/company-projects/invited-project?view=board#task']) (
+  it.each(['/workspace', '/workspace/company', '/workspace/company-projects/invited-project?groupId=channel']) (
     'provisions a new account before opening %s, then returns there after profile save', async (path) => {
       const router = openWorkspace(path)
       await waitFor(() => expect(backend.ensure).toHaveBeenCalledTimes(1))

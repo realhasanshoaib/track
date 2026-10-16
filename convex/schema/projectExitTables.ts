@@ -14,7 +14,6 @@ export const exitSnapshotPhase = v.union(
   v.literal('members'),
   v.literal('channels'),
   v.literal('threads'),
-  v.literal('tasks'),
   v.literal('complete'),
 )
 

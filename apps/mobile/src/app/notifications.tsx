@@ -13,7 +13,6 @@ import { useTheme } from '@/hooks/use-theme';
 import { usePushNotifications } from '@/lib/push-notifications';
 
 type ConversationMode = 'all' | 'mentions' | 'none';
-type TaskMode = 'important' | 'all' | 'muted';
 type PreviewMode = 'full' | 'context' | 'hidden';
 
 export default function NotificationSettingsScreen() {
@@ -25,7 +24,6 @@ export default function NotificationSettingsScreen() {
   const setPreferences = useMutation(api.notifications.setMobilePreferences);
   const global = settings?.global ?? {
     globalMode: 'all' as const,
-    taskMode: 'all' as const,
     previewMode: 'full' as const,
     soundEnabled: true,
     badgesEnabled: true,
@@ -33,7 +31,6 @@ export default function NotificationSettingsScreen() {
 
   function update(changes: Partial<{
     conversationMode: ConversationMode;
-    taskMode: TaskMode;
     previewMode: PreviewMode;
     soundEnabled: boolean;
     badgesEnabled: boolean;
@@ -60,8 +57,8 @@ export default function NotificationSettingsScreen() {
   const permissionBody = push.permissionState === 'denied'
     ? `Enable Track in ${Platform.OS === 'ios' ? 'iOS' : 'Android'} Settings to receive Project activity.`
     : push.permissionState === 'granted' || push.permissionState === 'provisional'
-      ? 'Track will notify this device for eligible conversation and task activity.'
-      : 'Get timely message previews, mentions, replies, Channel activity, and task changes.';
+      ? 'Track will notify this device for eligible conversation activity.'
+      : 'Get timely message previews, mentions, replies, Channel activity.';
 
   return (
     <ThemedView style={styles.screen}>
@@ -92,14 +89,8 @@ export default function NotificationSettingsScreen() {
             ))}
           </SheetSection>
 
-          <SheetSection title="Task default">
-            {(['important', 'all', 'muted'] as const).map((mode) => (
-              <SheetRow key={mode} label={mode === 'important' ? 'Important activity' : mode === 'all' ? 'All followed activity' : 'Off'} selected={global.taskMode === mode} onPress={() => update({ taskMode: mode })} />
-            ))}
-          </SheetSection>
-
           <SheetSection title="Privacy">
-            <SheetRow label="Show message and task previews" selected={global.previewMode === 'full'} onPress={() => update({ previewMode: 'full' })} />
+            <SheetRow label="Show message previews" selected={global.previewMode === 'full'} onPress={() => update({ previewMode: 'full' })} />
             <SheetRow label="Show sender and work context" selected={global.previewMode === 'context'} onPress={() => update({ previewMode: 'context' })} />
             <SheetRow label="Hide all work context" selected={global.previewMode === 'hidden'} onPress={() => update({ previewMode: 'hidden' })} />
           </SheetSection>

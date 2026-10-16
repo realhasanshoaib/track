@@ -4,16 +4,12 @@ import { mutation } from './_generated/server'
 import { requireAuthenticatedActor } from './lib/actorContext'
 import { appendAuditEvent } from './lib/audit'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-import { requireTaskAccess, resolveTaskRequestContext } from './lib/taskPolicy'
 import { resolveActorProjectMember, threadsEnabled } from './lib/channelThreadPolicy'
 
 const targetType = v.union(
   v.literal('message'),
   v.literal('attachment'),
   v.literal('voice_note'),
-  v.literal('task'),
-  v.literal('task_comment'),
-  v.literal('task_suggestion'),
 )
 
 const reason = v.union(
@@ -35,14 +31,11 @@ export const create = mutation({
     groupId: v.optional(v.id('groups')),
     targetMessageId: v.optional(v.id('messages')),
     targetAttachmentId: v.optional(v.id('attachments')),
-    targetTaskId: v.optional(v.id('tasks')),
-    targetTaskCommentId: v.optional(v.id('taskComments')),
-    targetTaskSuggestionId: v.optional(v.id('taskSuggestions')),
     reason,
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
+    await requireAuthenticatedActor(ctx)
     const baseAccess = await authorizeScopedRequest(ctx, {
       projectId: args.projectId,
       groupId: args.groupId,
@@ -68,30 +61,6 @@ export const create = mutation({
       channelThreadId = message?.channelThreadId
       await authorizeScopedRequest(ctx, { projectId: args.projectId, groupId: attachment.groupId, claimedUserId: args.reporterId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'readChannel')
     }
-    if (args.targetTaskId) {
-      const access = await requireTaskAccess(ctx, actor, args.targetTaskId, args)
-      if (access.task.projectId !== args.projectId || access.task.groupId !== args.groupId) {
-        throw new Error('task_access_changed')
-      }
-    }
-    if (args.targetTaskCommentId) {
-      const comment = await ctx.db.get(args.targetTaskCommentId)
-      if (!comment) throw new Error('task_access_changed')
-      const access = await requireTaskAccess(ctx, actor, comment.taskId, args)
-      if (access.task.projectId !== args.projectId || comment.originalGroupId !== args.groupId) {
-        throw new Error('task_access_changed')
-      }
-    }
-    if (args.targetTaskSuggestionId) {
-      const suggestion = await ctx.db.get(args.targetTaskSuggestionId)
-      if (!suggestion || suggestion.projectId !== args.projectId || suggestion.groupId !== args.groupId) {
-        throw new Error('task_access_changed')
-      }
-      const access = await resolveTaskRequestContext(
-        ctx, actor, suggestion.projectId, args, suggestion.groupId,
-      )
-      if (suggestion.groupId && !access.capabilities.canReadChannel) throw new Error('task_access_changed')
-    }
     if (channelThreadId && !threadsEnabled()) throw new Error('threads_disabled')
 
     const now = Date.now()
@@ -112,9 +81,6 @@ export const create = mutation({
       targetType: args.targetType,
       targetMessageId: args.targetMessageId,
       targetAttachmentId: args.targetAttachmentId,
-      targetTaskId: args.targetTaskId,
-      targetTaskCommentId: args.targetTaskCommentId,
-      targetTaskSuggestionId: args.targetTaskSuggestionId,
       reason: args.reason,
       note: note || undefined,
       status: 'open',

@@ -7,7 +7,7 @@ import { internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import { action, internalAction } from './_generated/server'
 import { sendNativePushBatch } from './lib/nativePush'
-import { messagePushCopy, taskPushCopy } from './lib/pushDelivery'
+import { messagePushCopy } from './lib/pushDelivery'
 import type { NativePushInput } from './lib/pushProviderTypes'
 
 type NativeTarget = {
@@ -176,86 +176,6 @@ export const deliverMessageNotifications = internalAction({
   },
 })
 
-export const deliverTaskNotification = internalAction({
-  args: { notificationId: v.id('taskNotifications') },
-  handler: async (ctx, args) => {
-    const notification = await ctx.runQuery((internal as any).taskNotifications.collectPushTargets, args)
-    if (!notification) return
-    if (!notification.targets.length) {
-      await ctx.runMutation(internal.pushDelivery.recordEvent, {
-        sourceKind: 'task', sourceId: String(args.notificationId), eventKind: notification.eventKind,
-        eligibleRecipientCount: 0, createdIntentCount: 0, webTargetCount: 0,
-      })
-      return
-    }
-    const webConfigured = webPushDetails()
-    const nativeIntentIds: Array<Id<'pushDeliveryIntents'>> = []
-    await Promise.all(notification.targets.map(async (rawTarget: NativeTarget | LegacyNativeTarget | WebTarget) => {
-      const copy = taskPushCopy({
-        eventKind: notification.eventKind,
-        projectName: notification.projectName,
-        publicKey: notification.publicKey,
-        taskTitle: notification.taskTitle,
-        previewMode: rawTarget.kind === 'web' ? 'context' : rawTarget.previewMode,
-      })
-      if (rawTarget.kind === 'web') {
-        if (!webConfigured) return
-        try {
-          await webPush.sendNotification(JSON.parse(rawTarget.tokenOrEndpoint), JSON.stringify({
-            ...copy, icon: '/logo192.png', tag: `track-task-${args.notificationId}`, url: notification.url,
-          }))
-        } catch (error) {
-          const statusCode = typeof error === 'object' && error && 'statusCode' in error ? error.statusCode : null
-          if (statusCode === 404 || statusCode === 410) {
-            await ctx.runMutation(internal.notifications.disableSubscription, { subscriptionId: rawTarget.subscriptionId })
-          }
-        }
-        return
-      }
-      const installationId = rawTarget.kind === 'native'
-        ? rawTarget.installationId
-        : await ctx.runMutation(internal.notifications.migrateLegacyNativeSubscription, {
-            subscriptionId: rawTarget.subscriptionId,
-          })
-      if (!installationId) return
-      const intentId = await ctx.runMutation(internal.pushDelivery.createIntent, {
-        sourceKind: 'task',
-        sourceId: String(args.notificationId),
-        eventKind: notification.eventKind,
-        recipientUserId: rawTarget.recipientUserId,
-        recipientProjectMemberId: notification.recipientProjectMemberId,
-        installationId,
-        idempotencyKey: `task:${args.notificationId}:${notification.recipientProjectMemberId}:${installationId}`,
-        title: copy.title,
-        body: copy.body,
-        data: {
-          schemaVersion: '1', eventKind: notification.eventKind,
-          projectId: String(notification.projectId), taskKey: notification.publicKey,
-          ...(notification.companyId ? { companyId: String(notification.companyId) } : {}),
-          membershipId: String(notification.recipientProjectMemberId),
-          url: notification.mobileUrl,
-        },
-        soundEnabled: rawTarget.soundEnabled,
-        badge: rawTarget.badge,
-        ttlMs: 24 * 60 * 60 * 1_000,
-        deferDispatch: true,
-      })
-      if (intentId) nativeIntentIds.push(intentId)
-    }))
-    for (let index = 0; index < nativeIntentIds.length; index += 100) {
-      await ctx.runAction(internal.pushNotifications.dispatchDeliveryBatch, {
-        intentIds: nativeIntentIds.slice(index, index + 100),
-      })
-    }
-    await ctx.runMutation(internal.pushDelivery.recordEvent, {
-      sourceKind: 'task', sourceId: String(args.notificationId), eventKind: notification.eventKind,
-      eligibleRecipientCount: 1,
-      createdIntentCount: nativeIntentIds.length,
-      webTargetCount: notification.targets.filter((target: any) => target.kind === 'web').length,
-    })
-  },
-})
-
 async function isIntentStillEligible(ctx: any, row: any) {
   const { intent, installation } = row
   if (!installation || !installation.enabled || !installation.nativePushToken ||
@@ -271,12 +191,7 @@ async function isIntentStillEligible(ctx: any, row: any) {
       target.projectMemberId === intent.recipientProjectMemberId,
     ))
   }
-  const current = await ctx.runQuery((internal as any).taskNotifications.collectPushTargets, {
-    notificationId: intent.sourceId as Id<'taskNotifications'>,
-  })
-  return Boolean(current?.targets.some((target: any) =>
-    target.kind === 'native' && target.installationId === intent.installationId,
-  ))
+  return false
 }
 
 export const dispatchDeliveryIntent = internalAction({

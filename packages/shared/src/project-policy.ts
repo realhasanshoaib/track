@@ -31,7 +31,6 @@ export type ProjectChannelCapabilities = Readonly<{
   canReadChannel: boolean
   canWriteChannel: boolean
   canStewardChannel: boolean
-  taskCollaboration: 'admin' | 'full' | 'scoped' | 'read_only'
 }>
 
 export function resolveProjectChannelCapabilities(
@@ -46,15 +45,6 @@ export function resolveProjectChannelCapabilities(
   const authorizedSteward =
     input.accessProfile === 'legacy' ? manager : manager && input.channelSteward === true
 
-  let taskCollaboration: ProjectChannelCapabilities['taskCollaboration'] = 'scoped'
-  if (readOnly) {
-    taskCollaboration = 'read_only'
-  } else if (manager) {
-    taskCollaboration = 'admin'
-  } else if (input.accessProfile === 'legacy' && input.projectRole === 'staff') {
-    taskCollaboration = 'full'
-  }
-
   return {
     accessProfile: input.accessProfile,
     accessMode: input.accessMode,
@@ -64,6 +54,5 @@ export function resolveProjectChannelCapabilities(
     canReadChannel: input.channelMember,
     canWriteChannel: !readOnly && input.channelMember && channelActive,
     canStewardChannel: !readOnly && input.channelMember && authorizedSteward,
-    taskCollaboration,
   }
 }

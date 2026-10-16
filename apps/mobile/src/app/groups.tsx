@@ -16,8 +16,7 @@ import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
-import { useReleaseConfig } from '@/lib/release-config';
-import { taskListHref } from '@/lib/task-navigation';
+
 import { usePushNotifications } from '@/lib/push-notifications';
 
 type MobileGroup = FunctionReturnType<typeof api.mobile.listGroupsPage>['page'][number];
@@ -25,7 +24,6 @@ type MobileGroup = FunctionReturnType<typeof api.mobile.listGroupsPage>['page'][
 export default function GroupsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const release = useReleaseConfig();
   const { trackUserId } = useTrackUser();
   const push = usePushNotifications();
   const { projectId, companyId, membershipId, archive } = useLocalSearchParams<{ projectId: string; companyId?: string; membershipId?: string; archive?: string }>();
@@ -71,19 +69,6 @@ export default function GroupsScreen() {
           headerLargeTitle: Platform.OS === 'ios',
           headerTransparent: Platform.OS === 'ios',
           headerBlurEffect: 'systemMaterial',
-          headerRight: () => release.tasks ? (
-            <Pressable
-              accessibilityLabel="Open tasks"
-              hitSlop={8}
-              onPress={() => router.push(taskListHref(projectId as Id<'projects'>, companyId && membershipId ? {
-                archived: archive === '1',
-                companyId: companyId as Id<'companies'>,
-                membershipId: membershipId as Id<'projectMembers'>,
-              } : null))}
-              style={styles.headerButton}>
-              <PlatformIcon color={theme.accent} name="briefcase-outline" size={22} />
-            </Pressable>
-          ) : null,
         }}
       />
 

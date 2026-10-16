@@ -17,7 +17,7 @@ Details, code references and evidence stay in tracker.yaml.
 
 ## First (P0)
 
-5 items — S: 0 · M: 3 · L: 2 · Unknown: 0
+4 items — S: 0 · M: 2 · L: 2 · Unknown: 0
 
 ### Groups
 
@@ -47,11 +47,6 @@ Details, code references and evidence stay in tracker.yaml.
               outside the loaded page.
 
 ### Platform
-
-- [Not started] Remove tasks and boards
-    **Size**: M — Tasks are self-contained apart from message links and notifications.
-    **Left**: Delete task code, tables, routes and screens in both apps.
-    **Left**: Remove task links from messages, search and notifications.
 
 - [Not started] Q9 Chat name and calm cyan look
     **Size**: M — Visible strings and theme tokens in both apps, plus design.md.
@@ -94,10 +89,9 @@ Details, code references and evidence stay in tracker.yaml.
 ### Verification and release
 
 - [Not started] End-to-end tests cover the chat journeys
-    **Size**: M — The harnesses exist; the tests must move from projects and tasks to
-              the eight journeys.
-    **Left**: Replace project and task tests with the eight chat journeys on web and
-              phone.
+    **Size**: M — The harnesses exist; the tests must move from project flows to the
+              eight journeys.
+    **Left**: Replace project tests with the eight chat journeys on web and phone.
     **Left**: Get a repeatably green run against the isolated backend.
 
 ## Later (P2)

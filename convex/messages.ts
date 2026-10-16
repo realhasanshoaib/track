@@ -1,6 +1,5 @@
 import {
   resolveProjectAccessProfile,
-  resolveReleaseFeatureFlag,
 } from '@track/shared/feature-flags'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
@@ -13,7 +12,6 @@ import { appendAuditEvent } from './lib/audit'
 import { listActiveChannelMemberships } from './lib/channelMembership'
 import { rateLimiter } from './lib/rateLimit'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-import { invalidateTaskEvidence } from './lib/taskEvidence'
 import {
   getArchivedChannelSnapshot,
   getArchivedMemberSnapshot,
@@ -910,9 +908,6 @@ export const send = mutation({
     await ctx.scheduler.runAfter(0, internal.pushNotifications.deliverMessageNotifications, {
       messageId,
     })
-    if (resolveReleaseFeatureFlag(process.env.TRACK_TASKS_ENABLED)) {
-      await ctx.scheduler.runAfter(0, (internal as any).taskDetection.queueForMessage, { messageId })
-    }
 
     return messageId
   },
@@ -1228,10 +1223,8 @@ export const remove = mutation({
       },
     })
 
-    await invalidateTaskEvidence(ctx, { messageId: message._id })
     for (const attachment of attachments) {
       if (!attachment) continue
-      await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
       await ctx.db.delete(attachment._id)
     }
     await ctx.db.delete(message._id)

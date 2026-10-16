@@ -1,18 +1,14 @@
+import type { FunctionReturnType } from 'convex/server'
+import type { api } from '../../../../../../convex/_generated/api'
 import type { ProjectSearchResult } from '#/features/workspace/search/ProjectSearchDialog'
 
 export type ProjectSearchSection = {
-  key: 'messages' | 'files' | 'threads' | 'groups' | 'tasks'
+  key: 'messages' | 'files' | 'threads' | 'groups'
   label: string
   results: ProjectSearchResult[]
 }
 
-type ProjectSearchResultsPayload = {
-  messages?: ProjectSearchResult[]
-  files?: ProjectSearchResult[]
-  groups?: ProjectSearchResult[]
-  tasks?: ProjectSearchResult[]
-  threads?: ProjectSearchResult[]
-} | null | undefined
+type ProjectSearchResultsPayload = FunctionReturnType<typeof api.search.project> | null | undefined
 
 export function buildProjectSearchSections(
   results: ProjectSearchResultsPayload,
@@ -37,11 +33,6 @@ export function buildProjectSearchSections(
       key: 'groups',
       label: 'Groups',
       results: results?.groups ?? [],
-    },
-    {
-      key: 'tasks',
-      label: 'Tasks',
-      results: results?.tasks ?? [],
     },
   ]
 }

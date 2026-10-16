@@ -15,7 +15,7 @@ import {
 import { formatRailLabel } from '#/features/workspace/lib/formatting'
 import { notificationModes } from '#/features/workspace/constants'
 import { notificationPermissionLabels, type WebNotificationPermission } from '#/features/workspace/web-notifications'
-import { ChannelTaskPanel } from '#/features/tasks/ConversationTaskActions'
+
 import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
 import type { GroupMessageItem } from '#/features/workspace/thread-items'
 import { useReleaseConfig } from '#/lib/release-config'
@@ -223,7 +223,7 @@ export function WorkspaceRail({
           {!references.length ? <p className="track-rail-empty">Files shared in this Channel appear here.</p> : null}
         </div>
       </section>
-      {releaseConfig.tasks && activeGroup ? <ChannelTaskPanel group={activeGroup} variant="rail" /> : null}
+
       {releaseConfig.threads && activeGroup && activeProjectId ? (
         <ChannelThreadBrowser
           groupId={activeGroup._id}

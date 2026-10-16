@@ -82,7 +82,6 @@ export type IconName =
   | 'sort'
   | 'star'
   | 'stop'
-  | 'subtask'
   | 'tag'
   | 'theme-light-dark'
   | 'trash-can-outline'
@@ -169,7 +168,6 @@ const SF_MAP: Partial<Record<IconName, SFSymbol>> = {
   'sort': 'arrow.up.arrow.down',
   'star': 'star',
   'stop': 'stop.fill',
-  'subtask': 'arrow.turn.down.right',
   'tag': 'tag',
   'theme-light-dark': 'circle.lefthalf.filled',
   'trash-can-outline': 'trash',
@@ -259,7 +257,6 @@ const ANDROID_MAP: Partial<Record<IconName, React.ComponentProps<typeof Material
   'sort': 'sort',
   'star': 'star',
   'stop': 'stop',
-  'subtask': 'subdirectory-arrow-right',
   'tag': 'label',
   'theme-light-dark': 'brightness-medium',
   'trash-can-outline': 'delete-outline',

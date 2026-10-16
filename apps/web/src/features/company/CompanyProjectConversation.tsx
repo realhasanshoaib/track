@@ -5,7 +5,7 @@ import type { api } from "../../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
-import { ChannelTaskPanel } from "#/features/tasks/ConversationTaskActions";
+
 import { ChannelThreadBrowser } from "#/features/threads/ChannelThreadBrowser";
 import type { ConversationComposerReply } from "#/features/workspace/components/ConversationComposer";
 import { ScopedConversationComposer } from "#/features/workspace/components/ScopedConversationComposer";
@@ -46,7 +46,6 @@ type CompanyProjectConversationProps = {
   projectMemberId: Id<"projectMembers">;
   readOnly: boolean;
   releaseConfig: {
-    tasks: boolean;
     threads: boolean;
   };
   snapshotState: ProjectSnapshotState | null | undefined;
@@ -116,7 +115,7 @@ export function CompanyProjectConversation({
         actingCompanyId={actingCompanyId}
         activeArea="conversation"
         activeProject={context}
-        tasksEnabled={releaseConfig.tasks}
+
         secondaryNavigation={
           <>
             {item.membership.status === "archived" ? (
@@ -259,13 +258,7 @@ export function CompanyProjectConversation({
           />
         ) : null}
         <aside className="company-project-conversation-rail">
-        {activeChannel && "projectId" in activeChannel && releaseConfig.tasks ? (
-          <ChannelTaskPanel
-            group={activeChannel}
-            identity={{ actingCompanyId, projectMemberId }}
-            variant="rail"
-          />
-        ) : null}
+
         {releaseConfig.threads && activeChannelId ? (
           <ChannelThreadBrowser
             context={{ actingCompanyId, projectMemberId }}

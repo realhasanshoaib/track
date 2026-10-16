@@ -11,7 +11,6 @@ const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 
 beforeEach(() => {
   vi.stubEnv('TRACK_COMPANY_MODEL_ENABLED', 'true')
-  vi.stubEnv('TRACK_TASKS_ENABLED', 'true')
   vi.stubEnv('TRACK_THREADS_ENABLED', 'true')
 })
 

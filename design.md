@@ -27,12 +27,12 @@ system changes, not for each component edit. This is not a visual QA signoff.
 
 Track is a warm, quiet workroom: paper-colored surfaces, dark stone typography,
 fine dividing lines, and small yellow signals. The main workspace is compact
-enough for active conversation and task work, without making every row a
+enough for active conversation, without making every row a
 competing card. Hierarchy comes from typography, alignment, and surface tone
 before decoration.
 
 Conversation leads. Company, Project, and Channel context stays recognizable
-while people move between messages, tasks, and threads. Dark mode keeps
+while people move between messages and threads. Dark mode keeps
 the same warm character rather than switching to a blue-black technology theme.
 
 ## 2. Color Palette & Roles
@@ -74,13 +74,12 @@ identity, unread state, conflict, and destructive intent never rely on color alo
 
 Inter is the interface and conversation family. SF Pro Rounded, with
 `ui-rounded` and Inter fallbacks, supplies restrained display headings; do not
-bundle the Apple font. Geist supports metadata. Geist Mono identifies task
-keys, keycaps, and file extensions rather than ordinary prose.
+bundle the Apple font. Geist supports metadata. Geist Mono identifies keycaps, and file extensions rather than ordinary prose.
 
 Use medium or semibold weight to establish headings and actions; keep message
 text comfortable for sustained reading. Metadata stays subordinate but legible.
-Long task titles and mixed left-to-right/right-to-left content must survive
-without hiding the words that distinguish one task from another.
+Long messages and mixed left-to-right/right-to-left content must survive
+without hiding the words that distinguish one message from another.
 
 ### Spacing Principles
 
@@ -100,7 +99,7 @@ Keep keyboard focus visible and name icon-only controls.
 
 ### Cards & Conversation Surfaces
 
-Task cards and supporting panels use light borders and modest rounding;
+Supporting panels use light borders and modest rounding;
 messages should read as a continuous conversation rather than a stack of
 oversized floating cards. Shared radii are 6, 8, and 12 pixels. Reserve full
 rounding for avatars, pills, and circles. Use shadows for overlays and sheets,
@@ -109,7 +108,7 @@ not to elevate every ordinary row.
 ### Navigation
 
 Group Projects under their Company and keep the current Project and Channel
-visible across conversation, task, and thread views. Collapsed navigation keeps
+visible across conversation and thread views. Collapsed navigation keeps
 identity, accessible names, and actions. Company badges explain representation
 without outranking the person's name. Do not reveal restricted Channel details
 in counts, snippets, or administrative explanations.
@@ -117,15 +116,12 @@ in counts, snippets, or administrative explanations.
 ### Inputs & Forms
 
 Forms use paper surfaces and explicit labels. The composer is anchored to its
-conversation and keeps text on failure. Task forms show conflicts without
-silently discarding edits. Loading, empty, offline, denied, error, and read-only
+conversation and keeps text on failure. Loading, empty, offline, denied, error, and read-only
 states require distinct, understandable treatment and an appropriate recovery path.
 
-### Tasks, Evidence & Archives
+### Conversation Evidence & Archives
 
-Keep references close to the task or answer they support. Workflow groups should
-combine equivalent states without disguising different workflows as the same
-status. Archived conversations have no writable controls. Distinguish a temporary
+Keep quote replies close to the messages they reference. Archived conversations have no writable controls. Distinguish a temporary
 Project capture pause from a Company's permanently frozen exit archive; explain
 the cutoff and show capture-management controls only to authorized administrators.
 
@@ -133,8 +129,7 @@ the cutoff and show capture-management controls only to authorized administrator
 
 ### Grid & Structure
 
-Use a stable navigation region and a flexible work surface. Task views inherit
-that shell instead of becoming a separate product. Dense member/settings lists
+Use a stable navigation region and a flexible work surface. Dense member/settings lists
 are appropriate; the conversation area prioritizes reading and composing.
 
 ### Whitespace Strategy
@@ -146,7 +141,7 @@ that pushes source context or primary actions out of view.
 ### Alignment & Visual Balance
 
 Align titles, metadata, and actions along readable edges. Keep author identity,
-represented Company, task status, and evidence legible before ornamental details.
+represented Company and evidence legible before ornamental details.
 Do not use company color or icon position as the only explanation of authority.
 
 ### Responsive Behavior & Touch
@@ -175,9 +170,6 @@ Primary buttons are ink, not yellow. For dark screens, specify warm charcoal
 
 - Design a Track Project conversation with a Company/Project sidebar, a clear
   Channel header, readable human messages, inline evidence, and a grounded composer.
-- Design a task detail surface in the same shell, keeping its conversation
-  reference, workflow state, and unsaved-edit conflict visible without visual noise.
-
 ### Incremental Iteration
 
 Refine one flow in the established shell before extending it. Check its dark,

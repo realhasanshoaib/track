@@ -89,19 +89,6 @@ test('real app operation timings and resource bytes stay inside budgets', async 
     }))
   }
 
-  const tasksLink = page.getByRole('link', { name: /Tasks.*Boards, my tasks, inbox/ }).first()
-  const tasksHref = await tasksLink.getAttribute('href')
-  expect(tasksHref).toBeTruthy()
-  const taskRouteMs = []
-  for (let index = 0; index < 3; index += 1) {
-    taskRouteMs.push(await measure(async () => {
-      await page.goto(tasksHref, { waitUntil: 'domcontentloaded' })
-      await expect(page.locator('button.task-card-open').filter({ hasText: 'E2E source-linked task' })).toBeVisible({ timeout: 30_000 })
-    }))
-    await page.goto(conversationUrl, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByText('E2E source message: assign an owner before launch.', { exact: true })).toBeVisible({ timeout: 30_000 })
-  }
-
   const sendAcknowledgementMs = []
   const composer = page.getByPlaceholder('Message browser-journeys...')
   for (let index = 0; index < 3; index += 1) {
@@ -160,7 +147,6 @@ test('real app operation timings and resource bytes stay inside budgets', async 
     generatedAt: new Date().toISOString(),
     fixture: {
       routeNavigationMs: percentile(routeNavigationMs, 0.95),
-      taskRouteMs: percentile(taskRouteMs, 0.95),
       sendAcknowledgementMs: percentile(sendAcknowledgementMs, 0.95),
       scrollInteractionMs: Math.round(scroll.durationMs * 100) / 100,
     },
@@ -172,7 +158,7 @@ test('real app operation timings and resource bytes stay inside budgets', async 
       count: appResources.length,
       entries: appResources,
     },
-    samples: { routeNavigationMs, taskRouteMs, sendAcknowledgementMs },
+    samples: { routeNavigationMs, sendAcknowledgementMs },
   }
   const outputPath = process.env.PERF_OUTPUT_PATH
     ? process.env.PERF_OUTPUT_PATH.replace(/\.json$/, `.${testInfo.project.name}.retry-${testInfo.retry}.json`)
@@ -184,7 +170,6 @@ test('real app operation timings and resource bytes stay inside budgets', async 
   expect(report.scroll.scrollHeight).toBeGreaterThan(report.scroll.clientHeight)
   expect(report.scroll.changedSteps).toBe(12)
   expect(report.fixture.routeNavigationMs).toBeLessThanOrEqual(budgets.fixture.routeNavigationMs)
-  expect(report.fixture.taskRouteMs).toBeLessThanOrEqual(budgets.fixture.taskRouteMs)
   expect(report.fixture.sendAcknowledgementMs).toBeLessThanOrEqual(budgets.fixture.sendAcknowledgementMs)
   expect(report.fixture.scrollInteractionMs).toBeLessThanOrEqual(budgets.fixture.scrollInteractionMs)
   expect(report.resources.bytes).toBeLessThanOrEqual(budgets.fixture.resourceBytes)

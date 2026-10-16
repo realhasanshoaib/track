@@ -4,7 +4,7 @@ import { useQuery } from 'convex/react'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
-import { useReleaseConfig } from '#/lib/release-config'
+
 import {
   MessageRow,
   type GroupMessageItem,
@@ -14,7 +14,7 @@ import type { ScopedComposerContext } from '#/features/workspace/chat/composer-s
 import type { GroupReference } from '#/features/workspace/group-types'
 import { formatThreadDayLabel, getThreadDayKey } from '#/features/workspace/lib/thread-date'
 import { buildMentionGroups } from '#/features/workspace/lib/mentions'
-import { TaskLinkBatchProvider } from '#/features/tasks/task-link-context'
+
 import {
   buildWorkspaceThreadItems,
 } from '#/features/workspace/search/chat-thread-data'
@@ -61,7 +61,6 @@ export function CompanyConversationTimeline({
   readOnly,
   visibleGroups,
 }: CompanyConversationTimelineProps) {
-  const release = useReleaseConfig()
   const messageStatus = messagePageStatus ?? 'Exhausted'
   const combinedPageStatus = messageStatus
   const channelMembers = useQuery(
@@ -131,7 +130,7 @@ export function CompanyConversationTimeline({
     )
   }
 
-  const taskLinkMessageIds = threadItems.map((entry) => entry.item.message._id)
+
   const content = (
     <div className="track-thread">
       {combinedPageStatus === 'CanLoadMore' || combinedPageStatus === 'LoadingMore' ? (
@@ -161,7 +160,7 @@ export function CompanyConversationTimeline({
               <MessageRow
                 activeGroupId={group._id}
                 busyAction={busyAction}
-                canCreateTasks={release.tasks && !readOnly}
+
                 canDeleteMessages={
                   !readOnly &&
                   (threadItem.item.message.authorProjectMemberId
@@ -172,7 +171,6 @@ export function CompanyConversationTimeline({
                 canReply={!readOnly}
                 currentUserId={actorId}
                 groups={forwardGroups}
-                identity={context}
                 item={threadItem.item}
                 mentionGroups={mentionGroups}
                 onDeleteMessage={onDeleteMessage}
@@ -188,12 +186,5 @@ export function CompanyConversationTimeline({
       })}
     </div>
   )
-  return release.tasks ? (
-    <TaskLinkBatchProvider
-      identity={context}
-      messageIds={taskLinkMessageIds}
-    >
-      {content}
-    </TaskLinkBatchProvider>
-  ) : content
+  return content
 }

@@ -17,11 +17,8 @@ import {
 import { isUploadResponse } from '#/features/workspace/chat/message-send'
 import { getMentionHandle } from '#/features/workspace/identity'
 import { MarkdownText } from '#/features/workspace/markdown'
-import {
-  CreateTaskFromMessage,
-  MessageInlineTasks,
-} from '#/features/tasks/ConversationTaskActions'
-import { TaskLinkBatchProvider } from '#/features/tasks/task-link-context'
+
+
 import { useReleaseConfigState } from '#/lib/release-config'
 import type { RepresentedThreadContext } from './thread-navigation'
 import './thread-workspace.css'
@@ -434,7 +431,7 @@ export function ThreadConversationPage({
   if (!navigation.available || !thread) return <Unavailable backHref={backHref} />
 
   const archived = thread.thread.status === 'archived' || navigation.archived
-  const taskLinkMessageIds = streamItems.map((entry) => entry.item.message._id)
+
   const conversationContent = (
     <main className="track-thread-route" aria-busy={busy}>
       <header className="track-thread-route-header">
@@ -505,12 +502,7 @@ export function ThreadConversationPage({
             </header>
             {entry.item.replyTo ? <small>Replying to {entry.item.replyTo.authorName}: {entry.item.replyTo.body}</small> : null}
             <MarkdownText text={entry.item.message.body || 'Attachment message'} />
-            {releaseConfig.tasks ? (
-              <MessageInlineTasks
-                identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
-                message={entry.item.message}
-              />
-            ) : null}
+
             {entry.item.attachments.map(({ attachment: file, url }) => url ? (
               <a href={url} key={file._id} rel="noreferrer" target="_blank">{file.filename}</a>
             ) : null)}
@@ -529,12 +521,7 @@ export function ThreadConversationPage({
                   Delete
                 </Button>
               ) : null}
-              {releaseConfig.tasks && !archived ? (
-                <CreateTaskFromMessage
-                  identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
-                  message={entry.item.message}
-                />
-              ) : null}
+
               <button
                 onClick={() => void createReport({
                   projectId,
@@ -572,15 +559,7 @@ export function ThreadConversationPage({
     </main>
   )
 
-  const conversation = releaseConfig.tasks ? (
-    <TaskLinkBatchProvider
-      identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
-      messageIds={taskLinkMessageIds}
-    >
-      {conversationContent}
-    </TaskLinkBatchProvider>
-  ) : conversationContent
-
+  const conversation = conversationContent
   if (!context) return conversation
 
   return (
@@ -589,7 +568,7 @@ export function ThreadConversationPage({
         actingCompanyId={context.actingCompanyId}
         activeArea="conversation"
         activeProject={{ projectId, projectMemberId: context.projectMemberId, groupId }}
-        tasksEnabled={releaseConfig.tasks}
+
       />
       {conversation}
     </div>

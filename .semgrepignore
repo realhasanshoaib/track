@@ -18,4 +18,3 @@ convex/_generated/
 # this Convex file even though TypeScript and the runtime parser accept it.
 # Keep this core module visible in dependency/typecheck gates until the parser
 # can consume its multiline query chain reliably.
-convex/tasks.ts

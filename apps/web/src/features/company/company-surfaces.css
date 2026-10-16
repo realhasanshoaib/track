@@ -1450,12 +1450,6 @@
   min-height: 20px;
 }
 
-.company-message-list article > .task-inline-cards {
-  display: grid;
-  max-width: 620px;
-  align-items: stretch;
-}
-
 .company-message-list article p {
   margin-top: 6px;
   color: var(--ink-2);

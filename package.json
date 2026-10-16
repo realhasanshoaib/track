@@ -21,7 +21,7 @@
     "lint:backend": "oxlint convex",
     "architecture:semgrep": "node scripts/gates/semgrep-ratchet.mjs",
     "test": "VITEST_MAX_WORKERS=1 turbo test --concurrency=1 && VITEST_MAX_WORKERS=1 vitest run --config vitest.config.ts --environment node --no-file-parallelism",
-    "e2e": "playwright test --config e2e/playwright.config.ts e2e/tests/track-journeys.spec.ts e2e/tests/task-editing.spec.ts",
+    "e2e": "playwright test --config e2e/playwright.config.ts e2e/tests/track-journeys.spec.ts",
     "perf:fixture": "TRACK_E2E_PRODUCTION=1 PERF_OUTPUT_PATH=artifacts/performance/fixture-performance.json playwright test --config e2e/playwright.config.ts e2e/tests/performance.spec.mjs",
     "perf:build": "node scripts/perf/measure-web-build.mjs",
     "gate": "pnpm check:tracker && pnpm test:tracker && q9gate run",
@@ -38,9 +38,7 @@
   "dependencies": {
     "@convex-dev/better-auth": "^0.12.5",
     "@convex-dev/rate-limiter": "^0.3.2",
-    "@openrouter/ai-sdk-provider": "^2.10.0",
     "@track/shared": "workspace:*",
-    "ai": "^6.0.223",
     "better-auth": "1.6.25",
     "firebase-admin": "14.2.0",
     "hono": "4.13.7",

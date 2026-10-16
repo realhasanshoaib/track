@@ -285,10 +285,7 @@ export function useWorkspaceThreadInteractions({
     setProjectSearchOpen(false)
     setProjectSearchQuery('')
     setMobileNavOpen(false)
-    if (result.kind === 'task' && result.taskKey && activeProjectId) {
-      navigateToSearchResult?.(result)
-      return
-    }
+
     if (result.threadId && result.groupId && activeProjectId) {
       navigateToSearchResult?.(result)
       return

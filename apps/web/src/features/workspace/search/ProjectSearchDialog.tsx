@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
 
 import type { Id } from '../../../../../../convex/_generated/dataModel'
-import { FolderKanban, ListTodo, LoaderCircle, MessagesSquare, Paperclip, Search, X } from 'lucide-react'
+import { FolderKanban, LoaderCircle, MessagesSquare, Paperclip, Search, X } from 'lucide-react'
 
 import { Button } from '#/components/ui/button'
 import {
@@ -15,7 +15,7 @@ import { Input } from '#/components/ui/input'
 import { AttachmentTypeIcon } from '#/features/workspace/attachment-ui'
 import { useReleaseConfig } from '#/lib/release-config'
 
-export type ProjectSearchFilter = 'all' | 'messages' | 'files' | 'groups' | 'tasks' | 'threads'
+export type ProjectSearchFilter = 'all' | 'messages' | 'files' | 'groups' | 'threads'
 
 export type ProjectSearchResult = {
   attachmentId?: Id<'attachments'>
@@ -24,9 +24,8 @@ export type ProjectSearchResult = {
   groupId?: Id<'groups'>
   groupName: string
   id: string
-  kind: 'message' | 'file' | 'group' | 'task' | 'thread'
+  kind: 'message' | 'file' | 'group' | 'thread'
   messageId?: Id<'messages'>
-  taskKey?: string
   threadId?: Id<'channelThreads'>
   threadName?: string
   preview: string
@@ -91,7 +90,6 @@ export function ProjectSearchDialog({
     { Icon: MessagesSquare, label: 'Messages', value: 'messages' },
     { Icon: Paperclip, label: 'Files', value: 'files' },
     { Icon: FolderKanban, label: 'Groups', value: 'groups' },
-    ...(releaseConfig.tasks ? [{ Icon: ListTodo, label: 'Tasks', value: 'tasks' as const }] : []),
     ...(releaseConfig.threads ? [{ Icon: MessagesSquare, label: 'Threads', value: 'threads' as const }] : []),
   ]
   const hasQuery = query.trim().length >= 2
@@ -136,7 +134,7 @@ export function ProjectSearchDialog({
             <span className="mono-label">Current project search</span>
             <DialogTitle>{projectName}</DialogTitle>
             <DialogDescription className="sr-only">
-              Search messages, files, groups, threads, and tasks in the current project.
+              Search messages, files, groups, and threads in the current project.
             </DialogDescription>
           </div>
           <Button aria-label="Close project search" className="icon-button" onClick={onClose} type="button">
@@ -150,13 +148,7 @@ export function ProjectSearchDialog({
             className="track-project-search-input"
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             onKeyDown={handleScopedKeyboard}
-            placeholder={releaseConfig.tasks && releaseConfig.threads
-              ? 'Search messages, files, threads, groups, and tasks...'
-              : releaseConfig.tasks
-                ? 'Search messages, files, groups, and tasks...'
-                : releaseConfig.threads
-                  ? 'Search messages, files, groups, and threads...'
-                  : 'Search messages, files, and groups...'}
+            placeholder="Search messages, files, groups, and threads..."
             value={query}
           />
           <span aria-live="polite">{updating ? 'Updating…' : `${total} results`}</span>
@@ -221,8 +213,6 @@ export function ProjectSearchDialog({
                             />
                           ) : result.kind === 'group' ? (
                             <FolderKanban size={16} />
-                          ) : result.kind === 'task' ? (
-                            <ListTodo size={16} />
                           ) : (
                             <MessagesSquare size={16} />
                           )}

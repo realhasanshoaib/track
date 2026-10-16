@@ -215,7 +215,7 @@ export function CompanyHubPage() {
         actingCompanyId={actingCompanyId}
         activeArea="company"
         onCompanyChange={setActingCompanyId}
-        tasksEnabled={flags.tasks}
+
         companyNavigation={
           <nav aria-label="Company workspace">
             <span className="company-project-nav-label">Company</span>

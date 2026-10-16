@@ -1,6 +1,6 @@
 # Track
 
-Project conversation, tasks, and evidence-grounded assistance in one workspace.
+Team conversation and shared attachments in one workspace.
 
 - [theory.md](theory.md): the model, vocabulary, reasons, and scope.
 - [Human tracker](tracker-human.md) · [searchable browser view](tracker-human.html):

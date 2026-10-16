@@ -20,11 +20,6 @@ import {
 import {
   captureExitBatch,
 } from "./lib/projectExitCapture";
-import {
-  clearTaskExitStagingBatch,
-  clearTaskExitStaging,
-  materializeTaskArchiveSnapshots,
-} from "./lib/taskLifecycle";
 
 type ThreadStateBefore = {
   name?: string;
@@ -395,22 +390,6 @@ async function boundedChannelIds(
   return result.length <= archiveProjectionLimit ? result.map((row) => row.groupId) : [];
 }
 
-async function boundedTaskRows(
-  ctx: MutationCtx,
-  operationId: string,
-  projectCompanyId: Doc<'projectCompanies'>['_id'],
-) {
-  const result = await ctx.db
-    .query('taskExitSnapshotStaging')
-    .withIndex('by_project_company_operation', (q) =>
-      q.eq('projectCompanyId', projectCompanyId).eq('operationId', operationId),
-    )
-    .take(archiveProjectionLimit + 1);
-  return result.length <= archiveProjectionLimit ? result : [];
-}
-
-// Legacy records created before operation-backed capture keep their immutable arrays.
-// New exits always use finalizeBatch below.
 export async function finalizeLegacyExit(
   ctx: MutationCtx,
   actor: Awaited<ReturnType<typeof requireAuthenticatedActor>>,
@@ -432,7 +411,6 @@ export async function finalizeLegacyExit(
     .collect();
   const memberRows = await boundedExitRows(ctx, operation.operationId, 'member');
   const channelRows = await boundedExitRows(ctx, operation.operationId, 'channel');
-  const taskRows = await boundedTaskRows(ctx, operation.operationId, participation._id);
   const projectSnapshot = decodeExitProjectSnapshot(ctx, participation.exitProjectSnapshot) ?? {};
   const memberSnapshots = memberRows.length > 0
     ? memberRows.flatMap((row) => row.payload.kind === 'member' ? [row.payload.snapshot] : [])
@@ -487,15 +465,6 @@ export async function finalizeLegacyExit(
       visibilityStatus: 'active',
       updatedAt: now,
     });
-    if (taskRows.length > 0 && taskRows.length <= archiveProjectionLimit) {
-      await materializeTaskArchiveSnapshots(ctx, {
-        entitlementId,
-        projectCompanyId: participation._id,
-        projectId: project._id,
-        channelIds,
-        operationId: operation.operationId,
-      });
-    }
     const channelMemberships = await ctx.db
       .query('groupMembers')
       .withIndex('by_project_member_status', (q) =>
@@ -717,7 +686,7 @@ export const finalize = mutation({
             };
           }),
       );
-      const entitlementId = await ctx.db.insert("projectArchiveEntitlements", {
+      await ctx.db.insert("projectArchiveEntitlements", {
         projectId: project._id,
         projectCompanyId: participation._id,
         companyId: company._id,
@@ -737,12 +706,6 @@ export const finalize = mutation({
         manifestHash: participation._id,
         createdAt: now,
         updatedAt: now,
-      });
-      await materializeTaskArchiveSnapshots(ctx, {
-        entitlementId,
-        projectCompanyId: participation._id,
-        projectId: project._id,
-        channelIds,
       });
       await Promise.all(
         channelMemberships.map((membership) =>
@@ -765,7 +728,6 @@ export const finalize = mutation({
       exitedAt: now,
       updatedAt: now,
     });
-    await clearTaskExitStaging(ctx, participation._id);
     await bumpProjectParticipants(ctx, project._id, now);
     const remaining = await ctx.db
       .query("projectCompanies")
@@ -1063,14 +1025,14 @@ export const captureBatch = internalMutation({
 });
 
 type CleanupCursor =
-  | { source: "snapshots" | "visibility" | "tasks" | "entitlements"; cursor: string | null }
+  | { source: "snapshots" | "visibility" | "entitlements"; cursor: string | null }
 
 function isCleanupCursor(value: unknown): value is CleanupCursor {
   if (typeof value !== "object" || value === null || !('source' in value) || !('cursor' in value)) return false;
   const source = value.source;
   const cursor = value.cursor;
   return (
-    (source === "snapshots" || source === "visibility" || source === "tasks" || source === "entitlements") &&
+    (source === "snapshots" || source === "visibility" || source === "entitlements") &&
     (cursor === null || typeof cursor === "string")
   );
 }
@@ -1121,24 +1083,8 @@ export const cleanupCapture = internalMutation({
         .paginate({ cursor: state.cursor, numItems: 100 });
       for (const row of result.page) await ctx.db.delete(row._id);
       const next = result.isDone
-        ? JSON.stringify({ source: "tasks", cursor: null })
-        : JSON.stringify({ source: "visibility", cursor: result.continueCursor });
-      await ctx.scheduler.runAfter(0, internal.projectExit.cleanupCapture, {
-        projectCompanyId: args.projectCompanyId,
-        operationId: args.operationId,
-        cursor: next,
-      });
-      return;
-    }
-    if (state.source === "tasks") {
-      const result = await clearTaskExitStagingBatch(ctx, {
-        projectCompanyId: args.projectCompanyId,
-        operationId: args.operationId,
-        cursor: state.cursor,
-      });
-      const next = result.done
         ? JSON.stringify({ source: "entitlements", cursor: null })
-        : JSON.stringify({ source: "tasks", cursor: result.cursor });
+        : JSON.stringify({ source: "visibility", cursor: result.continueCursor });
       await ctx.scheduler.runAfter(0, internal.projectExit.cleanupCapture, {
         projectCompanyId: args.projectCompanyId,
         operationId: args.operationId,

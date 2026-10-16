@@ -1,13 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import {
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  FolderKanban,
-  ListTodo,
-  MessagesSquare,
-} from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, FolderKanban, MessagesSquare } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api } from "../../../../../convex/_generated/api";
@@ -15,7 +8,6 @@ import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { resolveActiveActingCompanyId } from "./company-query-scope";
 import {
   getCompanyProjectConversationSearch,
-  getCompanyProjectTaskSearch,
   type CompanyProjectLinkContext,
 } from "./company-project-links";
 
@@ -24,8 +16,7 @@ import "./company-surfaces.css";
 
 export type CompanyProjectNavigationArea =
   | "company"
-  | "conversation"
-  | "tasks";
+  | "conversation";
 
 export type CompanyProjectNavigationIdentity = {
   groupId?: string;
@@ -40,7 +31,6 @@ export type CompanyProjectNavigationProps = {
   companyNavigation?: ReactNode;
   onCompanyChange?: (companyId: Id<"companies">) => void;
   secondaryNavigation?: ReactNode;
-  tasksEnabled?: boolean;
 };
 
 const collapseStorageKey = "track-company-project-nav-collapsed";
@@ -97,7 +87,6 @@ export function CompanyProjectNavigation({
   companyNavigation,
   onCompanyChange,
   secondaryNavigation,
-  tasksEnabled = true,
 }: CompanyProjectNavigationProps) {
   const [collapsed, setCollapsed] = useState(() =>
     typeof window === "undefined"
@@ -266,20 +255,7 @@ export function CompanyProjectNavigation({
               <MessagesSquare aria-hidden="true" size={14} />
               <span>Conversation</span>
             </Link>
-            {tasksEnabled ? (
-              <Link
-                aria-label={`Open ${activeProjectItem.project.name} tasks`}
-                aria-current={activeArea === "tasks" ? "page" : undefined}
-                className={activeArea === "tasks" ? "active" : undefined}
-                params={{ projectId: activeProjectItem.project._id }}
-                search={getCompanyProjectTaskSearch(activeLinkContext)}
-                title="Tasks"
-                to="/workspace/projects/$projectId/tasks"
-              >
-                <ListTodo aria-hidden="true" size={14} />
-                <span>Tasks</span>
-              </Link>
-            ) : null}
+
           </nav>
         </>
       ) : null}

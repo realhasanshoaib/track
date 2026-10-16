@@ -16,8 +16,8 @@ import type { GroupReference } from '#/features/workspace/group-types'
 import { ThreadDaySeparator } from '#/features/workspace/components/ThreadDaySeparator'
 import type { ChatSearchMatch } from '#/features/workspace/search/chat-search'
 import type { WorkspaceThreadItem } from '#/features/workspace/search/chat-thread-data'
-import { ChannelTaskPanel } from '#/features/tasks/ConversationTaskActions'
-import { TaskLinkBatchProvider } from '#/features/tasks/task-link-context'
+
+
 import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
 import { useReleaseConfig } from '#/lib/release-config'
 
@@ -160,11 +160,11 @@ export function GroupChatPage({
 }: GroupChatPageProps) {
   const releaseConfig = useReleaseConfig()
   const readOnly = activeGroup?.status === 'archived'
-  const taskLinkMessageIds = threadItems.map((entry) => entry.item.message._id)
+
   const content = (
     <>
       <div className="track-chat-mobile-context">
-        {releaseConfig.tasks && activeGroup ? <ChannelTaskPanel group={activeGroup} variant="rail" /> : null}
+
         {releaseConfig.threads && activeGroupId && activeProjectId ? (
           <ChannelThreadBrowser
             groupId={activeGroupId}
@@ -226,7 +226,7 @@ export function GroupChatPage({
                     activeGroupId={activeGroupId}
                     avatarUrl={messageAuthorAvatarUrlById.get(threadItem.item.author?._id ?? '')}
                     busyAction={busyAction}
-                    canCreateTasks={!readOnly}
+
                     canDeleteMessages={!readOnly}
                     canForwardMessages={!readOnly}
                     canReply={!readOnly}
@@ -315,11 +315,5 @@ export function GroupChatPage({
       )}
     </>
   )
-  return releaseConfig.tasks ? (
-    <TaskLinkBatchProvider
-      messageIds={taskLinkMessageIds}
-    >
-      {content}
-    </TaskLinkBatchProvider>
-  ) : content
+  return content
 }

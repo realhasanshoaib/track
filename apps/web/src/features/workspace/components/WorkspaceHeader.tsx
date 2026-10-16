@@ -1,9 +1,9 @@
 import type { ChangeEvent, RefObject } from 'react'
-import { Link } from '@tanstack/react-router'
-import { useQuery } from 'convex/react'
-import { Columns3, Menu, MessageSquare, MessageSquarePlus, Search } from 'lucide-react'
 
-import { api } from '../../../../../../convex/_generated/api'
+
+import { Menu, MessageSquarePlus, Search } from 'lucide-react'
+
+
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Button } from '#/components/ui/button'
@@ -11,7 +11,7 @@ import { Input } from '#/components/ui/input'
 import { AvatarNameTooltip } from '#/features/workspace/avatar-tooltip'
 import { getAvatarTone, getInitials } from '#/features/workspace/identity'
 import type { ActiveChannelMemberItem } from '#/features/workspace/lib/channel-header-members'
-import { useReleaseConfig } from '#/lib/release-config'
+
 
 type ProjectItem = {
   project: Doc<'projects'>
@@ -53,33 +53,6 @@ export function WorkspaceHeader({
   onSearchToggle,
   view,
 }: WorkspaceHeaderProps) {
-  const releaseConfig = useReleaseConfig()
-  const channelTasks = useQuery(
-    api.tasks.listPage,
-    releaseConfig.tasks && activeGroup
-      ? {
-          projectId: activeGroup.projectId,
-          groupId: activeGroup._id,
-          openOnly: true,
-          paginationOpts: { cursor: null, numItems: 100 },
-        }
-      : 'skip',
-  )
-  const channelBoards = useQuery(
-    api.taskBoards.list,
-    releaseConfig.tasks && activeGroup
-      ? { projectId: activeGroup.projectId }
-      : 'skip',
-  )
-  const activeChannelBoard = channelBoards?.find(
-    (item) => item.board.groupId === activeGroup?._id && item.board.isDefault,
-  ) ?? channelBoards?.find((item) => item.board.groupId === activeGroup?._id)
-  const openChannelTaskCount = channelTasks?.page.length ?? 0
-  let taskCountLabel = '…'
-  if (channelTasks) {
-    taskCountLabel = String(openChannelTaskCount)
-    if (!channelTasks.isDone) taskCountLabel += '+'
-  }
   return (
     <header className="track-thread-header">
       <Button
@@ -106,23 +79,7 @@ export function WorkspaceHeader({
           </span>
         ) : null}
       </div>
-      {view === 'group' && activeProjectId && releaseConfig.tasks ? (
-        <nav aria-label="Channel views" className="track-header-view-tabs">
-          <span aria-current="page" className="active">
-            <MessageSquare size={13} /> Conversation
-          </span>
-          <Link
-            params={{ projectId: activeProjectId }}
-            search={{ board: activeChannelBoard?.board._id, view: 'board' }}
-            to="/workspace/projects/$projectId/tasks"
-          >
-            <Columns3 size={13} /> Board <span
-              className="track-header-tab-count"
-              title={channelTasks && !channelTasks.isDone ? 'Partial count. Open the board to view all tasks.' : undefined}
-            >{taskCountLabel}</span>
-          </Link>
-        </nav>
-      ) : null}
+
       <div className="track-header-actions">
         <div className="track-header-members" aria-label="Channel members">
           {headerMembers.map((item) => {

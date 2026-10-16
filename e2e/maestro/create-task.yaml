@@ -1,8 +1,0 @@
-appId: ai.q9labs.track
----
-- tapOn: Title
-- inputText: "Ship push notifications"
-- tapOn: Description
-- inputText: "Verify notification routing"
-- hideKeyboard
-- tapOn: "Create task"

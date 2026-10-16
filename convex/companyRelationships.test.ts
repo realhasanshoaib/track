@@ -16,7 +16,6 @@ const scheduledTestBackends: Array<TestBackend> = []
 
 beforeEach(() => {
   vi.stubEnv('TRACK_COMPANY_MODEL_ENABLED', 'true')
-  vi.stubEnv('TRACK_TASKS_ENABLED', 'true')
   vi.stubEnv('TRACK_THREADS_ENABLED', 'true')
 })
 
@@ -63,60 +62,6 @@ describe('Company model authorization and lifecycle', () => {
     })
     await expect(actor.query(api.sharedProjects.listForActingCompany, { actingCompanyId: a }))
       .rejects.toThrow('company_unavailable')
-  })
-
-  it('enforces Company task scope and suspended assignee authorization', async () => {
-    {
-      const t = convexTest(schema, modules)
-      const user = await seedUser(t, 'company-task-user')
-      const companyId = await createCompany(t, user, 'Task Company', 'task-company')
-      const otherCompanyId = await createCompany(t, user, 'Other Company', 'other-task-company')
-      const projectId = await seedCompanyProject(t, user, companyId, 'Company Tasks')
-      const { groupId, projectMemberId } = await t.run(async (ctx) => {
-        const projectMember = (await ctx.db.query('projectMembers').withIndex('by_project', (q) => q.eq('projectId', projectId)).collect())[0]!
-        const group = (await ctx.db.query('groups').withIndex('by_project', (q) => q.eq('projectId', projectId)).collect())[0]!
-        return { groupId: group._id, projectMemberId: projectMember._id }
-      })
-      const actor = asUser(t, user)
-      const created = await actor.mutation(api.tasks.create, {
-        projectId, groupId, actingCompanyId: companyId, projectMemberId,
-        title: 'Company-scoped task', priority: 'high', idempotencyKey: 'company-task',
-      })
-      expect((await actor.query(api.tasks.list, {
-        projectId, actingCompanyId: companyId, projectMemberId,
-      })).map((item) => item.task._id)).toContain(created.taskId)
-      await expect(actor.query(api.tasks.list, {
-        projectId, actingCompanyId: otherCompanyId, projectMemberId,
-      })).rejects.toThrow('project_unavailable')
-    }
-    {
-      const t = convexTest(schema, modules)
-      const owner = await seedUser(t, 'task-chain-owner')
-      const recipient = await seedUser(t, 'task-chain-recipient')
-      const companyId = await createCompany(t, owner, 'Task Chain Company', 'task-chain-company')
-      await addCompanyMember(t, companyId, recipient)
-      const projectId = await seedCompanyProject(t, owner, companyId, 'Task Chain Project')
-      const ownerProjectMember = (await t.run(async (ctx) => ctx.db
-        .query('projectMembers').withIndex('by_project', (q) => q.eq('projectId', projectId)).first()))!
-      const recipientProjectMemberId = await asUser(t, owner).mutation(api.sharedProjects.addMember, {
-        actingCompanyId: companyId, projectId, projectMemberId: ownerProjectMember._id,
-        role: 'member', userId: recipient,
-      })
-      const recipientCompanyMember = (await t.run(async (ctx) => ctx.db
-        .query('companyMembers')
-        .withIndex('by_company_user', (q) => q.eq('companyId', companyId).eq('userId', recipient))
-        .unique()))!
-      await asUser(t, owner).mutation(api.companies.updateMember, {
-        companyId, companyMemberId: recipientCompanyMember._id, status: 'suspended',
-      })
-      await expect(asUser(t, owner).mutation(api.tasks.create, {
-        actingCompanyId: companyId,
-        assigneeProjectMemberId: recipientProjectMemberId,
-        idempotencyKey: 'inactive-company-task-assignee',
-        priority: 'none', projectId, projectMemberId: ownerProjectMember._id,
-        title: 'Do not assign inaccessible work',
-      })).rejects.toThrow('task_assignee_invalid')
-    }
   })
 
   it('enforces invitation and Project lifecycle transitions', async () => {
@@ -1217,9 +1162,9 @@ describe('Company model authorization and lifecycle', () => {
       actingCompanyId: aCompany,
       projectMemberId: aInitialMembership._id,
     })
-    const exitMessageId = await asUser(t, a).mutation(api.messages.send, {
+    await asUser(t, a).mutation(api.messages.send, {
       authorId: a,
-      body: 'Snapshot this focused task source.',
+      body: 'Snapshot this focused source.',
       channelThreadId: exitThreadId,
       groupId,
       idempotencyKey: 'exit-thread-message',
@@ -1227,22 +1172,6 @@ describe('Company model authorization and lifecycle', () => {
       actingCompanyId: aCompany,
       projectMemberId: aInitialMembership._id,
     })
-    await asUser(t, a).mutation(api.tasks.create, {
-      projectId,
-      groupId,
-      title: 'Archive focused work',
-      priority: 'none',
-      references: [{ type: 'message', messageId: exitMessageId, isPrimary: true }],
-      idempotencyKey: 'exit-thread-task',
-      actingCompanyId: aCompany,
-      projectMemberId: aInitialMembership._id,
-    })
-    await expect(
-      asUser(t, a).mutation(api.projectExit.prepare, {
-        actingCompanyId: aCompany,
-        projectId,
-      }),
-    ).rejects.toThrow('project_ownership_transfer_required')
     const ownershipTransferRequestId = await asUser(t, a).mutation(api.projectOwnership.request, {
       actingCompanyId: aCompany,
       projectId,
@@ -1319,14 +1248,7 @@ describe('Company model authorization and lifecycle', () => {
             .withIndex('by_operation', (q) => q.eq('operationId', operationId))
             .collect()
         : []
-      const taskRows = entitlement && operationId
-        ? await ctx.db.query('taskExitSnapshotStaging')
-            .withIndex('by_project_company_operation', (q) =>
-              q.eq('projectCompanyId', entitlement.projectCompanyId).eq('operationId', operationId),
-            )
-            .collect()
-        : []
-      return { archiveRows, aMember, entitlement, project, taskRows }
+      return { archiveRows, aMember, entitlement, project }
     })
     expect(firstExit.project?.status).toBe('active')
     expect(firstExit.aMember?.status).toBe('archived')
@@ -1341,7 +1263,6 @@ describe('Company model authorization and lifecycle', () => {
       throw new Error('exit_thread_snapshot_missing')
     }
     expect(archivedThread.payload.snapshot.replyCount).toBe(1)
-    expect(firstExit.taskRows.filter((row) => row.sourceTable === 'tasks')).toHaveLength(1)
     const archivedIdentity = {
       actingCompanyId: aCompany,
       projectMemberId: firstExit.aMember!._id,

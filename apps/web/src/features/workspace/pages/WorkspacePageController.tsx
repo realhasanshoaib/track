@@ -323,14 +323,7 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
 
   const navigateToSearchResult = useCallback((result: ProjectSearchResult) => {
     if (!activeProjectId) return
-    if (result.kind === 'task' && result.taskKey) {
-      void navigate({
-        to: '/workspace/projects/$projectId/tasks',
-        params: { projectId: activeProjectId },
-        search: { task: result.taskKey, view: 'all' },
-      })
-      return
-    }
+
     if (result.threadId && result.groupId) {
       void navigate({
         to: '/workspace/projects/$projectId/groups/$groupId/threads/$threadId',

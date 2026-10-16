@@ -13,7 +13,6 @@ import {
   requireProjectManager,
   requireProjectMember,
 } from './lib/permissions'
-import { invalidateTaskEvidence } from './lib/taskEvidence'
 
 const role = v.union(
   v.literal('owner'),
@@ -190,8 +189,6 @@ export const remove = mutation({
     })
 
     await Promise.all(attachments.map((attachment) => ctx.storage.delete(attachment.storageId).catch(() => undefined)))
-    for (const message of messages) await invalidateTaskEvidence(ctx, { messageId: message._id })
-    for (const attachment of attachments) await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
 
     for (const row of groupNotificationSettings) {
       if (row.groupId === args.groupId) await ctx.db.delete(row._id)

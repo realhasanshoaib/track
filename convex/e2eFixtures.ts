@@ -4,19 +4,10 @@ import type { Doc, Id } from './_generated/dataModel'
 import type { MutationCtx } from './_generated/server'
 import { mutation } from './_generated/server'
 import { devAuthBypassUser } from './lib/devAuth'
-import { createUniqueTaskPublicKey } from './lib/taskData'
 
 const fixtureNamePrefix = 'E2E '
 const fixtureTokenArgument = v.string()
 const performanceHistoryMessageCount = 24
-
-const workflow = [
-  { name: 'Backlog', category: 'backlog', visualToken: 'neutral', isDefault: false },
-  { name: 'To do', category: 'unstarted', visualToken: 'blue', isDefault: true },
-  { name: 'In progress', category: 'started', visualToken: 'amber', isDefault: false },
-  { name: 'Done', category: 'completed', visualToken: 'green', isDefault: false },
-  { name: 'Canceled', category: 'canceled', visualToken: 'neutral', isDefault: false },
-] as const
 
 type FixtureProject = {
   projectId: Id<'projects'>
@@ -102,17 +93,15 @@ async function fixtureUser(ctx: MutationCtx) {
 }
 
 async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
-  const [groups, members, boards, tasks, messages, threads] = await Promise.all([
+  const [groups, members, messages, threads] = await Promise.all([
     ctx.db.query('groups').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('projectMembers').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskBoards').withIndex('by_project_archived', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('tasks').withIndex('by_project_archived', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('messages').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('channelThreads').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
   ])
   const groupIds = new Set(groups.map((group) => String(group._id)))
 
-  const [groupMembers, groupReads, groupSettings, typing, threadFollowers, threadReads, attachments, taskReferences, taskActivities, taskComments, taskFollowers, taskLabels, taskLabelLinks, taskNotifications, taskReminders, auditEvents, invitations] = await Promise.all([
+  const [groupMembers, groupReads, groupSettings, typing, threadFollowers, threadReads, attachments, auditEvents, invitations] = await Promise.all([
     Promise.all(groups.map((group) => ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
     ctx.db.query('groupReadStates').collect().then((rows) => rows.filter((row) => row.projectId === projectId)),
     ctx.db.query('groupNotificationSettings').collect(),
@@ -120,14 +109,6 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
     ctx.db.query('channelThreadFollowers').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('channelThreadReadStates').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     Promise.all(groups.map((group) => ctx.db.query('attachments').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
-    ctx.db.query('taskReferences').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskActivities').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskComments').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskFollowers').collect().then((rows) => rows.filter((row) => row.projectId === projectId)),
-    ctx.db.query('taskLabels').withIndex('by_project_archived', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskLabelLinks').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskNotifications').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('taskReminderJobs').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('auditEvents').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
     Promise.all((['pending', 'accepted', 'revoked', 'expired'] as const).map((status) => ctx.db.query('invitations').withIndex('by_project_status', (query) => query.eq('projectId', projectId).eq('status', status)).collect())).then((rows) => rows.flat()),
   ])
@@ -145,20 +126,6 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
     await ctx.db.delete(row._id)
   }
   for (const row of messages) await ctx.db.delete(row._id)
-  for (const row of taskReferences) await ctx.db.delete(row._id)
-  for (const row of taskActivities) await ctx.db.delete(row._id)
-  for (const row of taskComments) await ctx.db.delete(row._id)
-  for (const row of taskFollowers) await ctx.db.delete(row._id)
-  for (const row of taskLabelLinks) await ctx.db.delete(row._id)
-  for (const row of taskLabels) await ctx.db.delete(row._id)
-  for (const row of taskNotifications) await ctx.db.delete(row._id)
-  for (const row of taskReminders) await ctx.db.delete(row._id)
-  for (const row of tasks) await ctx.db.delete(row._id)
-  for (const row of boards) {
-    const states = await ctx.db.query('taskWorkflowStates').withIndex('by_board_rank', (query) => query.eq('boardId', row._id)).collect()
-    for (const state of states) await ctx.db.delete(state._id)
-    await ctx.db.delete(row._id)
-  }
   for (const row of auditEvents) await ctx.db.delete(row._id)
   for (const row of invitations) await ctx.db.delete(row._id)
   for (const row of members) await ctx.db.delete(row._id)
@@ -222,72 +189,6 @@ async function createMessage(
   })
 }
 
-async function createBoardAndTask(
-  ctx: MutationCtx,
-  input: { projectId: Id<'projects'>; groupId: Id<'groups'>; projectMemberId: Id<'projectMembers'>; sourceMessageId: Id<'messages'>; now: number; namespace: string },
-) {
-  const boardId = await ctx.db.insert('taskBoards', {
-    projectId: input.projectId,
-    groupId: input.groupId,
-    name: 'E2E conversation tasks',
-    rank: '00000001',
-    isDefault: true,
-    createdByProjectMemberId: input.projectMemberId,
-    createdAt: input.now,
-    updatedAt: input.now,
-  })
-  const workflowStates = new Map<string, Id<'taskWorkflowStates'>>()
-  for (const [index, state] of workflow.entries()) {
-    const stateId = await ctx.db.insert('taskWorkflowStates', {
-      projectId: input.projectId,
-      boardId,
-      name: state.name,
-      category: state.category,
-      visualToken: state.visualToken,
-      rank: String(index + 1).padStart(4, '0'),
-      isDefault: state.isDefault,
-      createdAt: input.now,
-      updatedAt: input.now,
-    })
-    workflowStates.set(state.name, stateId)
-  }
-  const todoState = workflowStates.get('To do')
-  if (!todoState) throw new Error('e2e_fixture_workflow_missing')
-  const taskId = await ctx.db.insert('tasks', {
-    projectId: input.projectId,
-    publicKey: await createUniqueTaskPublicKey(ctx, input.projectId),
-    boardId,
-    groupId: input.groupId,
-    workflowStateId: todoState,
-    rank: '0001',
-    title: 'E2E source-linked task',
-    description: 'A task created from the seeded conversation evidence.',
-    searchText: 'e2e source-linked task a task created from the seeded conversation evidence.',
-    assigneeProjectMemberId: input.projectMemberId,
-    priority: 'high',
-    createdByProjectMemberId: input.projectMemberId,
-    revision: 1,
-    createIdempotencyKey: `e2e-${input.namespace}-task`,
-    createdAt: input.now,
-    updatedAt: input.now,
-  })
-  await ctx.db.insert('taskReferences', {
-    projectId: input.projectId,
-    taskId,
-    type: 'message',
-    groupId: input.groupId,
-    messageId: input.sourceMessageId,
-    quote: 'E2E source message: assign an owner before launch.',
-    availability: 'available',
-    isPrimary: true,
-    actorProjectMemberId: input.projectMemberId,
-    rank: '0001',
-    createdAt: input.now,
-    updatedAt: input.now,
-  })
-  return { boardId, taskId }
-}
-
 async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: string, historyMessageCount = 0) {
   const now = Date.now()
   const projectSpecs = [
@@ -340,7 +241,7 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       }
     }
     const sourceSequence = historyMessageCount + 1
-    const sourceMessageId = await createMessage(ctx, {
+    await createMessage(ctx, {
       projectId,
       groupId: activeGroupId,
       projectMemberId,
@@ -354,7 +255,7 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       groupId: activeGroupId,
       projectMemberId,
       userId: user._id,
-      body: spec.secondary ? 'Only the secondary project evidence belongs here.' : 'Conversation evidence remains linked to the source task.',
+      body: spec.secondary ? 'Only the secondary project evidence belongs here.' : 'Conversation evidence stays in the group.',
       sequence: spec.secondary ? 2 : sourceSequence + 1,
       now: now + index,
     })
@@ -376,14 +277,6 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
         body: 'Archived evidence remains available for review.',
         sequence: 1,
         now: now + index,
-      })
-      await createBoardAndTask(ctx, {
-        projectId,
-        groupId: activeGroupId,
-        projectMemberId,
-        sourceMessageId,
-        now: now + index,
-        namespace,
       })
     }
     result.push({ projectId, projectMemberId, activeGroupId, archivedGroupId })

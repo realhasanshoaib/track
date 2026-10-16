@@ -70,7 +70,7 @@ export const Fonts = Platform.select({
 
 /**
  * Sans styles carry prose and metadata. The mono styles are reserved for
- * identifiers (task keys, codes) — never for timestamps, names, or labels.
+ * identifiers (codes, codes) — never for timestamps, names, or labels.
  */
 export const Typography = {
   // Prose
@@ -171,7 +171,7 @@ export const Radius = {
   pill: 999,
 } as const;
 
-/** Caps Dynamic Type growth so dense chat and task layouts stay intact. */
+/** Caps Dynamic Type growth so dense chat layouts stay intact. */
 export const MaxFontScale = 1.3;
 
 export const TouchTarget = Platform.select({ ios: 44, android: 48 }) ?? 44;

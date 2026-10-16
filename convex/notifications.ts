@@ -21,12 +21,6 @@ const groupNotificationMode = v.union(
   v.literal('none'),
 )
 
-const taskNotificationMode = v.union(
-  v.literal('important'),
-  v.literal('all'),
-  v.literal('muted'),
-)
-
 const pushPermissionState = v.union(
   v.literal('not_determined'),
   v.literal('denied'),
@@ -95,7 +89,6 @@ export const getSettings = query({
     return {
       global: {
         globalMode: global?.globalMode ?? 'all',
-        taskMode: global?.taskMode ?? 'all',
         previewMode: global?.previewMode ?? 'full',
         soundEnabled: global?.soundEnabled ?? true,
         badgesEnabled: global?.badgesEnabled ?? true,
@@ -145,7 +138,6 @@ export const setMobilePreferences = mutation({
   args: {
     userId: v.id('users'),
     conversationMode: v.optional(notificationMode),
-    taskMode: v.optional(taskNotificationMode),
     previewMode: v.optional(v.union(v.literal('full'), v.literal('context'), v.literal('hidden'))),
     soundEnabled: v.optional(v.boolean()),
     badgesEnabled: v.optional(v.boolean()),
@@ -160,7 +152,6 @@ export const setMobilePreferences = mutation({
       .unique()
     const values = {
       globalMode: args.conversationMode ?? existing?.globalMode ?? 'all',
-      taskMode: args.taskMode ?? existing?.taskMode ?? 'all',
       previewMode: args.previewMode ?? existing?.previewMode ?? 'full',
       soundEnabled: args.soundEnabled ?? existing?.soundEnabled ?? true,
       badgesEnabled: args.badgesEnabled ?? existing?.badgesEnabled ?? true,

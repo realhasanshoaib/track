@@ -26,7 +26,6 @@ describe('central Project and Channel policy adapter', () => {
         accessProfile: 'legacy',
         canReadChannel: true,
         canWriteChannel: true,
-        taskCollaboration: 'full',
       },
     })
 

@@ -16,12 +16,3 @@ export function getCompanyProjectConversationSearch(
     membershipId: context.projectMemberId,
   };
 }
-
-export function getCompanyProjectTaskSearch(context: CompanyProjectLinkContext) {
-  return {
-    actingCompanyId: context.actingCompanyId,
-    groupId: context.groupId ?? "",
-    projectMemberId: context.projectMemberId,
-    view: "board" as const,
-  };
-}

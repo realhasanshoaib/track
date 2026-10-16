@@ -22,7 +22,7 @@ export type ThemedTextType =
 /**
  * `code` renders in the sans caption style: it is used throughout the app for
  * timestamps, counts, and labels, none of which are identifiers. Use `mono`
- * for genuine identifiers such as task keys.
+ * for genuine identifiers such as codes.
  */
 const TYPE_STYLES: Record<ThemedTextType, object> = {
   default: Typography.body,

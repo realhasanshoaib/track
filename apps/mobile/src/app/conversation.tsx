@@ -10,8 +10,8 @@ import { useTrackUser } from '@/contexts/track-user-context';
 import { Composer } from '@/components/composer';
 import { MessageActions } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
-import { TaskInlineCards } from '@/components/task-inline-cards';
-import { TaskLinkBatchProvider } from '@/lib/task-link-context';
+
+
 import { DateSeparator, ThreadRow, type DetailedMessage, type GroupedThreadItem, resolveMentionIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -24,7 +24,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfig } from '@/lib/release-config';
-import type { MobileTaskIdentity } from '@/lib/task-navigation';
+
 import { threadConversationHref, threadListHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
@@ -72,7 +72,7 @@ export default function ConversationScreen() {
   const setGlobalNotif = useMutation(api.notifications.setGlobalMode);
   const setGroupNotif = useMutation(api.notifications.setGroupMode);
   const createReport = useMutation(api.reports.create);
-  const createTask = useMutation(api.tasks.create);
+
   const deleteMessage = useMutation(api.messages.remove);
 
   const gid = groupId as Id<'groups'> | undefined;
@@ -87,11 +87,7 @@ export default function ConversationScreen() {
   const navigation = useQuery(api.mobile.resolveNavigation, trackUserId && pid && gid ? { userId: trackUserId, projectId: pid, groupId: gid, actingCompanyId: cid, projectMemberId: pmid } : 'skip');
   const readOnly = archive === '1' || navigation?.archived === true;
   // Memoised so composing a message does not rebuild every row's identity props.
-  const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
-    archived: readOnly,
-    companyId: cid,
-    membershipId: pmid,
-  } : null, [cid, pmid, readOnly]);
+
 
   const groupsPage = usePaginatedQuery(
     api.mobile.listGroupsPage,
@@ -147,11 +143,7 @@ export default function ConversationScreen() {
   const [reportReason, setReportReason] = useState<(typeof reportReasons)[number]>('inaccurate');
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
-  /**
-   * Rows that render task cards below them; those cards interrupt author
-   * grouping. Rows only report while mounted, so scrolling never regroups.
-   */
-  const [cardRowIds, setCardRowIds] = useState<ReadonlySet<string>>(() => new Set());
+
   const composerDraftScope = useMemo(() => trackUserId && pid && gid ? {
     actorId: trackUserId,
     actingCompanyId: cid,
@@ -166,15 +158,7 @@ export default function ConversationScreen() {
       ? current
       : { ...current, composer: nextComposer });
   }, [composerDraft]);
-  const trackCardRow = useCallback((rowId: string, hasCards: boolean) => {
-    setCardRowIds((prev) => {
-      if (prev.has(rowId) === hasCards) return prev;
-      const next = new Set(prev);
-      if (hasCards) next.add(rowId);
-      else next.delete(rowId);
-      return next;
-    });
-  }, []);
+
 
   const groupItems = useMemo(() => (groups ?? []) as { group: Doc<'groups'>; membership: Doc<'groupMembers'>; lastMessage: Doc<'messages'> | null; unreadCount: number }[], [groups]);
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
@@ -194,7 +178,7 @@ export default function ConversationScreen() {
     let lastDateStr = '';
     let lastAuthorKey = '';
     let lastAt = 0;
-    /** Anything between two messages — a date pill, an answer, a task card — starts a new group. */
+    /** Anything between two messages — a date pill — starts a new group. */
     let interrupted = true;
 
     for (const raw of sorted) {
@@ -212,11 +196,11 @@ export default function ConversationScreen() {
       result.push({ ...raw, isFirstInGroup });
       lastAuthorKey = authorKey;
       lastAt = raw.at;
-      interrupted = cardRowIds.has(raw.key);
+      interrupted = false;
     }
 
     return result;
-  }, [cardRowIds, messages]);
+  }, [messages]);
   const draftReply = useMemo(() => {
     const pendingReplyId = composerDraft.draft.replyToMessageId;
     if (!pendingReplyId) return null;
@@ -297,25 +281,6 @@ export default function ConversationScreen() {
           setReplyTo(actionTarget.item);
         },
       }] : []),
-      ...(!readOnly && releaseConfig.tasks ? [{
-        label: 'Create task',
-        icon: 'plus' as const,
-        onPress: () => {
-          const source = actionTarget.item.message.body;
-          const reference = { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true };
-          if (!pid || !gid) return;
-          void createTask({
-            projectId: pid,
-            groupId: gid,
-            title: source.trim().slice(0, 180) || 'Follow up',
-            priority: 'none',
-            references: [reference],
-            idempotencyKey: `${actionTarget.key}:${Date.now()}`,
-            actingCompanyId: cid,
-            projectMemberId: pmid,
-          });
-        },
-      }] : []),
       ...(!readOnly &&
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
@@ -357,7 +322,7 @@ export default function ConversationScreen() {
         onPress: () => setReportTarget(actionTarget),
       },
     ];
-  }, [actionTarget, cid, createTask, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, replyMessageId, router, setReplyTo, trackUserId]);
+  }, [actionTarget, cid, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.threads, replyMessageId, router, setReplyTo, trackUserId]);
 
   // Clear pending messages when the real message arrives from the server
   useEffect(() => {
@@ -545,22 +510,16 @@ export default function ConversationScreen() {
             if (index >= 0) listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
           } : undefined}
         />
-        {releaseConfig.tasks && pid ? <TaskInlineCards
-          identity={taskIdentity}
-          isOwnMessage={isOwnMessage}
-          messageId={item.item.message._id}
-          onCardsChange={trackCardRow}
-          projectId={pid}
-        /> : null}
+
       </View>
     );
-  }, [cid, gid, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, router, setReplyTo, taskIdentity, trackCardRow, trackUserId]);
+  }, [cid, gid, pid, pmid, readOnly, releaseConfig.threads, router, setReplyTo, trackUserId]);
 
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
   if ((network.isConnected === false || network.isInternetReachable === false) && messages === undefined) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Offline</ThemedText><ThemedText style={{ color: theme.textSecondary }}>This Channel is not available on the device yet.</ThemedText><Pressable accessibilityRole="button" onPress={() => pid && gid && router.replace(channelHref(pid, gid, cid && pmid ? { archived: readOnly, companyId: cid, membershipId: pmid } : null))} style={[styles.retry, { backgroundColor: theme.accent }]}><ThemedText style={{ color: Colors.light.text }} type="smallBold">Retry</ThemedText></Pressable></View></ThemedView>;
   if (navigation === undefined || (navigation.available && messages === undefined)) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Conversation' }} /><View style={styles.empty}><ThemedText style={{ color: theme.textSecondary }} type="small">Opening authorized conversation…</ThemedText></View></ThemedView>;
 
-  const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
+
 
   return (
     <ThemedView style={styles.screen}>
@@ -591,11 +550,7 @@ export default function ConversationScreen() {
       />
 
       <View style={styles.flex}>
-      <TaskLinkBatchProvider
-        enabled={releaseConfig.tasks}
-        identity={taskIdentity}
-        messageIds={taskLinkMessageIds}
-      >
+
       <FlatList
           ref={listRef}
           contentContainerStyle={styles.thread}
@@ -656,7 +611,7 @@ export default function ConversationScreen() {
             ) : null
           }
         />
-      </TaskLinkBatchProvider>
+
       {showJumpToLatest ? (
         <Pressable
           accessibilityLabel="Jump to latest messages"
