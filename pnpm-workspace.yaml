@@ -5,6 +5,7 @@ packages:
 nodeLinker: hoisted
 
 allowBuilds:
+  tsc-rs: true
   "@firebase/util": false
   esbuild: true
   lightningcss: true

@@ -9,7 +9,7 @@
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "wrangler dev --config .output/server/wrangler.json --local",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc-rs -p tsconfig.json --noEmit",
     "lint": "oxlint .",
     "test": "vitest run --config vitest.config.ts"
   },
