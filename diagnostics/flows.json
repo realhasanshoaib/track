@@ -1,0 +1,30 @@
+[
+  {
+    "id": "push.delivery",
+    "version": 1,
+    "steps": [
+      { "id": "queued" },
+      {
+        "id": "dispatch",
+        "after": ["queued"],
+        "within": "4m",
+        "oneOf": ["sending", "canceled", "expired"]
+      },
+      { "id": "sending", "after": ["dispatch:sending"], "within": "30s", "need": "conditional" },
+      {
+        "id": "result",
+        "after": ["sending"],
+        "within": "4m",
+        "oneOf": ["delivered", "retrying", "expired", "failed", "canceled"],
+        "need": "conditional"
+      },
+      {
+        "id": "settled",
+        "after": ["result:retrying"],
+        "within": "24h",
+        "oneOf": ["delivered", "expired", "failed", "canceled"],
+        "need": "conditional"
+      }
+    ]
+  }
+]

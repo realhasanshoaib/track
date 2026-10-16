@@ -196,14 +196,16 @@ export default defineSchema({
     traceId: v.string(),
     eventId: v.string(),
     journeyTraceId: v.optional(v.string()),
+    flowRun: v.optional(v.string()),
     occurredAt: v.number(),
     receivedAt: v.number(),
     subjectId: v.string(),
-    sourceSurface: v.literal('web'),
+    sourceSurface: v.union(v.literal('web'), v.literal('server')),
   })
     .index('by_trace_occurred_at', ['traceId', 'occurredAt'])
     .index('by_trace_event', ['traceId', 'eventId'])
     .index('by_journey_occurred_at', ['journeyTraceId', 'occurredAt'])
+    .index('by_flow_run', ['flowRun', 'occurredAt'])
     .index('by_subject_received_at', ['subjectId', 'receivedAt'])
     .index('by_received_at', ['receivedAt']),
   diagnosticIngestRequests: defineTable({
@@ -664,6 +666,8 @@ export default defineSchema({
     recipientProjectMemberId: v.optional(v.id('projectMembers')),
     installationId: v.id('pushInstallations'),
     idempotencyKey: v.string(),
+    diagnosticTraceId: v.optional(v.string()),
+    diagnosticSubjectId: v.optional(v.string()),
     title: v.string(),
     body: v.string(),
     data: v.any(),

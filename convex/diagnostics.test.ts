@@ -65,6 +65,9 @@ describe('diagnostics', () => {
     await expect(actor.mutation(api.diagnostics.ingest, { events: [unsafe] })).rejects.toThrow(
       'diagnostics_invalid_event',
     )
+    await expect(actor.mutation(api.diagnostics.ingest, { events: [{
+      ...valid, attributes: { flow: 'push.delivery', flow_run: 'forged-run', flow_step: 'queued' },
+    }] })).rejects.toThrow('diagnostics_invalid_event')
   })
 
   it('safely rejects ingestion before an authenticated user is provisioned', async () => {

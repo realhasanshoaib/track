@@ -1,15 +1,163 @@
+import { checkFlowRun, createDiagnosticCode, flowDefinitionSchema } from '@q9labsai/diagnostics'
 import { convexTest } from 'convex-test'
 import { describe, expect, it } from 'vitest'
 
+import flowDefinitions from '../diagnostics/flows.json' with { type: 'json' }
 import { api, internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import schema from './schema'
 
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error('Expected a value')
+  return value
+}
+
 const modules = (import.meta as ImportMeta & {
   glob: (patterns: Array<string>) => Record<string, () => Promise<unknown>>
 }).glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
+const pushFlow = flowDefinitionSchema.parse(flowDefinitions[0])
 
 describe('durable mobile push lifecycle', () => {
+  it('preserves browser journey ownership when its clock is ahead of push events', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-clock-skew')
+    const actor = asUser(t, userId)
+    const traceId = createDiagnosticCode()
+    const event = {
+      version: 1, traceId, journeyTraceId: traceId, spanId: '1234567890abcdef',
+      eventId: 'before_push', occurredAt: Date.now() + 60_000,
+      source: 'browser', kind: 'event', name: 'browser.push_source', status: 'ok', level: 'info',
+    }
+    expect(await actor.mutation(api.diagnostics.ingest, { events: [event] })).toEqual({ accepted: 1 })
+    await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'clock-skew', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'clock-skew', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 60_000, deferDispatch: true, sourceTraceId: traceId,
+    })
+    const nextEvent = { ...event, eventId: 'after_push', occurredAt: Date.now() + 61_000 }
+    expect(await actor.mutation(api.diagnostics.ingest, { events: [nextEvent] })).toEqual({ accepted: 1 })
+    await expect(actor.mutation(api.diagnostics.ingest, { events: [{
+      ...nextEvent, eventId: 'changed_journey', journeyTraceId: createDiagnosticCode(),
+    }] })).rejects.toThrow('diagnostics_invalid_link')
+    const otherUserId = await seedUser(t, 'push-clock-skew-other')
+    await expect(asUser(t, otherUserId).mutation(api.diagnostics.ingest, { events: [{
+      ...nextEvent, eventId: 'other_user',
+    }] })).rejects.toThrow('diagnostics_invalid_link')
+  })
+
+  it('records a delivered run on its source trace and finds it by flow run', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-delivered-flow')
+    const sourceUserId = await seedUser(t, 'push-source-flow')
+    const traceId = createDiagnosticCode()
+    await asUser(t, sourceUserId).mutation(api.diagnostics.ingest, { events: [{
+      version: 1, traceId, spanId: '1234567890abcdef', eventId: 'source_event',
+      occurredAt: Date.now(), source: 'browser', kind: 'event', name: 'browser.push_source',
+      status: 'ok', level: 'info',
+    }] })
+    const intentId = await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'delivered-flow', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'delivered-flow', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 60_000, deferDispatch: true, sourceTraceId: traceId,
+    })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
+    await t.mutation(internal.pushDelivery.recordDelivery, {
+      intentId: required(intentId), attemptNumber: required(attemptNumber), provider: 'fcm', providerLatencyMs: 18,
+    })
+    const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+    expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+      .toEqual([
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'delivered'],
+      ])
+    expect(checkFlowRun(pushFlow, run.events, Date.now()).verdict).toBe('ok')
+    const trace = await t.query(internal.diagnostics.lookup.trace, { traceId })
+    expect(trace.events).toHaveLength(5)
+    expect(await t.run(async (ctx) => ctx.db.query('diagnosticEvents')
+      .withIndex('by_flow_run', (q) => q.eq('flowRun', String(intentId))).first()))
+      .toMatchObject({ subjectId: String(sourceUserId) })
+    expect(await t.query(internal.diagnostics.lookup.trace, { flowRun: 'unknown-run' }))
+      .toEqual({ events: [] })
+  })
+
+  it('records cancellation after a retry without reporting provider failure', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-retry-cancel')
+    const intentId = required(await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'retry-cancel', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'retry-cancel', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
+    }))
+    const attemptNumber = required(await t.mutation(internal.pushDelivery.markSending, { intentId }))
+    await t.mutation(internal.pushDelivery.recordFailure, {
+      intentId, attemptNumber, category: 'provider_unavailable', permanent: false, providerLatencyMs: 1,
+    })
+    await t.mutation(internal.pushDelivery.cancelIntent, { intentId, reason: 'eligibility_changed' })
+    const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+    expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+      .toEqual([
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'retrying'], ['result', 'canceled'], ['settled', 'canceled'],
+      ])
+    expect(checkFlowRun(pushFlow, run.events, Date.now()).verdict).toBe('ok')
+    expect(await t.run(async (ctx) => ctx.db.get(intentId))).toMatchObject({ status: 'canceled' })
+  })
+
+  it('records retry and later expiry in the same run', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-expired-flow')
+    const intentId = await t.mutation(internal.pushDelivery.createIntent, {
+      sourceKind: 'test', sourceId: 'expired-flow', eventKind: 'test', recipientUserId: userId,
+      installationId, idempotencyKey: 'expired-flow', title: 'Track', body: 'Test',
+      data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
+    })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
+    await t.mutation(internal.pushDelivery.recordFailure, {
+      intentId: required(intentId), attemptNumber: required(attemptNumber), category: 'provider_unavailable',
+      permanent: false, providerLatencyMs: 1,
+    })
+    await t.run(async (ctx) => ctx.db.patch(required(intentId), { expiresAt: Date.now() - 1 }))
+    expect(await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })).toBeNull()
+    const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+    expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+      .toEqual([
+        ['queued', undefined], ['dispatch', 'sending'], ['sending', undefined],
+        ['result', 'retrying'],
+        ['result', 'expired'], ['settled', 'expired'],
+      ])
+    const checked = checkFlowRun(pushFlow, run.events, Date.now())
+    expect(checked.verdict).toBe('ok')
+    expect(checked.steps.find((step) => step.id === 'result')?.event?.attributes?.outcome)
+      .toBe('retrying')
+    expect(checked.steps.find((step) => step.id === 'settled')?.event?.attributes?.outcome)
+      .toBe('expired')
+    expect(await t.run(async (ctx) => ctx.db.get(required(intentId)))).toMatchObject({ status: 'expired' })
+  })
+
+  it('models cancellation and expiry before a send attempt without a failed flow', async () => {
+    const t = convexTest(schema, modules)
+    const { userId, installationId } = await seedDiagnosticIntentTarget(t, 'push-pre-send-flow')
+    for (const outcome of ['canceled', 'expired'] as const) {
+      const intentId = await t.mutation(internal.pushDelivery.createIntent, {
+        sourceKind: 'test', sourceId: outcome, eventKind: 'test', recipientUserId: userId,
+        installationId, idempotencyKey: `pre-send-${outcome}`, title: 'Track', body: 'Test',
+        data: {}, soundEnabled: true, ttlMs: 30_000, deferDispatch: true,
+      })
+      if (outcome === 'canceled') {
+        await t.mutation(internal.pushDelivery.cancelIntent, { intentId: required(intentId), reason: 'eligibility_changed' })
+      } else {
+        await t.run(async (ctx) => ctx.db.patch(required(intentId), { expiresAt: Date.now() - 1 }))
+        expect(await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })).toBeNull()
+      }
+      const run = await t.query(internal.diagnostics.lookup.trace, { flowRun: String(intentId) })
+      expect(run.events.map((item) => [item.attributes?.flow_step, item.attributes?.outcome]))
+        .toEqual([['queued', undefined], ['dispatch', outcome]])
+      const checked = checkFlowRun(pushFlow, run.events, Date.now())
+      expect(checked.verdict).toBe('ok')
+      expect(checked.steps.find((step) => step.id === 'sending')?.status).toBe('not_observable')
+    }
+  })
+
   it('keeps installation ownership and sign-out state isolated', async () => {
     const t = convexTest(schema, modules)
     const first = await seedUser(t, 'push-first')
@@ -62,6 +210,7 @@ describe('durable mobile push lifecycle', () => {
     })
     expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryAttempts').first()))
       .toMatchObject({ resultCategory: 'legacy_receipt_expired', status: 'permanent_failure' })
+    expect(await t.run(async (ctx) => ctx.db.query('diagnosticEvents').collect())).toEqual([])
   })
 
   it('converges duplicate scheduling, provider acceptance, and recovery', async () => {
@@ -80,12 +229,12 @@ describe('durable mobile push lifecycle', () => {
     const first = await t.mutation(internal.pushDelivery.createIntent, args)
     expect(await t.mutation(internal.pushDelivery.createIntent, args)).toBe(first)
     expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryIntents').collect())).toHaveLength(1)
-    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: first! })
+    const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: required(first) })
     await t.mutation(internal.pushDelivery.recordFailure, {
-      intentId: first!, attemptNumber: attemptNumber!, category: 'rate_limited',
+      intentId: required(first), attemptNumber: required(attemptNumber), category: 'rate_limited',
       permanent: false, providerLatencyMs: 20,
     })
-    expect(await t.run(async (ctx) => ctx.db.get(first!))).toMatchObject({
+    expect(await t.run(async (ctx) => ctx.db.get(required(first)))).toMatchObject({
       attemptCount: 1, status: 'retry_wait',
     })
     {
@@ -103,12 +252,12 @@ describe('durable mobile push lifecycle', () => {
         title: 'Track', body: 'Direct provider test', data: { schemaVersion: '1' },
         soundEnabled: true, ttlMs: 60_000, deferDispatch: true,
       })
-      const attemptNumber = await t.mutation(internal.pushDelivery.markSending, { intentId: intentId! })
+      const directAttempt = await t.mutation(internal.pushDelivery.markSending, { intentId: required(intentId) })
       await t.mutation(internal.pushDelivery.recordDelivery, {
-        intentId: intentId!, attemptNumber: attemptNumber!, provider: 'fcm',
+        intentId: required(intentId), attemptNumber: required(directAttempt), provider: 'fcm',
         providerMessageId: 'projects/track/messages/provider-id', providerLatencyMs: 18,
       })
-      expect(await t.run(async (ctx) => ctx.db.get(intentId!))).toMatchObject({
+      expect(await t.run(async (ctx) => ctx.db.get(required(intentId)))).toMatchObject({
         body: '', status: 'delivered', terminalAt: expect.any(Number), title: 'Track',
       })
       expect(await t.run(async (ctx) => ctx.db.query('pushDeliveryAttempts').first()))
@@ -146,6 +295,17 @@ describe('durable mobile push lifecycle', () => {
 })
 
 type TestBackend = ReturnType<typeof convexTest>
+
+async function seedDiagnosticIntentTarget(t: TestBackend, subject: string) {
+  const userId = await seedUser(t, subject)
+  const now = Date.now()
+  const installationId = await t.run(async (ctx) => ctx.db.insert('pushInstallations', {
+    installationId: `${subject}-installation`, userId, platform: 'ios',
+    environment: 'development', nativePushToken: `${subject}-token`, enabled: true,
+    permissionState: 'granted', lastSeenAt: now, createdAt: now, updatedAt: now,
+  }))
+  return { userId, installationId }
+}
 
 async function seedUser(t: TestBackend, subject: string) {
   return await t.run(async (ctx) => {

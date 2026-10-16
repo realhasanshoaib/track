@@ -1,12 +1,65 @@
+import { createDiagnosticCode, diagnosticCodeSchema, diagnosticEventSchema } from '@q9labsai/diagnostics'
 import { v } from 'convex/values'
 
 import { internal } from './_generated/api'
+import type { Doc } from './_generated/dataModel'
 import { internalMutation, internalQuery, query } from './_generated/server'
+import type { MutationCtx } from './_generated/server'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { retryDelayMs } from './lib/pushDelivery'
 
 const sourceKind = v.union(v.literal('message'), v.literal('task'), v.literal('test'))
 const terminalContent = { title: 'Track', body: '' }
+
+async function recordPushStep(
+  ctx: MutationCtx,
+  intent: Doc<'pushDeliveryIntents'>,
+  step: 'queued' | 'dispatch' | 'sending' | 'result' | 'settled',
+  outcome?: 'sending' | 'canceled' | 'delivered' | 'retrying' | 'expired' | 'failed',
+) {
+  const traceId = intent.diagnosticTraceId
+  if (!traceId) return
+  const occurredAt = Date.now()
+  const event = diagnosticEventSchema.parse({
+    version: 1,
+    traceId,
+    spanId: createDiagnosticCode().slice(0, 16),
+    eventId: createDiagnosticCode(),
+    occurredAt,
+    source: 'server',
+    kind: 'event',
+    name: `push.delivery.${step}`,
+    status: outcome === 'failed' || outcome === 'expired' ? 'error' : 'ok',
+    level: outcome === 'failed' || outcome === 'expired' ? 'warning' : 'info',
+    attributes: {
+      flow: 'push.delivery',
+      flow_run: String(intent._id),
+      flow_step: step,
+      ...(outcome ? { outcome } : {}),
+      attempt: intent.attemptCount,
+    },
+  })
+  await ctx.db.insert('diagnosticEvents', {
+    event,
+    traceId: event.traceId,
+    eventId: event.eventId,
+    flowRun: String(intent._id),
+    occurredAt,
+    receivedAt: occurredAt,
+    subjectId: intent.diagnosticSubjectId ?? String(intent.recipientUserId),
+    sourceSurface: 'server',
+  })
+}
+
+async function recordPushResult(
+  ctx: MutationCtx,
+  intent: Doc<'pushDeliveryIntents'>,
+  outcome: 'delivered' | 'retrying' | 'expired' | 'failed' | 'canceled',
+) {
+  await recordPushStep(ctx, intent, 'result', outcome)
+  if (outcome !== 'retrying' && (intent.attemptCount > 1 || intent.status === 'retry_wait'))
+    await recordPushStep(ctx, intent, 'settled', outcome)
+}
 
 export const recordEvent = internalMutation({
   args: {
@@ -46,6 +99,7 @@ export const createIntent = internalMutation({
     badge: v.optional(v.number()),
     ttlMs: v.number(),
     deferDispatch: v.optional(v.boolean()),
+    sourceTraceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query('pushDeliveryIntents')
@@ -55,6 +109,17 @@ export const createIntent = internalMutation({
     const installation = await ctx.db.get(args.installationId)
     if (!installation || !installation.enabled || !installation.nativePushToken ||
       installation.userId !== args.recipientUserId) return null
+    const recipient = await ctx.db.get(args.recipientUserId)
+    if (!recipient) return null
+    const sourceTraceId = args.sourceTraceId
+    if (sourceTraceId && !diagnosticCodeSchema.safeParse(sourceTraceId).success)
+      throw new Error('push_invalid_source_trace')
+    const sourceEvent = sourceTraceId
+      ? await ctx.db.query('diagnosticEvents')
+        .withIndex('by_trace_occurred_at', (q) => q.eq('traceId', sourceTraceId))
+        .first()
+      : null
+    if (sourceTraceId && !sourceEvent) throw new Error('push_source_trace_not_found')
     const now = Date.now()
     const intentId = await ctx.db.insert('pushDeliveryIntents', {
       sourceKind: args.sourceKind,
@@ -64,6 +129,8 @@ export const createIntent = internalMutation({
       recipientProjectMemberId: args.recipientProjectMemberId,
       installationId: args.installationId,
       idempotencyKey: args.idempotencyKey.slice(0, 300),
+      diagnosticTraceId: sourceTraceId ?? createDiagnosticCode(),
+      diagnosticSubjectId: sourceEvent?.subjectId ?? recipient.authUserId ?? recipient.googleSubject,
       title: args.title.slice(0, 80),
       body: args.body.slice(0, 180),
       data: args.data,
@@ -76,6 +143,8 @@ export const createIntent = internalMutation({
       createdAt: now,
       updatedAt: now,
     })
+    const intent = await ctx.db.get(intentId)
+    if (intent) await recordPushStep(ctx, intent, 'queued')
     if (!args.deferDispatch) {
       await ctx.scheduler.runAfter(0, internal.pushNotifications.dispatchDeliveryIntent, { intentId })
     }
@@ -106,6 +175,8 @@ export const markSending = internalMutation({
         terminalAt: now,
         updatedAt: now,
       })
+      if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'expired')
+      else await recordPushResult(ctx, intent, 'expired')
       return null
     }
     await ctx.db.patch(intent._id, {
@@ -114,6 +185,8 @@ export const markSending = internalMutation({
       nextAttemptAt: undefined,
       updatedAt: now,
     })
+    if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'sending')
+    await recordPushStep(ctx, { ...intent, attemptCount: intent.attemptCount + 1 }, 'sending')
     return intent.attemptCount + 1
   },
 })
@@ -130,6 +203,8 @@ export const cancelIntent = internalMutation({
       terminalAt: now,
       updatedAt: now,
     })
+    if (intent.attemptCount === 0) await recordPushStep(ctx, intent, 'dispatch', 'canceled')
+    else await recordPushResult(ctx, intent, 'canceled')
     await ctx.db.insert('pushDeliveryAttempts', {
       intentId: intent._id,
       attemptNumber: intent.attemptCount,
@@ -171,6 +246,7 @@ export const recordDelivery = internalMutation({
       terminalAt: now,
       updatedAt: now,
     })
+    await recordPushResult(ctx, intent, 'delivered')
   },
 })
 
@@ -203,6 +279,7 @@ export const recordFailure = internalMutation({
         terminalAt: now,
         updatedAt: now,
       })
+      await recordPushResult(ctx, intent, intent.expiresAt <= now ? 'expired' : 'failed')
       return { terminal: true }
     }
     const delay = retryDelayMs(args.attemptNumber)
@@ -211,6 +288,7 @@ export const recordFailure = internalMutation({
       nextAttemptAt: now + delay,
       updatedAt: now,
     })
+    await recordPushResult(ctx, intent, 'retrying')
     await ctx.scheduler.runAfter(delay, internal.pushNotifications.dispatchDeliveryIntent, { intentId: intent._id })
     return { terminal: false }
   },
@@ -241,6 +319,7 @@ export const expireLegacyProviderReceipts = internalMutation({
         terminalAt: now,
         updatedAt: now,
       })
+      await recordPushResult(ctx, intent, 'expired')
       expired += 1
     }
     return expired
@@ -274,6 +353,7 @@ export const recoverStaleSendingIntents = internalMutation({
           terminalAt: now,
           updatedAt: now,
         })
+        await recordPushResult(ctx, intent, intent.expiresAt <= now ? 'expired' : 'failed')
         continue
       }
       await ctx.db.insert('pushDeliveryAttempts', {
@@ -290,6 +370,7 @@ export const recoverStaleSendingIntents = internalMutation({
         nextAttemptAt: now,
         updatedAt: now,
       })
+      await recordPushResult(ctx, intent, 'retrying')
       await ctx.scheduler.runAfter(0, internal.pushNotifications.dispatchDeliveryIntent, {
         intentId: intent._id,
       })
