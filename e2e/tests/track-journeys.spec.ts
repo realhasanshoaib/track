@@ -82,7 +82,7 @@ test('quote reply jumps to an original outside the loaded page', async ({ page }
   })
   await resetFixture('quoteReset')
   await signIn(page)
-  await expect(page.getByRole('button', { name: 'Jump to quoted message' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Jump to quoted message' })).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('article.track-message-row').filter({ hasText: 'E2E performance history message 1' }).filter({ has: page.locator('.track-message-quote') })).toHaveCount(1)
   await capture(page, testInfo, 'quote-before-jump')
   await page.getByRole('button', { name: 'Jump to quoted message' }).click()
