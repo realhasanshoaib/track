@@ -14,60 +14,6 @@
   --font-heading: var(--font-display);
 }
 
-.track-channel-threads {
-  border-bottom: 1px solid var(--border);
-  display: grid;
-  gap: 10px;
-  padding: 14px 18px;
-}
-
-.track-channel-threads > header,
-.track-thread-route-header,
-.track-thread-route-actions,
-.track-thread-rename,
-.track-thread-create {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-}
-
-.track-channel-threads > header {
-  justify-content: space-between;
-}
-
-.track-channel-threads p,
-.track-thread-route p {
-  margin: 0;
-}
-
-.track-thread-tabs {
-  background: var(--muted);
-  border-radius: 8px;
-  display: flex;
-  padding: 2px;
-}
-
-.track-thread-tabs button {
-  border: 0;
-  border-radius: 6px;
-  min-height: 36px;
-  padding: 0 12px;
-}
-
-.track-thread-tabs button.active {
-  background: var(--background);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
-}
-
-.track-thread-list {
-  display: grid;
-  gap: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.track-thread-list a,
 .track-source-thread-link {
   align-items: center;
   background: var(--muted);
@@ -80,161 +26,16 @@
   text-decoration: none;
 }
 
-.track-thread-list a > span,
 .track-source-thread-link {
   gap: 3px;
 }
 
-.track-thread-list a > span {
-  display: grid;
-}
-
-.track-thread-list small,
-.track-source-thread-link span,
-.track-thread-route-header p,
-.track-thread-message time {
+.track-source-thread-link span {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.track-thread-list b {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 11px;
-  padding: 3px 7px;
-}
-
-.track-thread-create {
-  align-items: stretch;
-}
-
-.track-thread-create > input {
-  flex: 1;
-}
-
-.track-thread-create label,
-.track-thread-create select {
-  min-width: 220px;
-}
-
-.track-thread-create select {
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: inherit;
-  height: 100%;
-  min-height: 40px;
-  padding: 0 10px;
-}
-
-.track-thread-route {
-  background: var(--background);
-  color: var(--foreground);
-  display: grid;
-  gap: 16px;
-  margin: 0 auto;
-  max-width: 920px;
-  min-height: 100vh;
-  padding: 24px;
-}
-
-.track-thread-route-header {
-  align-items: flex-start;
-  border-bottom: 1px solid var(--border);
-  justify-content: space-between;
-  padding-bottom: 16px;
-}
-
-.track-thread-route-header > div:nth-child(2) {
-  flex: 1;
-}
-
-.track-thread-route-header h1 {
-  font-size: 22px;
-  margin: 2px 0 4px;
-}
-
-.track-thread-rename input {
-  max-width: 420px;
-}
-
-.track-thread-source,
-.track-thread-archived {
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  display: grid;
-  gap: 5px;
-  padding: 12px;
-}
-
-.track-thread-message-list {
-  align-content: start;
-  display: grid;
-  gap: 10px;
-  min-height: 280px;
-}
-
-.track-thread-message {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  display: grid;
-  gap: 7px;
-  padding: 12px;
-}
-
-.track-thread-message > header,
-.track-thread-message > footer {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: space-between;
-}
-
-.track-thread-message > footer {
-  justify-content: flex-end;
-}
-
-.track-thread-message > footer button,
-.track-thread-composer button[type='button'] {
-  background: transparent;
-  border: 0;
-  color: var(--muted-foreground);
-  min-height: 36px;
-  padding: 0 8px;
-  text-decoration: underline;
-}
-
-.track-thread-composer {
-  background: var(--background);
-  border-top: 1px solid var(--border);
-  bottom: 0;
-  display: grid;
-  gap: 10px;
-  padding: 14px 0 4px;
-  position: sticky;
-}
-
-.track-thread-composer textarea {
-  min-height: 86px;
-}
-
 @media (max-width: 720px) {
-  .track-thread-create,
-  .track-thread-route-header,
-  .track-thread-rename {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .track-thread-create label,
-  .track-thread-create select {
-    width: 100%;
-  }
-
-  .track-thread-route {
-    padding: 16px;
-  }
 }
 
 :root {
@@ -4239,7 +4040,6 @@ button {
   }
 }
 
-
 .track-message-body {
   position: relative;
   min-width: 0;
@@ -5698,7 +5498,6 @@ button.track-mention-inline.group:focus-visible {
   background: var(--avatar-tone-4);
 }
 
-
 .track-mention-avatar.sun,
 .track-mention-avatar.amber,
 .track-mention-avatar.orange,
@@ -6889,7 +6688,7 @@ button:disabled:hover {
   }
 }
 
-/* Authoritative UI direction adoption — conversation, work, Company, and thread surfaces. */
+/* Authoritative UI direction adoption — conversation, work, and Company surfaces. */
 body {
   font-size: 14px;
   line-height: 1.5;
@@ -7232,8 +7031,7 @@ body {
   display: none;
 }
 
-.track-rail-section,
-.track-rail > .track-channel-threads {
+.track-rail-section {
   display: grid;
   gap: 7px;
   flex: none;
@@ -7253,8 +7051,7 @@ body {
   min-height: 30px;
 }
 
-.track-rail-heading,
-.track-rail > .track-channel-threads .mono-label {
+.track-rail-heading {
   color: var(--ink-4);
   font-family: var(--font-meta);
   font-size: 10.5px;
@@ -7318,61 +7115,6 @@ body {
   font-family: var(--font-meta);
   font-size: 9.5px;
 }
-
-.track-rail > .track-channel-threads > header {
-  align-items: flex-start;
-}
-
-.track-rail > .track-channel-threads > header p {
-  display: none;
-}
-
-.track-rail .track-thread-tabs button {
-  min-height: 24px;
-  font-size: 10px;
-  padding: 0 7px;
-}
-
-.track-rail .track-channel-threads > input {
-  min-height: 30px;
-  font-size: 11.5px;
-}
-
-.track-rail .track-thread-list {
-  gap: 2px;
-}
-
-.track-rail .track-thread-list a {
-  min-height: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  padding: 6px 8px;
-}
-
-.track-rail .track-thread-list a:hover {
-  background: var(--paper-3);
-}
-
-.track-rail .track-thread-list strong {
-  font-size: 12.5px;
-}
-
-.track-rail .track-thread-list small {
-  font-family: var(--font-meta);
-  font-size: 9.5px;
-}
-
-.track-rail .track-thread-create {
-  display: grid;
-  gap: 6px;
-}
-
-.track-rail .track-thread-create label,
-.track-rail .track-thread-create select {
-  min-width: 0;
-  width: 100%;
-}
 .track-rail {
   display: flex;
   flex-direction: column;
@@ -7388,8 +7130,7 @@ body {
   gap: 2px;
 }
 
-.track-rail-section,
-.track-rail-thread-section {
+.track-rail-section {
   display: flex;
   flex: none;
   flex-direction: column;
@@ -7400,7 +7141,6 @@ body {
 }
 
 .track-rail-section > header,
-.track-rail-thread-section > header,
 .track-rail-heading-row {
   display: flex;
   min-height: 18px;
@@ -7409,8 +7149,7 @@ body {
   padding: 0 2px;
 }
 
-.track-rail-heading,
-.track-rail-thread-section > header > span {
+.track-rail-heading {
   color: var(--ink-4);
   font-family: var(--font-meta);
   font-size: 10.5px;
@@ -7437,179 +7176,6 @@ body {
   width: 28px;
   height: 28px;
   flex: none;
-}
-
-
-.track-rail-thread-tools {
-  color: var(--ink-4);
-  font-family: var(--font-meta);
-  font-size: 10px;
-}
-
-
-.track-rail-thread-tools summary {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  padding: 2px;
-}
-
-
-.track-rail-thread-tools[open] {
-  display: grid;
-  gap: 6px;
-}
-
-
-.track-rail-thread-tools input,
-.track-rail-thread-tools select {
-  min-width: 0;
-  min-height: 30px;
-  font-size: 11px;
-}
-
-.track-rail-thread-section > ul {
-  display: grid;
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.track-rail-thread-section > ul a {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto 6px;
-  align-items: center;
-  gap: 8px;
-  border-radius: 6px;
-  color: var(--ink-2);
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 6px 8px;
-  text-decoration: none;
-}
-
-.track-rail-thread-section > ul a:hover {
-  background: var(--paper-3);
-}
-
-.track-rail-thread-section > ul strong {
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track-rail-thread-section > ul span {
-  color: var(--ink-4);
-  font-family: var(--font-meta);
-  font-size: 9.5px;
-  white-space: nowrap;
-}
-
-.track-rail-thread-section > ul i {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-/* Thread route */
-.track-thread-route {
-  display: flex;
-  width: min(760px, 100%);
-  min-height: 100vh;
-  flex-direction: column;
-  gap: 0;
-  border-right: 1px solid var(--hairline);
-  border-left: 1px solid var(--hairline);
-  background: var(--paper);
-  padding: 0;
-}
-
-.track-thread-route-header {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--paper);
-  padding: 10px 14px;
-}
-
-.track-thread-route-header > a {
-  color: var(--ink-3);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.track-thread-route-header h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.track-thread-route-header p {
-  font-family: var(--font-meta);
-  font-size: 9.5px;
-}
-
-.track-thread-rename,
-.track-thread-source,
-.track-thread-notice,
-.track-thread-archived,
-.track-thread-route > .track-error {
-  margin: 10px 14px 0;
-}
-
-.track-thread-source,
-.track-thread-archived {
-  border-color: var(--hairline);
-  border-radius: 7px;
-  background: var(--paper-2);
-  padding: 8px 12px;
-}
-
-.track-thread-message-list {
-  gap: 16px;
-  flex: 1;
-  padding: 20px 24px;
-}
-
-.track-thread-message {
-  position: relative;
-  gap: 3px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  padding: 4px 8px;
-}
-
-.track-thread-message > header strong {
-  font-size: 13px;
-}
-
-.track-thread-message p {
-  color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-.track-thread-composer {
-  gap: 6px;
-  margin: 0 24px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
-  padding: 8px;
-}
-
-.track-thread-composer textarea {
-  min-height: 56px;
-  border: 0;
-  box-shadow: none;
 }
 
 /* Company-owned surfaces live in features/company/company-surfaces.css. */
@@ -7695,20 +7261,6 @@ body {
   .track-composer-wrap {
     padding: 8px 14px max(14px, env(safe-area-inset-bottom));
   }
-
-  .track-thread-route {
-    border: 0;
-  }
-
-  .track-thread-route-header {
-    align-items: flex-start;
-  }
-
-  .track-thread-message-list {
-    padding: 16px 12px;
-  }
-
-  .track-thread-composer {
-    margin: 0 12px;
-  }
 }
+
+.track-message-quote { color: inherit; font: inherit; text-align: left; cursor: pointer; border-top: 0; border-right: 0; border-bottom: 0; }

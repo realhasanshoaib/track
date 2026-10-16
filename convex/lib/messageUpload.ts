@@ -12,7 +12,7 @@ export type MessageUploadMetadata = {
 export type MessageUploadScope = {
   projectId: Id<'projects'>
   groupId: Id<'groups'>
-  channelThreadId?: Id<'channelThreads'>
+
   uploaderId: Id<'users'>
   uploaderProjectMemberId: Id<'projectMembers'>
   actingCompanyId?: Id<'companies'>
@@ -24,7 +24,6 @@ function matchesScope(
 ) {
   return intent.projectId === scope.projectId &&
     intent.groupId === scope.groupId &&
-    intent.channelThreadId === scope.channelThreadId &&
     intent.uploaderId === scope.uploaderId &&
     intent.uploaderProjectMemberId === scope.uploaderProjectMemberId &&
     intent.actingCompanyId === scope.actingCompanyId

@@ -6,8 +6,8 @@ import type { Page, TestInfo } from '@playwright/test'
 const execFileAsync = promisify(execFile)
 const fixtureCommand = new URL('../../scripts/e2e/fixture-command.mjs', import.meta.url)
 
-async function resetFixture() {
-  await execFileAsync(process.execPath, [fixtureCommand.pathname, 'reset'], {
+async function resetFixture(operation = 'reset') {
+  await execFileAsync(process.execPath, [fixtureCommand.pathname, operation], {
     env: process.env,
     maxBuffer: 8 * 1024 * 1024,
     timeout: 120_000,
@@ -72,4 +72,21 @@ test('archived channel renders as a read-only evidence surface', async ({ page }
   await expect(page.getByText('Archived evidence remains available for review.', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByPlaceholder(/Message archived-review/)).toHaveCount(0)
   await capture(page, testInfo, 'archived-channel')
+})
+
+test('quote reply jumps to an original outside the loaded page', async ({ page }, testInfo) => {
+  const browserErrors: string[] = []
+  page.on('pageerror', (error) => browserErrors.push(error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  await resetFixture('quoteReset')
+  await signIn(page)
+  await expect(page.getByRole('button', { name: 'Jump to quoted message' })).toBeVisible()
+  await expect(page.locator('article.track-message-row').filter({ hasText: 'E2E performance history message 1' }).filter({ has: page.locator('.track-message-quote') })).toHaveCount(1)
+  await capture(page, testInfo, 'quote-before-jump')
+  await page.getByRole('button', { name: 'Jump to quoted message' }).click()
+  await expect(page.locator('article.track-message-row').filter({ has: page.locator('.track-markdown', { hasText: /^E2E performance history message 1$/ }) })).toBeInViewport({ timeout: 30_000 })
+  await capture(page, testInfo, 'quote-after-jump')
+  expect(browserErrors).toEqual([])
 })

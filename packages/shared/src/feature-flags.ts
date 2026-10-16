@@ -1,16 +1,14 @@
-export const releaseFeatureNames = ['companyModel', 'threads'] as const
+export const releaseFeatureNames = ['companyModel'] as const
 export type ReleaseFeatureName = (typeof releaseFeatureNames)[number]
 
 export type ReleaseFeatureFlags = Readonly<Record<ReleaseFeatureName, boolean>>
 
 export const defaultReleaseFeatureFlags = Object.freeze({
   companyModel: true,
-  threads: true,
 }) satisfies ReleaseFeatureFlags
 
 export const unavailableReleaseFeatureFlags = Object.freeze({
   companyModel: false,
-  threads: false,
 }) satisfies ReleaseFeatureFlags
 
 export function resolveReleaseFeatureFlag(value: string | undefined) {

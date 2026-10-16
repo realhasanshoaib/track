@@ -21,7 +21,7 @@ export type UploadIntentResponse = {
 
 export type GenerateUploadUrlInput = {
   actingCompanyId?: Id<'companies'>
-  channelThreadId?: Id<'channelThreads'>
+
   contentType: string
   durationMs?: number
   filename: string

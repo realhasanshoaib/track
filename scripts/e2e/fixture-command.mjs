@@ -6,7 +6,7 @@ const execFileAsync = promisify(execFile)
 const metadataPath = process.env.TRACK_E2E_METADATA_PATH ?? new URL('../../artifacts/e2e/local-stack.json', import.meta.url)
 const operation = process.argv[2] ?? 'reset'
 
-if (!['reset', 'seed', 'performanceReset'].includes(operation)) {
+if (!['reset', 'seed', 'performanceReset', 'quoteReset'].includes(operation)) {
   throw new Error(`Unsupported fixture operation: ${operation}`)
 }
 

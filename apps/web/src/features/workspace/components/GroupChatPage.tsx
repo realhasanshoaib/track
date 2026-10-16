@@ -17,10 +17,6 @@ import { ThreadDaySeparator } from '#/features/workspace/components/ThreadDaySep
 import type { ChatSearchMatch } from '#/features/workspace/search/chat-search'
 import type { WorkspaceThreadItem } from '#/features/workspace/search/chat-thread-data'
 
-
-import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
-import { useReleaseConfig } from '#/lib/release-config'
-
 type PendingAttachment = ReturnType<typeof createPendingAttachment>
 type ActiveTypingIndicator = NonNullable<ConversationComposerProps['activeTypingIndicators']>[number]
 type MentionOption = ConversationComposerProps['filteredMentionOptions'][number]
@@ -29,7 +25,6 @@ type MentionSection = ConversationComposerProps['mentionSections'][number]
 type GroupChatPageProps = {
   activeGroup: Doc<'groups'> | undefined
   activeGroupId: Id<'groups'> | null
-  activeProjectId: Id<'projects'> | null
   activeTypingIndicators: Array<ActiveTypingIndicator>
   busyAction: string | null
   chatSearchMatchKeys: Set<string>
@@ -99,7 +94,6 @@ type GroupChatPageProps = {
 export function GroupChatPage({
   activeGroup,
   activeGroupId,
-  activeProjectId,
   activeTypingIndicators,
   busyAction,
   chatSearchMatchKeys,
@@ -158,23 +152,12 @@ export function GroupChatPage({
   visibleMessages,
   voiceRecordingActive,
 }: GroupChatPageProps) {
-  const releaseConfig = useReleaseConfig()
   const readOnly = activeGroup?.status === 'archived'
 
   const content = (
     <>
       <div className="track-chat-mobile-context">
 
-        {releaseConfig.threads && activeGroupId && activeProjectId ? (
-          <ChannelThreadBrowser
-            groupId={activeGroupId}
-            projectId={activeProjectId}
-            readOnly={activeGroup?.status === 'archived'}
-            timelineMessages={visibleMessages}
-            userId={currentUserId}
-            variant="rail"
-          />
-        ) : null}
       </div>
       <div
         className="track-thread-scroll"

@@ -32,14 +32,6 @@ const channelMessages = [
   { author: 3, hoursAgo: 1, body: 'Final preview is stable. I am comfortable calling this ready once release notes are published.' },
 ]
 
-const threadReplies = [
-  { author: 1, hoursAgo: 25, body: 'Yes. Lead with faster handoffs, then support it with the shared conversation context.' },
-  { author: 2, hoursAgo: 24, body: 'I agree. The customer proof point is fewer status meetings after the launch.' },
-  { author: 3, hoursAgo: 23, body: 'That framing also gives us room to mention the mobile workflow without overloading the banner.' },
-  { author: 0, hoursAgo: 21, body: 'Decision made. Leo owns the final copy and Priya will validate it in the preview.' },
-  { author: 1, hoursAgo: 19, body: 'Done. The final headline is in the review board and ready for approval.' },
-]
-
 export const seedLaunchWeek = mutation({
   args: {},
   handler: async (ctx) => {
@@ -75,15 +67,12 @@ export const seedLaunchWeek = mutation({
       .collect())
       .find((group) => group.name === 'launch-week' && !group.archivedAt)
     if (existingChannel) {
-      const [messages, thread] = await Promise.all([
-        ctx.db.query('messages').withIndex('by_group_created_at', (query) => query.eq('groupId', existingChannel._id)).collect(),
-        ctx.db.query('channelThreads').withIndex('by_group_status_updated_at', (query) => query.eq('groupId', existingChannel._id).eq('status', 'active')).first(),
-      ])
+      const messages = await
+        ctx.db.query('messages').withIndex('by_group_created_at', (query) => query.eq('groupId', existingChannel._id)).collect()
       return {
         alreadySeeded: true,
         channelId: existingChannel._id,
-        messageCount: messages.filter((message) => !message.channelThreadId).length,
-        threadId: thread?._id,
+        messageCount: messages.length,
       }
     }
 
@@ -178,50 +167,11 @@ export const seedLaunchWeek = mutation({
       messageIds.push(messageId)
     }
 
-    const threadSourceMessageId = messageIds[12]
-    if (!threadSourceMessageId) throw new Error('demo_seed_message_missing')
-    const threadId = await ctx.db.insert('channelThreads', {
-      projectId: project._id,
-      groupId: channelId,
-      name: 'Release banner decision',
-      sourceMessageId: threadSourceMessageId,
-      creatorUserId: seededMembers[0].user._id,
-      creatorProjectMemberId: seededMembers[0].member._id,
-      status: 'active',
-      revision: 1,
-      replyCount: threadReplies.length,
-      latestReplyAt: now - 19 * hour,
-      latestChannelSequence: channelMessages.length + threadReplies.length,
-      idempotencyKey: 'demo-launch-week-release-banner-thread',
-      createdAt: now - 26 * hour,
-      updatedAt: now - 19 * hour,
-    })
-    for (const [index, reply] of threadReplies.entries()) {
-      const author = seededMembers[reply.author]
-      if (!author) throw new Error('demo_seed_thread_author_missing')
-      await ctx.db.insert('messages', {
-        projectId: project._id,
-        groupId: channelId,
-        authorId: author.user._id,
-        authorProjectMemberId: author.member._id,
-        channelThreadId: threadId,
-        channelSequence: channelMessages.length + index + 1,
-        body: reply.body,
-        mentions: [],
-        attachmentIds: [],
-        replyToMessageId: index === 0 ? threadSourceMessageId : undefined,
-        createdAt: now - reply.hoursAgo * hour,
-      })
-    }
-    await ctx.db.patch(channelId, { nextChannelSequence: channelMessages.length + threadReplies.length })
-
     return {
       alreadySeeded: false,
       projectId: project._id,
       channelId,
-      threadId,
       messageCount: channelMessages.length,
-      threadReplyCount: threadReplies.length,
     }
   },
 })

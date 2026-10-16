@@ -20,7 +20,7 @@ type Props = {
   isOwnMessage: boolean;
   message: DetailedMessage;
   onLongPress: () => void;
-  onOpenThread?: () => void;
+
   onPressReply?: () => void;
   timeLabel: string;
 };
@@ -30,7 +30,7 @@ export function MessageBubble({
   isOwnMessage,
   message,
   onLongPress,
-  onOpenThread,
+
   onPressReply,
   timeLabel,
 }: Props) {
@@ -45,9 +45,6 @@ export function MessageBubble({
   );
   // Media-closed bubbles overlay the timestamp on the image, WhatsApp-style.
   const mediaClosesBubble =
-    hasMedia &&
-    !body &&
-    !message.channelThread &&
     message.attachments.every(
       ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
     );
@@ -147,42 +144,7 @@ export function MessageBubble({
           </View>
         ) : null}
 
-        {message.channelThread ? (
-          <Pressable
-            accessibilityHint={onOpenThread ? 'Opens the thread' : undefined}
-            accessibilityLabel={`Thread ${message.channelThread.name}, ${message.channelThread.replyCount} ${
-              message.channelThread.replyCount === 1 ? 'reply' : 'replies'
-            }${message.channelThread.status === 'archived' ? ', archived' : ''}`}
-            accessibilityRole={onOpenThread ? 'button' : 'text'}
-            android_ripple={{ color: theme.backgroundSelected }}
-            disabled={!onOpenThread}
-            onLongPress={onLongPress}
-            onPress={() => {
-              if (!onOpenThread) return;
-              hapticLight();
-              onOpenThread();
-            }}
-            style={[
-              styles.threadChip,
-              hasMedia && styles.inset,
-              { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline },
-            ]}>
-            <PlatformIcon color={theme.textSecondary} name="forum-outline" size={15} />
-            <View style={styles.threadBody}>
-              <ThemedText numberOfLines={1} type="captionBold">
-                {message.channelThread.name}
-              </ThemedText>
-              <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">
-                {`${message.channelThread.replyCount} ${
-                  message.channelThread.replyCount === 1 ? 'reply' : 'replies'
-                }${message.channelThread.status === 'archived' ? ' · Archived' : ''}`}
-              </ThemedText>
-            </View>
-            {onOpenThread ? (
-              <PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} />
-            ) : null}
-          </Pressable>
-        ) : null}
+        {null}
 
         {body ? null : mediaClosesBubble ? (
           <View style={[styles.timeOverlay, { backgroundColor: theme.overlay }]}>

@@ -1,21 +1,13 @@
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 
-
 const memberBatchSize = 25
 const channelBatchSize = 50
-const threadBatchSize = 25
 
 export type ExitCaptureCursor =
   | { phase: 'members' | 'channels'; cursor: string | null }
-  | {
-      phase: 'threads'
-      memberCursor: string | null
-      memberId?: Id<'projectMembers'>
-      memberDone?: boolean
-      channelCursor?: string | null
-      threadCursor?: string | null
-    }
+  | { phase: 'visibility'; memberCursor: string | null; memberDone: boolean;
+      memberId?: Id<'projectMembers'>; channelCursor?: string | null }
 
 type ExitSnapshotRow =
   | { scope: 'member'; sourceId: string; projectMemberId: Id<'projectMembers'>; payload: {
@@ -44,24 +36,6 @@ type ExitSnapshotRow =
         status?: string
       }
     } }
-  | { scope: 'thread'; sourceId: string; projectMemberId: Id<'projectMembers'>; threadId: Id<'channelThreads'>; payload: {
-      kind: 'thread'
-      snapshot: {
-        _id: Id<'channelThreads'>
-        createdAt: number
-        groupId: Id<'groups'>
-        name: string
-        status: 'active' | 'archived'
-        revision: number
-        sourceAvailable: boolean
-        following: boolean
-        lastReadChannelSequence: number
-        replyCount?: number
-        latestReplyAt?: number
-        latestChannelSequence?: number
-      }
-    } }
-
 type OperationInput = {
   projectCompanyId: Id<'projectCompanies'>
   projectId: Id<'projects'>
@@ -118,38 +92,22 @@ function normalizeSnapshotSearchText(value: string) {
 }
 
 function snapshotSearchText(row: ExitSnapshotRow): string | undefined {
-  if (row.payload.kind === 'channel' || row.payload.kind === 'thread') {
+  if (row.payload.kind === 'channel') {
     return normalizeSnapshotSearchText(row.payload.snapshot.name)
   }
   return undefined
 }
 
-function isPhase(value: unknown): value is ExitCaptureCursor['phase'] {
-  return value === 'members' || value === 'channels' || value === 'threads'
-}
-
 function isExitCaptureCursor(value: unknown): value is ExitCaptureCursor {
   if (typeof value !== 'object' || value === null || !('phase' in value)) return false
-  const phase = value.phase
-  if (!isPhase(phase)) return false
-  if (phase === 'threads') {
-    if (!('memberCursor' in value)) return false
-    const memberCursor = value.memberCursor
-    const channelCursor = 'channelCursor' in value ? value.channelCursor : undefined
-    const threadCursor = 'threadCursor' in value ? value.threadCursor : undefined
-    const memberId = 'memberId' in value ? value.memberId : undefined
-    const memberDone = 'memberDone' in value ? value.memberDone : undefined
-    return (
-      (memberCursor === null || typeof memberCursor === 'string') &&
-      (memberDone === undefined || typeof memberDone === 'boolean') &&
-      (channelCursor === undefined || channelCursor === null || typeof channelCursor === 'string') &&
-      (threadCursor === undefined || threadCursor === null || typeof threadCursor === 'string') &&
-      (memberId === undefined || typeof memberId === 'string')
-    )
+  if (value.phase === 'visibility') {
+    return 'memberCursor' in value && (value.memberCursor === null || typeof value.memberCursor === 'string') &&
+      'memberDone' in value && typeof value.memberDone === 'boolean' &&
+      (!('memberId' in value) || typeof value.memberId === 'string') &&
+      (!('channelCursor' in value) || value.channelCursor === null || typeof value.channelCursor === 'string')
   }
-  if (!('cursor' in value)) return false
-  const cursor = value.cursor
-  return cursor === null || typeof cursor === 'string'
+  return (value.phase === 'members' || value.phase === 'channels') && 'cursor' in value &&
+    (value.cursor === null || typeof value.cursor === 'string')
 }
 
 export function decodeExitCaptureCursor(value: string | null | undefined): ExitCaptureCursor {
@@ -185,8 +143,7 @@ async function insertSnapshotRow(
     operationId: input.operationId,
     scope: row.scope,
     projectMemberId: 'projectMemberId' in row ? row.projectMemberId : undefined,
-    groupId: row.scope === 'channel' ? row.payload.snapshot._id : row.scope === 'thread' ? row.payload.snapshot.groupId : undefined,
-    threadId: row.scope === 'thread' ? row.threadId : undefined,
+    groupId: row.scope === 'channel' ? row.payload.snapshot._id : undefined,
     sourceKind: row.scope,
     sourceId: row.sourceId,
     searchText: snapshotSearchText(row),
@@ -316,9 +273,9 @@ async function captureChannels(
   }
   return {
     cursor: result.isDone
-      ? encodeCursor({ phase: 'threads', memberCursor: null })
+      ? encodeCursor({ phase: 'visibility', memberCursor: null, memberDone: false })
       : encodeCursor({ phase: 'channels', cursor: result.continueCursor }),
-    nextPhase: result.isDone ? 'threads' as const : 'channels' as const,
+    nextPhase: result.isDone ? 'visibility' as const : 'channels' as const,
     stagedCount,
   }
 }
@@ -375,144 +332,31 @@ async function stageChannelVisibilityPage(
   }
 }
 
-async function captureThreads(
+async function captureVisibility(
   ctx: MutationCtx,
   input: OperationInput,
   participation: Doc<'projectCompanies'>,
-  cursor: Extract<ExitCaptureCursor, { phase: 'threads' }>,
+  cursor: Extract<ExitCaptureCursor, { phase: 'visibility' }>,
 ) {
-  let memberId = cursor.memberId
-  let memberCursor = cursor.memberCursor
-  let channelCursor = cursor.channelCursor
-  let threadCursor = cursor.threadCursor ?? null
-  let stagedCount = 0
-  if (!memberId) {
-    if (cursor.memberDone) {
-      return {
-        cursor: null,
-        nextPhase: 'complete' as const,
-        stagedCount,
-      }
-    }
-    const memberPage = await ctx.db
-      .query('projectMembers')
-      .withIndex('by_project_company_status', (q) =>
-        q
-          .eq('projectId', input.projectId)
-          .eq('companyId', participation.companyId)
-          .eq('status', 'active'),
-      )
-      .paginate({ cursor: memberCursor, numItems: 1 })
-    if (memberPage.page.length === 0) {
-      return {
-        cursor: null,
-        nextPhase: 'complete' as const,
-        stagedCount,
-      }
-    }
-    const member = memberPage.page[0]
-    memberId = member._id
-    memberCursor = memberPage.continueCursor
-    const memberDone = memberPage.isDone
-    channelCursor = null
-    threadCursor = null
-    await ensureStagingEntitlement(ctx, input, participation, memberId)
+  if (!cursor.memberId) {
+    if (cursor.memberDone) return { cursor: null, nextPhase: 'complete' as const, stagedCount: 0 }
+    const members = await ctx.db.query('projectMembers').withIndex('by_project_company_status', (q) =>
+      q.eq('projectId', input.projectId).eq('companyId', participation.companyId).eq('status', 'active'),
+    ).paginate({ cursor: cursor.memberCursor, numItems: 1 })
+    const member = members.page[0]
+    if (members.page.length === 0) return { cursor: null, nextPhase: 'complete' as const, stagedCount: 0 }
+    await ensureStagingEntitlement(ctx, input, participation, member._id)
     return {
-      cursor: encodeCursor({ phase: 'threads', memberCursor, memberId, memberDone, channelCursor, threadCursor }),
-      nextPhase: 'threads' as const,
-      stagedCount,
+      cursor: encodeCursor({ phase: 'visibility', memberId: member._id, memberCursor: members.continueCursor,
+        memberDone: members.isDone, channelCursor: null }),
+      nextPhase: 'visibility' as const, stagedCount: 0,
     }
   }
-  if (channelCursor !== undefined) {
-    const visibility = await stageChannelVisibilityPage(ctx, input, memberId, channelCursor)
-    stagedCount += visibility.stagedCount
-    return {
-      cursor: visibility.done
-        ? encodeCursor({ phase: 'threads', memberCursor, memberId, memberDone: cursor.memberDone, threadCursor: null })
-        : encodeCursor({
-            phase: 'threads',
-            memberCursor,
-            memberId,
-            memberDone: cursor.memberDone,
-            channelCursor: visibility.cursor,
-            threadCursor: null,
-          }),
-      nextPhase: 'threads' as const,
-      stagedCount,
-    }
-  }
-  const threads = await ctx.db
-    .query('channelThreads')
-    .withIndex('by_project', (q) => q.eq('projectId', input.projectId))
-    .paginate({ cursor: threadCursor, numItems: threadBatchSize })
-  for (const thread of threads.page) {
-    if (thread.createdAt > input.cutoff) continue
-    const membership = await ctx.db
-      .query('groupMembers')
-      .withIndex('by_group_project_member', (q) =>
-        q.eq('groupId', thread.groupId).eq('projectMemberId', memberId),
-      )
-      .unique()
-    if (!membership || membership.status !== 'active') continue
-    const [sourceMessage, follower, readState] = await Promise.all([
-      thread.sourceMessageId ? ctx.db.get(thread.sourceMessageId) : null,
-      ctx.db
-        .query('channelThreadFollowers')
-        .withIndex('by_thread_project_member', (q) =>
-          q.eq('channelThreadId', thread._id).eq('projectMemberId', memberId),
-        )
-        .unique(),
-      ctx.db
-        .query('channelThreadReadStates')
-        .withIndex('by_thread_project_member', (q) =>
-          q.eq('channelThreadId', thread._id).eq('projectMemberId', memberId),
-        )
-        .unique(),
-    ])
-    const payload = {
-      kind: 'thread' as const,
-      snapshot: {
-        _id: thread._id,
-        createdAt: thread.createdAt,
-        groupId: thread.groupId,
-        name: thread.name,
-        status: thread.status,
-        revision: thread.revision,
-        sourceAvailable: Boolean(sourceMessage && sourceMessage.createdAt <= input.cutoff),
-        following: follower?.preference === 'following',
-        lastReadChannelSequence: readState?.lastReadChannelSequence ?? 0,
-        replyCount: thread.replyCount,
-        latestReplyAt: thread.latestReplyAt,
-        latestChannelSequence: thread.latestChannelSequence,
-      },
-    }
-    if (await insertSnapshotRow(ctx, input, {
-      scope: 'thread',
-      sourceId: String(thread._id),
-      projectMemberId: memberId,
-      threadId: thread._id,
-      payload,
-    })) stagedCount += 1
-  }
-  if (!threads.isDone) {
-    return {
-      cursor: encodeCursor({ phase: 'threads', memberCursor, memberId, memberDone: cursor.memberDone, threadCursor: threads.continueCursor }),
-      nextPhase: 'threads' as const,
-      stagedCount,
-    }
-  }
-  if (cursor.memberDone) {
-    return {
-      cursor: null,
-      nextPhase: 'complete' as const,
-      stagedCount,
-    }
-  }
-  return {
-    cursor: encodeCursor({ phase: 'threads', memberCursor, threadCursor: null }),
-    nextPhase: 'threads' as const,
-    stagedCount,
-  }
+  const result = await stageChannelVisibilityPage(ctx, input, cursor.memberId, cursor.channelCursor ?? null)
+  const next: ExitCaptureCursor = result.done
+    ? { phase: 'visibility', memberCursor: cursor.memberCursor, memberDone: cursor.memberDone }
+    : { ...cursor, channelCursor: result.cursor }
+  return { cursor: encodeCursor(next), nextPhase: 'visibility' as const, stagedCount: result.stagedCount }
 }
 
 export async function captureExitBatch(
@@ -529,17 +373,13 @@ export async function captureExitBatch(
       const result = await captureMembers(ctx, input, cursor.cursor)
       return { ...result, phase: result.nextPhase, cursor: result.cursor }
     }
+    case 'visibility': {
+      const result = await captureVisibility(ctx, input, participation, cursor)
+      return { phase: result.nextPhase, cursor: result.cursor, stagedCount: result.stagedCount }
+    }
     case 'channels': {
       const result = await captureChannels(ctx, input, cursor.cursor)
       return { ...result, phase: result.nextPhase, cursor: result.cursor }
-    }
-    case 'threads': {
-      const result = await captureThreads(ctx, input, participation, cursor)
-      return {
-        phase: result.nextPhase,
-        cursor: result.cursor,
-        stagedCount: result.stagedCount,
-      }
     }
   }
   throw new Error('snapshot_capture_cursor_invalid')

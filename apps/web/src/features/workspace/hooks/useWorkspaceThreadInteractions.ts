@@ -26,7 +26,6 @@ export function useWorkspaceThreadInteractions({
   latestThreadItemKey,
   messagesLoaded,
   navigateToGroup,
-  navigateToSearchResult,
   openProjectSearch,
   pendingFocusMessageId,
   setActiveChatMatchIndex,
@@ -64,7 +63,6 @@ export function useWorkspaceThreadInteractions({
   latestThreadItemKey: string | null
   messagesLoaded: boolean
   navigateToGroup: (groupId: Id<'groups'>) => void
-  navigateToSearchResult?: (result: ProjectSearchResult) => void
   openProjectSearch: () => void
   pendingFocusMessageId: Id<'messages'> | null
   setActiveChatMatchIndex: Dispatch<SetStateAction<number>>
@@ -286,10 +284,6 @@ export function useWorkspaceThreadInteractions({
     setProjectSearchQuery('')
     setMobileNavOpen(false)
 
-    if (result.threadId && result.groupId && activeProjectId) {
-      navigateToSearchResult?.(result)
-      return
-    }
     if (!result.groupId) return
     navigateToGroup(result.groupId)
     if (!result.messageId) return

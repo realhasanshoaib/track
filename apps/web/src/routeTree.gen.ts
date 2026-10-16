@@ -29,7 +29,6 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as WorkspaceProjectsProjectIdIndexRouteImport } from './routes/workspace.projects.$projectId.index'
 import { Route as WorkspaceProjectsProjectIdSettingsRouteImport } from './routes/workspace.projects.$projectId.settings'
 import { Route as WorkspaceProjectsProjectIdGroupsGroupIdRouteImport } from './routes/workspace.projects.$projectId.groups.$groupId'
-import { Route as WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRouteImport } from './routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId'
 
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/workspace',
@@ -136,12 +135,6 @@ const WorkspaceProjectsProjectIdGroupsGroupIdRoute =
     path: '/groups/$groupId',
     getParentRoute: () => WorkspaceProjectsProjectIdRoute,
   } as any)
-const WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute =
-  WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRouteImport.update({
-    id: '/threads/$threadId',
-    path: '/threads/$threadId',
-    getParentRoute: () => WorkspaceProjectsProjectIdGroupsGroupIdRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -164,7 +157,6 @@ export interface FileRoutesByFullPath {
   '/workspace/projects/$projectId/settings': typeof WorkspaceProjectsProjectIdSettingsRoute
   '/workspace/projects/$projectId/': typeof WorkspaceProjectsProjectIdIndexRoute
   '/workspace/projects/$projectId/groups/$groupId': typeof WorkspaceProjectsProjectIdGroupsGroupIdRouteWithChildren
-  '/workspace/projects/$projectId/groups/$groupId/threads/$threadId': typeof WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -185,7 +177,6 @@ export interface FileRoutesByTo {
   '/workspace/projects/$projectId/settings': typeof WorkspaceProjectsProjectIdSettingsRoute
   '/workspace/projects/$projectId': typeof WorkspaceProjectsProjectIdIndexRoute
   '/workspace/projects/$projectId/groups/$groupId': typeof WorkspaceProjectsProjectIdGroupsGroupIdRouteWithChildren
-  '/workspace/projects/$projectId/groups/$groupId/threads/$threadId': typeof WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -209,7 +200,6 @@ export interface FileRoutesById {
   '/workspace/projects/$projectId/settings': typeof WorkspaceProjectsProjectIdSettingsRoute
   '/workspace/projects/$projectId/': typeof WorkspaceProjectsProjectIdIndexRoute
   '/workspace/projects/$projectId/groups/$groupId': typeof WorkspaceProjectsProjectIdGroupsGroupIdRouteWithChildren
-  '/workspace/projects/$projectId/groups/$groupId/threads/$threadId': typeof WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -234,7 +224,6 @@ export interface FileRouteTypes {
     | '/workspace/projects/$projectId/settings'
     | '/workspace/projects/$projectId/'
     | '/workspace/projects/$projectId/groups/$groupId'
-    | '/workspace/projects/$projectId/groups/$groupId/threads/$threadId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -255,7 +244,6 @@ export interface FileRouteTypes {
     | '/workspace/projects/$projectId/settings'
     | '/workspace/projects/$projectId'
     | '/workspace/projects/$projectId/groups/$groupId'
-    | '/workspace/projects/$projectId/groups/$groupId/threads/$threadId'
   id:
     | '__root__'
     | '/'
@@ -278,7 +266,6 @@ export interface FileRouteTypes {
     | '/workspace/projects/$projectId/settings'
     | '/workspace/projects/$projectId/'
     | '/workspace/projects/$projectId/groups/$groupId'
-    | '/workspace/projects/$projectId/groups/$groupId/threads/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -439,24 +426,14 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceProjectsProjectIdGroupsGroupIdRouteImport
       parentRoute: typeof WorkspaceProjectsProjectIdRoute
     }
-    '/workspace/projects/$projectId/groups/$groupId/threads/$threadId': {
-      id: '/workspace/projects/$projectId/groups/$groupId/threads/$threadId'
-      path: '/threads/$threadId'
-      fullPath: '/workspace/projects/$projectId/groups/$groupId/threads/$threadId'
-      preLoaderRoute: typeof WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRouteImport
-      parentRoute: typeof WorkspaceProjectsProjectIdGroupsGroupIdRoute
-    }
   }
 }
 
 interface WorkspaceProjectsProjectIdGroupsGroupIdRouteChildren {
-  WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute: typeof WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute
 }
 
 const WorkspaceProjectsProjectIdGroupsGroupIdRouteChildren: WorkspaceProjectsProjectIdGroupsGroupIdRouteChildren =
   {
-    WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute:
-      WorkspaceProjectsProjectIdGroupsGroupIdThreadsThreadIdRoute,
   }
 
 const WorkspaceProjectsProjectIdGroupsGroupIdRouteWithChildren =

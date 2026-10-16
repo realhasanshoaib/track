@@ -38,7 +38,7 @@ export type { ScopedComposerContext } from '#/features/workspace/chat/composer-s
 
 export type ScopedConversationComposerProps = {
   actorId: Id<'users'>
-  channelThreadId?: Id<'channelThreads'>
+
   className?: string
   context?: ScopedComposerContext
   group: Pick<GroupReference, '_id' | 'name'>
@@ -57,7 +57,7 @@ export function ScopedConversationComposer(props: ScopedConversationComposerProp
     props.actorId,
     props.projectId,
     props.group._id,
-    props.channelThreadId ?? 'channel',
+    'channel',
     props.context?.actingCompanyId ?? 'legacy',
     props.context?.projectMemberId ?? 'legacy',
   ].join(':')
@@ -66,7 +66,7 @@ export function ScopedConversationComposer(props: ScopedConversationComposerProp
 
 function ScopedConversationComposerSession({
   actorId,
-  channelThreadId,
+
   className,
   context,
   group,
@@ -95,8 +95,7 @@ function ScopedConversationComposerSession({
     projectMemberId: context?.projectMemberId,
     projectId,
     groupId: group._id,
-    threadId: channelThreadId,
-  }), [actorId, channelThreadId, context?.actingCompanyId, context?.projectMemberId, group._id, projectId])
+  }), [actorId, context?.actingCompanyId, context?.projectMemberId, group._id, projectId])
   const [composer, setComposer] = useState(() => readComposerDraft(composerDraftScope)?.composer ?? '')
   const [composerCursor, setComposerCursor] = useState(0)
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
@@ -265,7 +264,7 @@ function ScopedConversationComposerSession({
             ...context,
             authorId: actorId,
             body,
-            channelThreadId,
+
             groupId: group._id,
             idempotencyKey,
             mentionedProjectMemberIds: context
@@ -291,7 +290,7 @@ function ScopedConversationComposerSession({
               await generateUploadUrl({
                 ...input,
                 ...context,
-                channelThreadId,
+
               }),
             intentKey: attempt.idempotencyKey,
             pendingAttachment,
@@ -329,7 +328,7 @@ function ScopedConversationComposerSession({
         type="file"
       />
       <ConversationComposer
-        ariaLabel={channelThreadId ? `Reply in ${group.name}` : `Message ${group.name}`}
+        ariaLabel={`Message ${group.name}`}
         available={!busyAction}
         busyAction={busyAction}
         className={className}
@@ -361,7 +360,7 @@ function ScopedConversationComposerSession({
         onShowMentionMenuClose={() => setComposerCursor(0)}
         onVoiceNoteRecorded={attachments.handleVoiceNoteRecorded}
         pendingAttachments={attachments.pendingAttachments}
-        placeholder={placeholder ?? (channelThreadId ? 'Reply in thread' : `Message #${group.name}`)}
+        placeholder={placeholder ?? `Message ${group.name}...`}
         removePendingAttachment={attachments.removePendingAttachment}
         replyTo={replyTo}
                 setComposerCursorFromRef={handleComposerSelection}

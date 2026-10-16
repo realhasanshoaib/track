@@ -137,34 +137,6 @@
       "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
     },
     {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "2ae61941497b9dd17852eed2563add637262744afa2826f59e3a9c661ca3481f",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 210,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "2ae61941497b9dd17852eed2563add637262744afa2826f59e3a9c661ca3481f",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 210,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "961fc9af10b6be26b8cbb10c8380e90ca6045c02ed10208376bcb0128c23c7ef",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 213,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "961fc9af10b6be26b8cbb10c8380e90ca6045c02ed10208376bcb0128c23c7ef",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 213,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
       "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "e88f33510f5602db70e1572d1b1e8a77c0abdedeed792493f03dd9492a3a3d94",
       "path": "apps/mobile/src/app/conversation.tsx",
@@ -191,27 +163,6 @@
       "path": "apps/mobile/src/app/conversation.tsx",
       "line": 316,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "06de02bb5c8f95533c18716ec6d7459f1de197ff9899ecec3053d87fcfd226fe",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 412,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "06de02bb5c8f95533c18716ec6d7459f1de197ff9899ecec3053d87fcfd226fe",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 412,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "06de02bb5c8f95533c18716ec6d7459f1de197ff9899ecec3053d87fcfd226fe",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 412,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
     },
     {
       "code": "react(no-unstable-nested-components)",
@@ -246,20 +197,6 @@
       "fingerprint": "191a5d072d104cee37551fc0dd3960323e0ae8a9452e92aee187cbc2aceb0012",
       "path": "apps/mobile/src/app/conversation.tsx",
       "line": 551,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "927a2848c95ffc63f2128922e2ba764abcfc691f5d6188bb5509e6f700e44989",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 575,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "927a2848c95ffc63f2128922e2ba764abcfc691f5d6188bb5509e6f700e44989",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 575,
       "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
     },
     {
@@ -562,188 +499,6 @@
       "path": "apps/mobile/src/app/sign-in.tsx",
       "line": 423,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4e83d29ab7742f6b27efc09354c97a5a5754c24ce3436ce2c277e90a50fe2d21",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 45,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ee2990a519105d300286aeb13d5739d5c680c8437ec6f75494fb6ed2f0dd950d",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 46,
-      "message": "Unsafe type assertion: type 'Id<\"projects\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "061977d242b1285de0db6cf9c926d118375f6dd6fea949a5497631babc01fad3",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 47,
-      "message": "Unsafe type assertion: type 'Id<\"channelThreads\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a244a97fe382def314fa6166f351cdcb4914ab2053be6e425fec7628203aff3f",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 48,
-      "message": "Unsafe type assertion: type 'Id<\"messages\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "afd38c59a44d02aca04abedecbf79cb93c426a2ad21d946366113a882a14e4c8",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 49,
-      "message": "Unsafe type assertion: type 'Id<\"companies\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0e6dc2eb22ad3647e118d7a23c3dff09eccc4e97fbae3506511785722c8b30a9",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 50,
-      "message": "Unsafe type assertion: type 'Id<\"projectMembers\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "react(set-state-in-effect)",
-      "fingerprint": "6df76dc2aca00e873fadecda9699f7d49704ac1f7016559de086a24f9a238dc2",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 103,
-      "message": "Calling setState synchronously within an effect can trigger cascading renders"
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "cfab3f8ae4b78f5615694747256d47da3ff9279f8d090c16c480a5a8495ccd19",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 112,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "cfab3f8ae4b78f5615694747256d47da3ff9279f8d090c16c480a5a8495ccd19",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 112,
-      "message": "Unsafe type assertion: type 'DetailedMessage[]' is more narrow than the original type."
-    },
-    {
-      "code": "unicorn(no-array-reverse)",
-      "fingerprint": "50cb2c5585428a64a45c28654f81b86d4e7df8ddee65be147bd3e39a2e8e7fad",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 114,
-      "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "85336b4f26b9686fb54009e82035dc558edc99b2a79938b675b48643a6551295",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 342,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "85336b4f26b9686fb54009e82035dc558edc99b2a79938b675b48643a6551295",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 342,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "react(no-unstable-nested-components)",
-      "fingerprint": "35c179e6350814dd31c49562fd38f83cd5b644d65542929d7cbc1b6e3b392591",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 357,
-      "message": "Do not define components during render."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "740c17d072f244ed61364d501c7a65559e98e37b9410d772121715b84dc4d029",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 360,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "740c17d072f244ed61364d501c7a65559e98e37b9410d772121715b84dc4d029",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 360,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4e83d29ab7742f6b27efc09354c97a5a5754c24ce3436ce2c277e90a50fe2d21",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 44,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ee2990a519105d300286aeb13d5739d5c680c8437ec6f75494fb6ed2f0dd950d",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 45,
-      "message": "Unsafe type assertion: type 'Id<\"projects\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "afd38c59a44d02aca04abedecbf79cb93c426a2ad21d946366113a882a14e4c8",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 46,
-      "message": "Unsafe type assertion: type 'Id<\"companies\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0e6dc2eb22ad3647e118d7a23c3dff09eccc4e97fbae3506511785722c8b30a9",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 47,
-      "message": "Unsafe type assertion: type 'Id<\"projectMembers\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "eeab1ddacf711e9fb6ce01a61fed8a94a75a67c1f5d766ed882a650a302beb63",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 48,
-      "message": "Unsafe type assertion: type 'Id<\"messages\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "react-hooks(exhaustive-deps)",
-      "fingerprint": "09838fea06c6788f589a157812c5ae0c1e9a1dfb961920d3da519497e97424c2",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 117,
-      "message": "React Hook useMemo has a missing dependency: 'gid'"
-    },
-    {
-      "code": "react(memo-dependencies)",
-      "fingerprint": "5f27e092f2c15af5f6102455cd9cf67fbc968142b5e9e7feb593d36440c53817",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 123,
-      "message": "Found missing memoization dependencies"
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "943e1233e428b82d3c3622baf48a81ce75d0ee42f661aabcd3aba4d15aeca047",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 145,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "943e1233e428b82d3c3622baf48a81ce75d0ee42f661aabcd3aba4d15aeca047",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 145,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "8cc5b2d5ed2eddcf2732448905b7553965a981256558ebc6875f5a5f0612eb59",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 202,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "8cc5b2d5ed2eddcf2732448905b7553965a981256558ebc6875f5a5f0612eb59",
-      "path": "apps/mobile/src/app/threads.tsx",
-      "line": 202,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
     },
     {
       "code": "typescript(no-misused-promises)",
@@ -1817,20 +1572,6 @@
       "message": "Function expected no return value."
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "c64f6b898f1b5584d4598079df7429ecfddad448578be6df574aae007e9580b5",
-      "path": "apps/mobile/src/lib/push-presentation.ts",
-      "line": 20,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "bf101ca8d4ab44fcac23bd3a2389e26394449dfc14f410357b78dee6bf982cbe",
-      "path": "apps/mobile/src/lib/push-presentation.ts",
-      "line": 21,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
       "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "7fbe3546f6582057093d13192cf9fab0dc1468f50615fe7b3490797321294016",
       "path": "apps/web/src/components/AppProviders.tsx",
@@ -2487,160 +2228,6 @@
       "path": "apps/web/src/features/profile/ProfileSettingsPage.tsx",
       "line": 716,
       "message": "A form label must be associated with a control."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "273c014858d79ef6efaa7a9478684abbb496b142cac25b6aa28e0204829bc327",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 135,
-      "message": "Prefer `output` over `role` attribute `status`."
-    },
-    {
-      "code": "jsx-a11y(control-has-associated-label)",
-      "fingerprint": "cc5caf48f8988236a727a0a2e8b5e3cd9f5ca1348a8c1d86b8f5592104bc38c8",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 149,
-      "message": "A control must be associated with a text label."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "68d3a07b172090ba5f5b97de0afd3e3a33a7e09f1d9f92ddd4622470ddecfe28",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 152,
-      "message": "Unsafe type assertion: type '\"\" | Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "4d67918291268a4f804dca06c02abaedd8f0b754b248cc10bf9e002d6fe9d441",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 191,
-      "message": "Prefer `output` over `role` attribute `status`."
-    },
-    {
-      "code": "jsx-a11y(control-has-associated-label)",
-      "fingerprint": "02872cc31ed18c2fd66e46ffd90ace02f496c2bebba7a93e107fbed48eb75b9a",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 198,
-      "message": "A control must be associated with a text label."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "23093f56fe04012862959a7131fa81681fe9101007e5b6217a384c0ebc8c8e3d",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 205,
-      "message": "Prefer `output` over `role` attribute `status`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "9f4f0f097573e2b361c211e8dc873d17f7f1ea33240fd9c7bde6e0a319040e82",
-      "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
-      "line": 241,
-      "message": "Unsafe type assertion: type '\"\" | Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ba13a9dee4057988cb5ac6b7b764fe792453b3225c7847132949c4095a8d7e53",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 60,
-      "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "react(set-state-in-effect)",
-      "fingerprint": "03f641b6042196220d8ef2a6e3d16fef3bdc80dfcaa032a834c8202dc7ede49a",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 107,
-      "message": "Calling setState synchronously within an effect can trigger cascading renders"
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "16d510d0d4b4f2f3018b957208cedfdcb9475a96db456d7d38023b316f9e4d52",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 110,
-      "message": "Unnecessary conditional, value is always falsy."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "72e659330bcb2451e19f35acac139f39d770ee6a43605675b81c8f77ed7218b9",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 124,
-      "message": "Unsafe member access .user on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "6860617c68fb09fb537f924506bdbe1ed8bf116a3862761529312f87c850b189",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 125,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6860617c68fb09fb537f924506bdbe1ed8bf116a3862761529312f87c850b189",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 125,
-      "message": "Unsafe member access .user on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b5ebfec8ac9b1c40f8121642dca580e07dedab99298de968e0bf289116f453b2",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 128,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b5ebfec8ac9b1c40f8121642dca580e07dedab99298de968e0bf289116f453b2",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 128,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b5ebfec8ac9b1c40f8121642dca580e07dedab99298de968e0bf289116f453b2",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 128,
-      "message": "Unsafe member access .membership on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b5ebfec8ac9b1c40f8121642dca580e07dedab99298de968e0bf289116f453b2",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 128,
-      "message": "Unsafe member access .user on an `any` value."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "df25358eca8fccbdad58d032a82fd19bea9df9ea6953201d404246209a54d641",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 135,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "df25358eca8fccbdad58d032a82fd19bea9df9ea6953201d404246209a54d641",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 135,
-      "message": "Unsafe type assertion: type 'ThreadMessageDetail[]' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4f53255477518a572fc77427e0f783682221d77f71317fa736e768abe62ad69c",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 221,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "4c91ef7a4e0428a4b4d2ba2fb3b929f2a3a9f2abb6c38ef89eb230e8cee6a630",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 358,
-      "message": "Prefer `output` over `role` attribute `status`."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "41a3e38bd8d96e96a5c395c81b8fd78f25b84e43068bd85a3a6d4fee05fd9a11",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 360,
-      "message": "Prefer `output` over `role` attribute `status`."
     },
     {
       "code": "typescript(switch-exhaustiveness-check)",
@@ -3938,41 +3525,6 @@
       "message": "Unsafe type assertion: type 'Id<\"projectMembers\">' is more narrow than the original type."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d8764cafd59a75844fb052d158fafb0efa05d3a6ef29671f5f08cf332875ac4f",
-      "path": "apps/web/src/routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId.tsx",
-      "line": 19,
-      "message": "Unsafe type assertion: type 'Id<\"companies\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a68d2ee997331f0e44fb6555a3382b2cfec18120667bb699b8c24c0342af2b53",
-      "path": "apps/web/src/routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId.tsx",
-      "line": 20,
-      "message": "Unsafe type assertion: type 'Id<\"projectMembers\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "70779f94e39892918f7ae7b157f97795478596f27f2db2fa40d26a55970a50c4",
-      "path": "apps/web/src/routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId.tsx",
-      "line": 25,
-      "message": "Unsafe type assertion: type 'Id<\"groups\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "00845cd1dc75cfa0a42d224ea2937501a8c65e426f558fc034a750d7e2d2501d",
-      "path": "apps/web/src/routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId.tsx",
-      "line": 26,
-      "message": "Unsafe type assertion: type 'Id<\"projects\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ade8a4ee1d6ca4cae5df64b597661014e27e11ea4dbd63fcc7cd67001e4f3361",
-      "path": "apps/web/src/routes/workspace.projects.$projectId.groups.$groupId.threads.$threadId.tsx",
-      "line": 27,
-      "message": "Unsafe type assertion: type 'Id<\"channelThreads\">' is more narrow than the original type."
-    },
-    {
       "code": "typescript(prefer-nullish-coalescing)",
       "fingerprint": "facbea922a8eb10dd3ada0136e492b008a2251bf5eefd567b3f1ef82c94a566a",
       "path": "apps/web/src/routes/workspace.tsx",
@@ -4111,104 +3663,6 @@
       "path": "convex/auth.ts",
       "line": 595,
       "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 575,
-      "message": "'groupId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 575,
-      "message": "'owner' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 575,
-      "message": "'projectId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 575,
-      "message": "'t' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 617,
-      "message": "'groupId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 617,
-      "message": "'owner' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 617,
-      "message": "'projectId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "83b94f6ee280d366cf2f8a14b529cf505a36e4984b67784be989f175300cc638",
-      "path": "convex/channelThreads.test.ts",
-      "line": 617,
-      "message": "'t' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "f33046c2b8203aac7f55c4e8df7564b3f1a9a3e00660ed72c52bc13a14117784",
-      "path": "convex/channelThreads.test.ts",
-      "line": 635,
-      "message": "'storageId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "8bc64402fe31cd6554aa8aef72fd4baa747822e397d0c92731e028dfaea133fe",
-      "path": "convex/channelThreads.test.ts",
-      "line": 648,
-      "message": "'firstAttachmentId' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "cc39ba178f230efedd56a51a35cfd2d379dc5f4fc7bfce05f2321ae9302e7047",
-      "path": "convex/channelThreads.test.ts",
-      "line": 649,
-      "message": "'secondAttachmentId' is already declared in the upper scope."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "78f8a5789dba62b9681f03ebd14d439423615d0c5da982acd3eedc12053de82c",
-      "path": "convex/channelThreads.test.ts",
-      "line": 899,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "10799a7046aafb5b147fda58fd60f4b2f59c067e8f79b94be8c0ff15d20423e0",
-      "path": "convex/channelThreads.ts",
-      "line": 299,
-      "message": "Unsafe type assertion: type 'Id<\"groups\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "4b2ae9be7e89bf1ab04c017c4af9ff0c96b0ce2d804ce9077b018da64f233d88",
-      "path": "convex/channelThreads.ts",
-      "line": 508,
-      "message": "Forbidden non-null assertion."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -4730,20 +4184,6 @@
     },
     {
       "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "bf083b76070c0d59693612973b6b769ec883396ef2e065c7cd153ffd77a0593b",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1253,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "e63613b95147e5fcbfa5582f59faacbad6f9770d42219208f9655a5d0da46e7f",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1261,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
       "fingerprint": "d2ac9747f7f7a20a5c64346016429db68ab88b542506eba3be29dd5f42a3b4cf",
       "path": "convex/companyRelationships.test.ts",
       "line": 1274,
@@ -4891,13 +4331,6 @@
     },
     {
       "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "0fb635096a19289ad4113d0dad843db527feae025847c2a83528e20966900a6f",
-      "path": "convex/demoSeed.ts",
-      "line": 234,
-      "message": "Unnecessary conditional, value is always falsy."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "2ac0f33efe51fe05cc2b3a4d3aaf4edd05c4b2ad622a577badc6ff5aed5cfaed",
       "path": "convex/groups.test.ts",
       "line": 30,
@@ -4995,34 +4428,6 @@
       "message": "Do not use useless `undefined`."
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "4d713e31dee60afc48060f5fd2207ea3d4a03261b75dc33edc46cb6feaec7a98",
-      "path": "convex/messages.ts",
-      "line": 806,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "88b529625062e6c21e44679a70e46f70f7b1fe516791018dfa6dd56f45ef492c",
-      "path": "convex/messages.ts",
-      "line": 807,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "bacf916c42cdd9138375f16d7156d95d69ed2a9f9635f65627172977340532e0",
-      "path": "convex/mobile.ts",
-      "line": 38,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "0dd952be08a1cd62017d7627f40ca0ad59a69cc577a48b1392d22862f1089b51",
-      "path": "convex/mobile.ts",
-      "line": 63,
-      "message": "'readState' is already declared in the upper scope."
-    },
-    {
       "code": "typescript(no-unsafe-return)",
       "fingerprint": "316679d0c46664a061348766c83fb525b48c12edae6c6f22b9b4dae5f0530090",
       "path": "convex/mobile.ts",
@@ -5042,20 +4447,6 @@
       "path": "convex/mobile.ts",
       "line": 241,
       "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "0f52112fa6647500374d36e1a83928da3823c60b99d9c52db7db96fab230ac0a",
-      "path": "convex/mobile.ts",
-      "line": 256,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "26eeff2dbf893cc5daeee6ee4e4c993e3167890e26845518271202c050429ead",
-      "path": "convex/mobile.ts",
-      "line": 257,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "typescript(no-unsafe-assignment)",
@@ -5094,20 +4485,6 @@
     },
     {
       "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "36f391f88d1685488f16b5480982bb419264c274672f5a7c27425b6cc78f3a9a",
-      "path": "convex/notifications.ts",
-      "line": 649,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "6945766095abb8f667fbf34ef3189d7b22a5acdfa94cb3d067ffcdc033303d9e",
-      "path": "convex/notifications.ts",
-      "line": 650,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
       "fingerprint": "bbbd7e915329ba63870bd02c5761840881852837f90369e072be763c586c2ab2",
       "path": "convex/notifications.ts",
       "line": 661,
@@ -5126,20 +4503,6 @@
       "path": "convex/notifications.ts",
       "line": 702,
       "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "16228bd247a10ad6e8f0dfffaa4c28a4f87728882849b6658a3935726ee63a5d",
-      "path": "convex/notifications.ts",
-      "line": 709,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "2f395605a0f2c02b21d0e295a35de8c16735a3df0b5be51e1f225a6929aff3c9",
-      "path": "convex/notifications.ts",
-      "line": 710,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -5182,34 +4545,6 @@
       "path": "convex/projectArchives.ts",
       "line": 176,
       "message": "'request' is already declared in the upper scope."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "2e2ff77fd5bbd997c81106104117ba18ce56ffdf2cb105d2879270ebc7462494",
-      "path": "convex/projectExit.ts",
-      "line": 402,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "1fe6b3c9b61bf628a8bd162c512e0720185b74c94a1af3cffc4e2ecb96681b2a",
-      "path": "convex/projectExit.ts",
-      "line": 422,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "c30af8b3b0cba655330acc6505a537001f57bce68cbae1ea02f40f24868eabb6",
-      "path": "convex/projectExit.ts",
-      "line": 428,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "d160a3a643e20defb1b246ab00a253206f030991707cb073e07672b96ae3a3d0",
-      "path": "convex/projectExit.ts",
-      "line": 446,
-      "message": "Forbidden non-null assertion."
     },
     {
       "code": "typescript(no-unsafe-assignment)",
@@ -5745,38 +5080,10 @@
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "cce0eb1dbfa6325d724b71c2c00af3f40a40143123646191e5d35306c348dc24",
-      "path": "convex/search.ts",
-      "line": 94,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "85924211c083600ab800ed888f96560cb85a2bd60816980f459afe74c48b50d0",
       "path": "convex/search.ts",
       "line": 95,
       "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "9326585967aeae967910954c749ed03437b432c094c34b7b5ef9bf363aa8f94c",
-      "path": "convex/search.ts",
-      "line": 110,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "2c882486784917762b65a477bd7cc86be3ed8ca9df8e6aad526c760a4de325a8",
-      "path": "convex/search.ts",
-      "line": 113,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a9a2d2da52fa4a7b4b0024ecff1f232a6c5d4944840b052875323296c55cc719",
-      "path": "convex/search.ts",
-      "line": 115,
-      "message": "Unsafe type assertion: type 'Id<\"channelThreads\">' is more narrow than the original type."
     },
     {
       "code": "typescript(no-unnecessary-condition)",
@@ -5784,27 +5091,6 @@
       "path": "convex/search.ts",
       "line": 156,
       "message": "This condition will always return the same value since the types have no overlap."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "9326585967aeae967910954c749ed03437b432c094c34b7b5ef9bf363aa8f94c",
-      "path": "convex/search.ts",
-      "line": 169,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "2c882486784917762b65a477bd7cc86be3ed8ca9df8e6aad526c760a4de325a8",
-      "path": "convex/search.ts",
-      "line": 172,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a9a2d2da52fa4a7b4b0024ecff1f232a6c5d4944840b052875323296c55cc719",
-      "path": "convex/search.ts",
-      "line": 174,
-      "message": "Unsafe type assertion: type 'Id<\"channelThreads\">' is more narrow than the original type."
     },
     {
       "code": "typescript(prefer-nullish-coalescing)",

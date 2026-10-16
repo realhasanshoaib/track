@@ -7,7 +7,6 @@ import type { QueryCtx } from './_generated/server'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
 import { requireActiveCompanyMembership, requireCompanyModelEnabled } from './lib/companyPolicy'
-import { threadsEnabled } from './lib/channelThreadPolicy'
 import {
   getArchivedChannelSnapshot,
   listArchivedChannelVisibilityPage,
@@ -132,12 +131,12 @@ export const listGroupsPage = query({
       }
       if (!group) return null
       const cutoff = entitlement?.exitAt
-      const lastMessage = await ctx.db.query('messages').withIndex('by_group_thread_created_at', (q) =>
+      const lastMessage = await ctx.db.query('messages').withIndex('by_group_created_at', (q) =>
         cutoff
           // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          ? q.eq('groupId', membership.groupId).eq('channelThreadId', undefined).lte('createdAt', cutoff)
+          ? q.eq('groupId', membership.groupId).lte('createdAt', cutoff)
           // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          : q.eq('groupId', membership.groupId).eq('channelThreadId', undefined)).order('desc').first()
+          : q.eq('groupId', membership.groupId)).order('desc').first()
       const unreadCount = await getGroupUnreadCount(ctx, membership.groupId, args.userId, companyMemberId, cutoff)
       return { group, membership, lastMessage, unreadCount }
     }))
@@ -169,8 +168,8 @@ async function getGroupUnreadCount(
       ).unique()
   const messages = await ctx.db
     .query('messages')
-    .withIndex('by_group_thread_created_at', (q) =>
-      q.eq('groupId', groupId).eq('channelThreadId', undefined),
+    .withIndex('by_group_created_at', (q) =>
+      q.eq('groupId', groupId),
     )
     .collect()
 
@@ -183,40 +182,8 @@ async function getGroupUnreadCount(
     if (!readState) return true
     return message.createdAt > readState.lastReadAt
   }).length
-  if (!threadsEnabled() || !resolvedProjectMemberId) return timelineUnread
 
-  const followedThreads = await ctx.db
-    .query('channelThreadFollowers')
-    .withIndex('by_project_member_preference', (q) =>
-      q.eq('projectMemberId', resolvedProjectMemberId).eq('preference', 'following'),
-    )
-    .collect()
-  const threadUnread = (await Promise.all(
-    followedThreads
-      .filter((follower) => follower.groupId === groupId)
-      .map(async (follower) => {
-        const readState = await ctx.db
-          .query('channelThreadReadStates')
-          .withIndex('by_thread_project_member', (q) =>
-            q
-              .eq('channelThreadId', follower.channelThreadId)
-              .eq('projectMemberId', resolvedProjectMemberId),
-          )
-          .unique()
-        const thread = await ctx.db.get(follower.channelThreadId)
-        const latestChannelSequence = cutoff
-          ? (await ctx.db
-              .query('messages')
-              .withIndex('by_thread_created_at', (q) =>
-                q.eq('channelThreadId', follower.channelThreadId).lte('createdAt', cutoff),
-              )
-              .order('desc')
-              .first())?.channelSequence ?? 0
-          : thread?.latestChannelSequence ?? 0
-        return latestChannelSequence > (readState?.lastReadChannelSequence ?? 0) ? 1 : 0
-      }),
-  )).reduce<number>((total, count) => total + count, 0)
-  return timelineUnread + threadUnread
+  return timelineUnread
 }
 
 export const listProjects = query({
@@ -405,9 +372,9 @@ export const listGroups = query({
         const cutoff = access.companyAccess?.entitlement?.exitAt
         const lastMessage = await ctx.db
           .query('messages')
-          .withIndex('by_group_thread_created_at', (q) => cutoff
-            ? q.eq('groupId', group._id).eq('channelThreadId', undefined).lte('createdAt', cutoff)
-            : q.eq('groupId', group._id).eq('channelThreadId', undefined))
+          .withIndex('by_group_created_at', (q) => cutoff
+            ? q.eq('groupId', group._id).lte('createdAt', cutoff)
+            : q.eq('groupId', group._id))
           .order('desc')
           .first()
         const unreadCount = await getGroupUnreadCount(ctx, group._id, args.userId, args.projectMemberId, cutoff)
@@ -525,7 +492,7 @@ export const markGroupRead = mutation({
     if (access.companyAccess?.projectMember.status === 'archived') throw new Error('archive_read_state_immutable')
     if (args.lastReadMessageId) {
       const message = await ctx.db.get(args.lastReadMessageId)
-      if (!message || message.groupId !== args.groupId || message.channelThreadId) {
+      if (!message || message.groupId !== args.groupId) {
         throw new Error('message_not_found')
       }
     }

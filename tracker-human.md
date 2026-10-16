@@ -17,7 +17,7 @@ Details, code references and evidence stay in tracker.yaml.
 
 ## First (P0)
 
-4 items — S: 0 · M: 2 · L: 2 · Unknown: 0
+3 items — S: 0 · M: 1 · L: 2 · Unknown: 0
 
 ### Groups
 
@@ -35,16 +35,6 @@ Details, code references and evidence stay in tracker.yaml.
               groups, then remove Projects.
     **Left**: Let a person start a group of two from someone's name.
     **Left**: Plan the production data move; it needs Hasan's approval before it runs.
-
-### Conversation
-
-- [Not started] Replies quote a message, without side threads
-    **Size**: M — Quote replies already exist; the work is removing threads and checking
-              the jump to old messages.
-    **Left**: Delete side threads, their followers and read state, and their screens in
-              both apps.
-    **Left**: Make sure tapping a quote jumps to the original message even when it is
-              outside the loaded page.
 
 ### Platform
 

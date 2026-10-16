@@ -123,7 +123,6 @@ export const companyProjectTables = {
     channelCount: v.optional(v.number()),
     projectSnapshot: v.any(),
     channelSnapshots: v.array(v.any()),
-    threadSnapshots: v.optional(v.array(v.any())),
     memberSnapshots: v.optional(v.array(v.any())),
     retentionStatus: archiveRetentionStatus,
     manifestHash: v.string(),

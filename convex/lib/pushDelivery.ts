@@ -16,14 +16,13 @@ export function messagePushCopy(input: {
   senderName: string
   groupName: string
   messagePreview: string
-  threadName?: string
   previewMode: 'full' | 'context' | 'hidden'
 }) {
   if (input.previewMode === 'hidden') {
     return { title: 'Track', body: input.eventKind === 'mention' ? 'You were mentioned' : 'New conversation activity' }
   }
   const sender = safePushLabel(input.senderName, 'A teammate')
-  const location = safePushLabel(input.threadName || input.groupName, 'a Channel')
+  const location = safePushLabel(input.groupName, 'a Channel')
   if (input.previewMode === 'full') {
     const event = input.eventKind === 'mention'
       ? `${sender} mentioned you`
@@ -37,7 +36,6 @@ export function messagePushCopy(input: {
   }
   if (input.eventKind === 'mention') return { title: 'Track', body: `${sender} mentioned you in ${location}` }
   if (input.eventKind === 'direct_reply') return { title: 'Track', body: `${sender} replied to you in ${location}` }
-  if (input.eventKind === 'thread_reply') return { title: 'Track', body: `New reply from ${sender} in ${location}` }
   return { title: 'Track', body: `New message from ${sender} in ${location}` }
 }
 

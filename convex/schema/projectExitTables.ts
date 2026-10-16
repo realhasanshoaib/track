@@ -13,14 +13,13 @@ export const exitSnapshotStatus = v.union(
 export const exitSnapshotPhase = v.union(
   v.literal('members'),
   v.literal('channels'),
-  v.literal('threads'),
+  v.literal('visibility'),
   v.literal('complete'),
 )
 
 export const exitSnapshotScope = v.union(
   v.literal('member'),
   v.literal('channel'),
-  v.literal('thread'),
 )
 
 const memberSnapshot = v.object({
@@ -51,21 +50,6 @@ const channelSnapshot = v.object({
   status: v.optional(v.string()),
 })
 
-const threadSnapshot = v.object({
-  _id: v.id('channelThreads'),
-  createdAt: v.number(),
-  groupId: v.id('groups'),
-  name: v.string(),
-  status: v.union(v.literal('active'), v.literal('archived')),
-  revision: v.number(),
-  sourceAvailable: v.boolean(),
-  following: v.boolean(),
-  lastReadChannelSequence: v.number(),
-  replyCount: v.optional(v.number()),
-  latestReplyAt: v.optional(v.number()),
-  latestChannelSequence: v.optional(v.number()),
-})
-
 export const exitSnapshotPayload = v.union(
   v.object({
     kind: v.literal('member'),
@@ -74,10 +58,6 @@ export const exitSnapshotPayload = v.union(
   v.object({
     kind: v.literal('channel'),
     snapshot: channelSnapshot,
-  }),
-  v.object({
-    kind: v.literal('thread'),
-    snapshot: threadSnapshot,
   }),
 
 )
@@ -111,7 +91,6 @@ export const projectExitTables = {
     scope: exitSnapshotScope,
     projectMemberId: v.optional(v.id('projectMembers')),
     groupId: v.optional(v.id('groups')),
-    threadId: v.optional(v.id('channelThreads')),
     sourceKind: exitSnapshotScope,
     sourceId: v.string(),
     searchText: v.optional(v.string()),
@@ -126,11 +105,7 @@ export const projectExitTables = {
       'projectMemberId',
       'scope',
     ])
-    .index('by_operation_member_thread', [
-      'operationId',
-      'projectMemberId',
-      'threadId',
-    ])
+
     .index('by_operation_scope', ['operationId', 'scope', 'sourceId'])
     .searchIndex('search_name_by_operation', {
       searchField: 'searchText',

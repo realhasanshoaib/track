@@ -1,7 +1,6 @@
 export type PushContext = {
   projectId?: string;
   groupId?: string;
-  threadId?: string;
 };
 
 let activeContext: PushContext | null = null;
@@ -15,6 +14,5 @@ export function shouldPresentPush(data: Record<string, unknown> | null | undefin
   const sameProject = !activeContext.projectId || data?.projectId === activeContext.projectId;
   if (!sameProject) return true;
   if (!activeContext.groupId || data?.groupId !== activeContext.groupId) return true;
-  if (activeContext.threadId) return data?.threadId !== activeContext.threadId;
-  return Boolean(data?.threadId);
+  return false;
 }

@@ -10,16 +10,19 @@ import {
 afterEach(() => clearComposerDrafts());
 
 describe('mobile composer draft scope', () => {
-  it('includes represented membership and thread identity', () => {
+  it('preserves the Channel key', () => {
+    expect(composerDraftKey({ actorId: 'user-a', projectId: 'project-a', groupId: 'group-a' }))
+      .toBe('user-a:legacy-company:legacy-membership:project-a:group-a:channel');
+  });
+
+  it('includes represented membership and Channel identity', () => {
     const scope = {
       actorId: 'user-a',
       actingCompanyId: 'company-a',
       projectMemberId: 'member-a',
       projectId: 'project-a',
       groupId: 'group-a',
-      threadId: 'thread-a',
     };
-    expect(composerDraftKey(scope)).not.toBe(composerDraftKey({ ...scope, threadId: 'thread-b' }));
     expect(composerDraftKey(scope)).not.toBe(composerDraftKey({ ...scope, projectMemberId: 'member-b' }));
   });
 

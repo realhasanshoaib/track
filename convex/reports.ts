@@ -4,7 +4,7 @@ import { mutation } from './_generated/server'
 import { requireAuthenticatedActor } from './lib/actorContext'
 import { appendAuditEvent } from './lib/audit'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-import { resolveActorProjectMember, threadsEnabled } from './lib/channelThreadPolicy'
+import { resolveActorProjectMember } from './lib/messagePolicy'
 
 const targetType = v.union(
   v.literal('message'),
@@ -45,23 +45,18 @@ export const create = mutation({
     }, args.groupId ? 'readChannel' : 'readProject')
 
     let scopedGroupId = args.groupId
-    let channelThreadId
     if (args.targetMessageId) {
       const message = await ctx.db.get(args.targetMessageId)
       if (!message || message.projectId !== args.projectId) throw new Error('message_not_found')
       scopedGroupId = message.groupId
-      channelThreadId = message.channelThreadId
       await authorizeScopedRequest(ctx, { projectId: args.projectId, groupId: message.groupId, claimedUserId: args.reporterId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'readChannel')
     }
     if (args.targetAttachmentId) {
       const attachment = await ctx.db.get(args.targetAttachmentId)
       if (!attachment || attachment.projectId !== args.projectId) throw new Error('attachment_not_found')
-      const message = await ctx.db.get(attachment.messageId)
       scopedGroupId = attachment.groupId
-      channelThreadId = message?.channelThreadId
       await authorizeScopedRequest(ctx, { projectId: args.projectId, groupId: attachment.groupId, claimedUserId: args.reporterId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'readChannel')
     }
-    if (channelThreadId && !threadsEnabled()) throw new Error('threads_disabled')
 
     const now = Date.now()
     const note = args.note?.trim()
@@ -74,7 +69,7 @@ export const create = mutation({
     const reportId = await ctx.db.insert('contentReports', {
       projectId: args.projectId,
       groupId: scopedGroupId,
-      channelThreadId,
+
       reporterId: args.reporterId,
       reporterProjectMemberId: reporterProjectMember._id,
       actingCompanyId: baseAccess.companyAccess?.company._id,
@@ -91,7 +86,7 @@ export const create = mutation({
     await appendAuditEvent(ctx, {
       projectId: args.projectId,
       groupId: scopedGroupId,
-      channelThreadId,
+
       actorId: args.reporterId,
       actorProjectMemberId: reporterProjectMember._id,
       actingCompanyId: baseAccess.companyAccess?.company._id,
@@ -101,7 +96,7 @@ export const create = mutation({
       after: {
         reason: args.reason,
         targetType: args.targetType,
-        channelThreadId,
+
       },
     })
 

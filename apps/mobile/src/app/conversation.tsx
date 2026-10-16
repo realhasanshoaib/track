@@ -11,7 +11,6 @@ import { Composer } from '@/components/composer';
 import { MessageActions } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
 
-
 import { DateSeparator, ThreadRow, type DetailedMessage, type GroupedThreadItem, resolveMentionIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -23,9 +22,7 @@ import { idempotencyKey } from '@/lib/idempotency';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
-import { useReleaseConfig } from '@/lib/release-config';
 
-import { threadConversationHref, threadListHref } from '@/lib/thread-navigation';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 
@@ -60,7 +57,6 @@ export default function ConversationScreen() {
   const network = useNetworkState();
   const router = useRouter();
   const { trackUserId } = useTrackUser();
-  const releaseConfig = useReleaseConfig();
   const { groupId, projectId, companyId, membershipId, archive, messageId } = useLocalSearchParams<{ groupId: string; projectId: string; companyId?: string; membershipId?: string; archive?: string; messageId?: string }>();
 
   const sendMessage = useMutation(api.messages.send);
@@ -87,7 +83,6 @@ export default function ConversationScreen() {
   const navigation = useQuery(api.mobile.resolveNavigation, trackUserId && pid && gid ? { userId: trackUserId, projectId: pid, groupId: gid, actingCompanyId: cid, projectMemberId: pmid } : 'skip');
   const readOnly = archive === '1' || navigation?.archived === true;
   // Memoised so composing a message does not rebuild every row's identity props.
-
 
   const groupsPage = usePaginatedQuery(
     api.mobile.listGroupsPage,
@@ -158,7 +153,6 @@ export default function ConversationScreen() {
       ? current
       : { ...current, composer: nextComposer });
   }, [composerDraft]);
-
 
   const groupItems = useMemo(() => (groups ?? []) as { group: Doc<'groups'>; membership: Doc<'groupMembers'>; lastMessage: Doc<'messages'> | null; unreadCount: number }[], [groups]);
   const memberItems = useMemo(() => projectMembers ?? [], [projectMembers]);
@@ -263,17 +257,6 @@ export default function ConversationScreen() {
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
-      ...(releaseConfig.threads && pid && gid ? [{
-        label: actionTarget.item.channelThread ? 'Open thread' : 'Start thread',
-        icon: 'forum-outline' as const,
-        onPress: () => {
-          if (actionTarget.item.channelThread) {
-            router.push(threadConversationHref(pid, gid, actionTarget.item.channelThread.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
-            return;
-          }
-          router.push(threadListHref(pid, gid, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null, actionTarget.item.message._id) as never);
-        },
-      }] : []),
       ...(!readOnly ? [{
         label: 'Reply',
         icon: 'arrow-up' as const,
@@ -322,7 +305,7 @@ export default function ConversationScreen() {
         onPress: () => setReportTarget(actionTarget),
       },
     ];
-  }, [actionTarget, cid, deleteMessage, gid, pid, pmid, readOnly, releaseConfig.threads, replyMessageId, router, setReplyTo, trackUserId]);
+  }, [actionTarget, cid, deleteMessage, pmid, readOnly, replyMessageId, setReplyTo, trackUserId]);
 
   // Clear pending messages when the real message arrives from the server
   useEffect(() => {
@@ -501,25 +484,23 @@ export default function ConversationScreen() {
             hapticLight();
             setReplyTo(item.item);
           }}
-          onOpenThread={releaseConfig.threads && pid && gid && item.item.channelThread ? () => {
-            router.push(threadConversationHref(pid, gid, item.item.channelThread!.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
-          } : undefined}
+
           onPressReply={item.item.replyTo ? () => {
             const quotedId = item.item.replyTo?.messageId;
+            if (!quotedId) return;
             const index = threadItemsRef.current.findIndex((entry) => entry.kind === 'message' && entry.item.message._id === quotedId);
             if (index >= 0) listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+            else router.setParams({ messageId: quotedId });
           } : undefined}
         />
 
       </View>
     );
-  }, [cid, gid, pid, pmid, readOnly, releaseConfig.threads, router, setReplyTo, trackUserId]);
+  }, [readOnly, router, setReplyTo, trackUserId]);
 
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
   if ((network.isConnected === false || network.isInternetReachable === false) && messages === undefined) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Offline</ThemedText><ThemedText style={{ color: theme.textSecondary }}>This Channel is not available on the device yet.</ThemedText><Pressable accessibilityRole="button" onPress={() => pid && gid && router.replace(channelHref(pid, gid, cid && pmid ? { archived: readOnly, companyId: cid, membershipId: pmid } : null))} style={[styles.retry, { backgroundColor: theme.accent }]}><ThemedText style={{ color: Colors.light.text }} type="smallBold">Retry</ThemedText></Pressable></View></ThemedView>;
   if (navigation === undefined || (navigation.available && messages === undefined)) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Conversation' }} /><View style={styles.empty}><ThemedText style={{ color: theme.textSecondary }} type="small">Opening authorized conversation…</ThemedText></View></ThemedView>;
-
-
 
   return (
     <ThemedView style={styles.screen}>
@@ -682,16 +663,7 @@ export default function ConversationScreen() {
             }}
           />
         </SheetSection>
-        {releaseConfig.threads && pid && gid ? <SheetSection title="Conversation">
-          <SheetRow
-            icon="forum-outline"
-            label="Threads"
-            onPress={() => {
-              setToolsOpen(false);
-              router.push(threadListHref(pid, gid, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
-            }}
-          />
-        </SheetSection> : null}
+
         <SheetSection title="Global">
           {(['all', 'mentions', 'none'] as const).map((mode) => (
             <SheetRow

@@ -93,21 +93,18 @@ async function fixtureUser(ctx: MutationCtx) {
 }
 
 async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
-  const [groups, members, messages, threads] = await Promise.all([
+  const [groups, members, messages] = await Promise.all([
     ctx.db.query('groups').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('projectMembers').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     ctx.db.query('messages').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('channelThreads').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
   ])
   const groupIds = new Set(groups.map((group) => String(group._id)))
 
-  const [groupMembers, groupReads, groupSettings, typing, threadFollowers, threadReads, attachments, auditEvents, invitations] = await Promise.all([
+  const [groupMembers, groupReads, groupSettings, typing, attachments, auditEvents, invitations] = await Promise.all([
     Promise.all(groups.map((group) => ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
     ctx.db.query('groupReadStates').collect().then((rows) => rows.filter((row) => row.projectId === projectId)),
     ctx.db.query('groupNotificationSettings').collect(),
     Promise.all(groups.map((group) => ctx.db.query('typingIndicators').withIndex('by_group_updated_at', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
-    ctx.db.query('channelThreadFollowers').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('channelThreadReadStates').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
     Promise.all(groups.map((group) => ctx.db.query('attachments').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
     ctx.db.query('auditEvents').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
     Promise.all((['pending', 'accepted', 'revoked', 'expired'] as const).map((status) => ctx.db.query('invitations').withIndex('by_project_status', (query) => query.eq('projectId', projectId).eq('status', status)).collect())).then((rows) => rows.flat()),
@@ -119,9 +116,6 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
   for (const row of groupMembers) await ctx.db.delete(row._id)
   for (const row of groupReads) await ctx.db.delete(row._id)
   for (const row of typing) await ctx.db.delete(row._id)
-  for (const row of threadFollowers) await ctx.db.delete(row._id)
-  for (const row of threadReads) await ctx.db.delete(row._id)
-  for (const row of threads) await ctx.db.delete(row._id)
   for (const row of attachments) {
     await ctx.db.delete(row._id)
   }
@@ -174,7 +168,7 @@ async function createGroup(
 
 async function createMessage(
   ctx: MutationCtx,
-  input: { projectId: Id<'projects'>; groupId: Id<'groups'>; projectMemberId: Id<'projectMembers'>; userId: Id<'users'>; body: string; sequence: number; now: number },
+  input: { projectId: Id<'projects'>; groupId: Id<'groups'>; projectMemberId: Id<'projectMembers'>; userId: Id<'users'>; body: string; sequence: number; now: number; replyToMessageId?: Id<'messages'> },
 ) {
   return await ctx.db.insert('messages', {
     projectId: input.projectId,
@@ -183,6 +177,7 @@ async function createMessage(
     authorProjectMemberId: input.projectMemberId,
     channelSequence: input.sequence,
     body: input.body,
+    replyToMessageId: input.replyToMessageId,
     mentions: [],
     attachmentIds: [],
     createdAt: input.now + input.sequence,
@@ -227,9 +222,10 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       status: 'active',
       now: now + index,
     })
+    let oldestMessageId: Id<'messages'> | undefined
     if (!spec.secondary && historyMessageCount > 0) {
       for (let historyIndex = 1; historyIndex <= historyMessageCount; historyIndex += 1) {
-        await createMessage(ctx, {
+        const historyId = await createMessage(ctx, {
           projectId,
           groupId: activeGroupId,
           projectMemberId,
@@ -238,6 +234,7 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
           sequence: historyIndex,
           now: now + index - historyMessageCount,
         })
+        oldestMessageId ??= historyId
       }
     }
     const sourceSequence = historyMessageCount + 1
@@ -256,6 +253,7 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       projectMemberId,
       userId: user._id,
       body: spec.secondary ? 'Only the secondary project evidence belongs here.' : 'Conversation evidence stays in the group.',
+      replyToMessageId: oldestMessageId,
       sequence: spec.secondary ? 2 : sourceSequence + 1,
       now: now + index,
     })
@@ -322,5 +320,17 @@ export const performanceReset = mutation({
     if (!user) throw new Error('e2e_fixture_user_missing')
     await clearFixture(ctx, user._id, namespace)
     return await seedFixture(ctx, user, namespace, performanceHistoryMessageCount)
+  },
+})
+
+export const quoteReset = mutation({
+  args: fixtureArgs,
+  handler: async (ctx, args) => {
+    assertFixtureAccess(args.token)
+    const namespace = validNamespace(args.namespace)
+    const user = await fixtureUser(ctx)
+    if (!user) throw new Error('e2e_fixture_user_missing')
+    await clearFixture(ctx, user._id, namespace)
+    return await seedFixture(ctx, user, namespace, 150)
   },
 })

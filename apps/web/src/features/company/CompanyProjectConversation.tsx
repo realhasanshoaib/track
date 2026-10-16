@@ -6,7 +6,6 @@ import type { Doc, Id } from "../../../../../convex/_generated/dataModel";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 
-import { ChannelThreadBrowser } from "#/features/threads/ChannelThreadBrowser";
 import type { ConversationComposerReply } from "#/features/workspace/components/ConversationComposer";
 import { ScopedConversationComposer } from "#/features/workspace/components/ScopedConversationComposer";
 import { CompanyConversationTimeline } from "#/features/workspace/components/CompanyConversationTimeline";
@@ -45,13 +44,8 @@ type CompanyProjectConversationProps = {
   projectId: Id<"projects">;
   projectMemberId: Id<"projectMembers">;
   readOnly: boolean;
-  releaseConfig: {
-    threads: boolean;
-  };
   snapshotState: ProjectSnapshotState | null | undefined;
-  targetMessageId?: Id<"messages">;
   replyToMessage: ConversationComposerReply | null;
-  threadUnreadByChannel: ReadonlyMap<Id<"groups">, number>;
   busyAction: string | null;
   onChannelNameChange: (name: string) => void;
   onCreateChannel: () => Promise<unknown>;
@@ -84,11 +78,8 @@ export function CompanyProjectConversation({
   projectId,
   projectMemberId,
   readOnly,
-  releaseConfig,
   replyToMessage,
   snapshotState,
-  targetMessageId,
-  threadUnreadByChannel,
   busyAction,
   onChannelNameChange,
   onCreateChannel,
@@ -126,7 +117,6 @@ export function CompanyProjectConversation({
               <div className="company-project-nav-channel-list">
                 {channelItems.map((channel) => {
                   const { Icon, tone } = getGroupAvatar(channel);
-                  const unreadCount = threadUnreadByChannel.get(channel._id) ?? 0;
                   return (
                     <button
                       aria-current={
@@ -154,14 +144,6 @@ export function CompanyProjectConversation({
                             : "Channel"}
                         </small>
                       </span>
-                      {unreadCount > 0 ? (
-                        <span
-                          aria-label={`${unreadCount} unread threads`}
-                          className="company-project-nav-count"
-                        >
-                          {unreadCount}
-                        </span>
-                      ) : null}
                     </button>
                   );
                 })}
@@ -232,7 +214,6 @@ export function CompanyProjectConversation({
               onReplyMessage={onReplyMessage}
               onLoadMoreMessages={onLoadMoreMessages}
               readOnly={readOnly}
-              targetMessageId={targetMessageId}
               visibleGroups={channelItems}
             />
           ) : (
@@ -259,17 +240,6 @@ export function CompanyProjectConversation({
         ) : null}
         <aside className="company-project-conversation-rail">
 
-        {releaseConfig.threads && activeChannelId ? (
-          <ChannelThreadBrowser
-            context={{ actingCompanyId, projectMemberId }}
-            groupId={activeChannelId}
-            projectId={projectId}
-            readOnly={readOnly}
-            timelineMessages={messages ?? []}
-            userId={currentUser._id}
-            variant="rail"
-          />
-        ) : null}
         </aside>
       </section>
     </>

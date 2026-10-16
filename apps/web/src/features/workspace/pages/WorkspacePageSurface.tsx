@@ -180,7 +180,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
         currentUserDesignation={state.currentUserDesignation}
         currentUserEmail={state.currentUserEmail}
         currentUserName={state.currentUserName}
-        currentUserId={auth.trackUserId}
+
         logoutConfirmOpen={state.logoutConfirmOpen}
         mobileNavOpen={state.mobileNavOpen}
         navCollapsed={state.navCollapsed}
@@ -240,7 +240,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
           <GroupChatPage
             activeGroup={activeGroup}
             activeGroupId={state.activeGroupId}
-            activeProjectId={state.activeProjectId}
+
             activeTypingIndicators={conversation.activeTypingIndicators}
             busyAction={state.busyAction}
             chatSearchMatchKeys={presentation.chatSearchMatchKeys}
@@ -331,7 +331,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
 
       {route.view === 'group' ? (
         <WorkspaceRail
-          activeGroup={activeGroup}
+
           activeProjectId={state.activeProjectId}
           busyAction={notifications.notificationBusyAction ?? state.busyAction}
           globalNotificationMode={notifications.globalNotificationMode}
@@ -345,7 +345,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
           onSendTestNotification={() => void notifications.handleSendTestNotification()}
           onStartResize={() => update.setRailResizing(true)}
           railCollapsed={state.railCollapsed}
-          userId={auth.trackUserId}
+
           visibleMessages={presentation.visibleMessages}
         />
       ) : null}

@@ -32,8 +32,6 @@ type Props = {
   isFirstInGroup: boolean;
   isOwnMessage?: boolean;
   onLongPress: () => void;
-  /** Opens the Channel thread attached to this message. */
-  onOpenThread?: () => void;
   /** Jumps to the message this one quotes. */
   onPressReply?: () => void;
   onSwipeReply?: () => void;
@@ -44,7 +42,6 @@ export function ThreadRow({
   isFirstInGroup,
   isOwnMessage,
   onLongPress,
-  onOpenThread,
   onPressReply,
   onSwipeReply,
 }: Props) {
@@ -88,7 +85,6 @@ export function ThreadRow({
               isOwnMessage={Boolean(isOwnMessage)}
               message={item.item}
               onLongPress={onLongPress}
-              onOpenThread={onOpenThread}
               onPressReply={onPressReply}
               timeLabel={fmtTime(item.item.message.createdAt)}
             />

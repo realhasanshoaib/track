@@ -139,10 +139,16 @@ export function CompanyProjectPage({
   const [replyToMessageByScope, setReplyToMessageByScope] = useState<
     Map<string, ConversationComposerReply>
   >(() => new Map());
-  const targetMessageId =
+  const [targetMessageId, setTargetMessageId] = useState(() =>
     typeof window === "undefined"
       ? undefined
-      : getMessageIdFromHash(window.location.hash);
+      : getMessageIdFromHash(window.location.hash),
+  );
+  useEffect(() => {
+    const updateTarget = () => setTargetMessageId(getMessageIdFromHash(window.location.hash));
+    window.addEventListener("hashchange", updateTarget);
+    return () => window.removeEventListener("hashchange", updateTarget);
+  }, []);
   const readableActiveChannelId =
     activeActingCompanyId &&
     canReadChannels &&
@@ -179,24 +185,7 @@ export function CompanyProjectPage({
     }
     return [...uniqueMessages.values()];
   }, [pagedMessages]);
-  const threadUnread = useQuery(
-    api.channelThreads.listGroupUnread,
-    releaseConfig.threads && currentUser && activeActingCompanyId && canReadChannels
-      ? {
-          actingCompanyId: activeActingCompanyId,
-          projectId,
-          projectMemberId,
-          userId: currentUser._id,
-        }
-      : "skip",
-  );
-  const threadUnreadByChannel = useMemo(
-    () =>
-      new Map(
-        (threadUnread ?? []).map((entry) => [entry.groupId, entry.unreadCount]),
-      ),
-    [threadUnread],
-  );
+
   const createChannel = useMutation(api.channels.create);
   const addProjectMember = useMutation(api.sharedProjects.addMember);
   const updateProjectMember = useMutation(api.sharedProjects.updateMember);
@@ -388,6 +377,7 @@ export function CompanyProjectPage({
 
   function openMessageSource(groupId: Id<"groups">, messageId: Id<"messages">) {
     setActiveChannelId(groupId);
+    setTargetMessageId(messageId);
     window.history.replaceState(null, "", `#message-${messageId}`);
   }
 
@@ -674,13 +664,9 @@ export function CompanyProjectPage({
         projectId={projectId}
         projectMemberId={projectMemberId}
         readOnly={readOnly}
-        releaseConfig={{
-          threads: releaseConfig.threads,
-        }}
         replyToMessage={replyToMessage}
         snapshotState={snapshotState}
-        targetMessageId={targetMessageId}
-        threadUnreadByChannel={threadUnreadByChannel}
+
       />
       <CompanyProjectAdministration
         actingCompanyId={actingCompanyId}

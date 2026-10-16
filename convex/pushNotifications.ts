@@ -42,7 +42,7 @@ type LegacyNativeTarget = Omit<NativeTarget, 'installationId' | 'kind'> & {
 
 export function resolveMessageNotificationUrls(input: {
   actingCompanyId?: string
-  channelThreadId?: string
+
   groupId: string
   legacyWebUrl: string
   messageId: string
@@ -52,10 +52,7 @@ export function resolveMessageNotificationUrls(input: {
   const represented = input.actingCompanyId && input.projectMemberId
     ? { companyId: input.actingCompanyId, membershipId: input.projectMemberId }
     : null
-  const representedSearch = represented ? `?${new URLSearchParams(represented)}` : ''
-  const webUrl = input.channelThreadId
-    ? `/workspace/projects/${encodeURIComponent(input.projectId)}/groups/${encodeURIComponent(input.groupId)}/threads/${encodeURIComponent(input.channelThreadId)}${representedSearch}#message-${encodeURIComponent(input.messageId)}`
-    : represented
+  const webUrl = represented
       ? `/workspace/company-projects/${encodeURIComponent(input.projectId)}?${new URLSearchParams({
           ...represented,
           groupId: input.groupId,
@@ -64,9 +61,7 @@ export function resolveMessageNotificationUrls(input: {
   const mobileContext = represented
     ? `&companyId=${encodeURIComponent(represented.companyId)}&membershipId=${encodeURIComponent(represented.membershipId)}`
     : ''
-  const mobileUrl = input.channelThreadId
-    ? `/thread?projectId=${encodeURIComponent(input.projectId)}&groupId=${encodeURIComponent(input.groupId)}&threadId=${encodeURIComponent(input.channelThreadId)}${mobileContext}&messageId=${encodeURIComponent(input.messageId)}`
-    : `/conversation?projectId=${encodeURIComponent(input.projectId)}&groupId=${encodeURIComponent(input.groupId)}${mobileContext}&messageId=${encodeURIComponent(input.messageId)}`
+  const mobileUrl = `/conversation?projectId=${encodeURIComponent(input.projectId)}&groupId=${encodeURIComponent(input.groupId)}${mobileContext}&messageId=${encodeURIComponent(input.messageId)}`
   return { mobileUrl, webUrl }
 }
 
@@ -96,7 +91,7 @@ export const deliverMessageNotifications = internalAction({
       const target = rawTarget as NativeTarget | LegacyNativeTarget | WebTarget
       const urls = resolveMessageNotificationUrls({
         actingCompanyId: target.actingCompanyId,
-        channelThreadId: notification.channelThreadId,
+
         groupId: String(notification.groupId),
         legacyWebUrl: notification.url,
         messageId: String(args.messageId),
@@ -107,7 +102,6 @@ export const deliverMessageNotifications = internalAction({
         eventKind: target.eventKind ?? 'message',
         senderName: notification.senderName,
         groupName: notification.groupName,
-        threadName: notification.channelThreadName,
         messagePreview: notification.messagePreview,
         previewMode: target.kind === 'web' ? 'context' : target.previewMode,
       })
@@ -147,7 +141,6 @@ export const deliverMessageNotifications = internalAction({
           projectId: String(notification.projectId),
           groupId: String(notification.groupId),
           messageId: String(args.messageId),
-          ...(notification.channelThreadId ? { threadId: String(notification.channelThreadId) } : {}),
           ...(target.actingCompanyId ? { companyId: String(target.actingCompanyId) } : {}),
           ...(target.projectMemberId ? { membershipId: String(target.projectMemberId) } : {}),
           url: urls.mobileUrl,

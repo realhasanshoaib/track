@@ -6,7 +6,6 @@ import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { isExpoPushToken } from './lib/pushTokens'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-import { threadsEnabled } from './lib/channelThreadPolicy'
 
 const notificationMode = v.union(
   v.literal('all'),
@@ -588,15 +587,14 @@ export const collectMessageNotificationTargets = internalQuery({
     const pushEnvironment = serverPushEnvironment()
     const message = await ctx.db.get(args.messageId)
     if (!message) return null
-    if (message.channelThreadId && !threadsEnabled()) return null
-    const [author, group, project, channelThread, replyToMessage] = await Promise.all([
+
+    const [author, group, project, replyToMessage] = await Promise.all([
       ctx.db.get(message.authorId),
       ctx.db.get(message.groupId),
       ctx.db.get(message.projectId),
-      message.channelThreadId ? ctx.db.get(message.channelThreadId) : null,
       message.replyToMessageId ? ctx.db.get(message.replyToMessageId) : null,
     ])
-    if (!group || !project || (message.channelThreadId && !channelThread)) return null
+    if (!group || !project) return null
 
     const groupMembers = await ctx.db
       .query('groupMembers')
@@ -631,18 +629,7 @@ export const collectMessageNotificationTargets = internalQuery({
           replyToMessage.authorId === membership.userId &&
           (!replyToMessage.authorProjectMemberId || replyToMessage.authorProjectMemberId === projectMemberId),
         )
-        if (message.channelThreadId) {
-          if (!projectMemberId) return []
-          const follower = await ctx.db
-            .query('channelThreadFollowers')
-            .withIndex('by_thread_project_member', (q) =>
-              q
-                .eq('channelThreadId', message.channelThreadId!)
-                .eq('projectMemberId', projectMemberId!),
-            )
-            .unique()
-          if (follower?.preference !== 'following' && !mentioned && !directReply) return []
-        }
+
         if (project.accessProfile === 'company') {
           if (!membership.projectMemberId) return []
           if (!projectMember || projectMember.status !== 'active' || !projectMember.companyId || !projectMember.projectCompanyId) return []
@@ -696,9 +683,9 @@ export const collectMessageNotificationTargets = internalQuery({
               q.eq('userId', membership.userId).eq('groupId', message.groupId),
             ).unique()
         const unreadMessages = await ctx.db.query('messages')
-          .withIndex('by_group_thread_created_at', (q) => readState
-            ? q.eq('groupId', message.groupId).eq('channelThreadId', undefined).gt('createdAt', readState.lastReadAt)
-            : q.eq('groupId', message.groupId).eq('channelThreadId', undefined))
+          .withIndex('by_group_created_at', (q) => readState
+            ? q.eq('groupId', message.groupId).gt('createdAt', readState.lastReadAt)
+            : q.eq('groupId', message.groupId))
           .take(100)
         const badge = Math.min(
           99,
@@ -719,7 +706,7 @@ export const collectMessageNotificationTargets = internalQuery({
             actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
-            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
+            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : 'message',
             exactMembership: subscription.projectMemberId === projectMemberId,
           }))
         const nativeTargets = installations
@@ -740,7 +727,7 @@ export const collectMessageNotificationTargets = internalQuery({
             previewMode: globalSettings?.previewMode ?? 'full',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
-            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
+            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : 'message',
           }))
         const installationTokens = new Set(installations.flatMap((installation) =>
           [installation.nativePushToken, installation.expoPushToken].filter(Boolean)))
@@ -759,7 +746,7 @@ export const collectMessageNotificationTargets = internalQuery({
             previewMode: globalSettings?.previewMode ?? 'context',
             soundEnabled: globalSettings?.soundEnabled ?? true,
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
-            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : message.channelThreadId ? 'thread_reply' : 'message',
+            eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : 'message',
             exactMembership: subscription.projectMemberId === projectMemberId,
           }))
         return [...webTargets, ...nativeTargets, ...legacyNativeTargets]
@@ -778,8 +765,7 @@ export const collectMessageNotificationTargets = internalQuery({
     }
 
     return {
-      channelThreadId: message.channelThreadId,
-      channelThreadName: channelThread?.name,
+
       groupId: message.groupId,
       groupName: group.name,
       projectId: message.projectId,
@@ -787,9 +773,7 @@ export const collectMessageNotificationTargets = internalQuery({
       senderName: author?.displayName ?? 'Track',
       messagePreview: message.body || message.notificationPreview || 'Sent an attachment.',
       targets: Array.from(uniqueTargets.values()),
-      url: message.channelThreadId
-        ? `/workspace/projects/${message.projectId}/groups/${message.groupId}/threads/${message.channelThreadId}#message-${message._id}`
-        : `/workspace/projects/${message.projectId}/groups/${message.groupId}`,
+      url: `/workspace/projects/${message.projectId}/groups/${message.groupId}`,
     }
   },
 })

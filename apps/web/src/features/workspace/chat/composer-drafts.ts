@@ -4,7 +4,6 @@ export type ComposerDraftScope = {
   projectMemberId?: string
   projectId: string
   groupId: string
-  threadId?: string
 }
 
 export type ComposerDraft = {
@@ -22,7 +21,7 @@ export function getComposerDraftKey(scope: ComposerDraftScope) {
     scope.projectMemberId ?? 'legacy-membership',
     scope.projectId,
     scope.groupId,
-    scope.threadId ?? 'channel',
+    'channel',
   ].join(':')
 }
 

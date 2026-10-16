@@ -6,7 +6,6 @@ describe('web release config', () => {
   it('fails closed while the server projection is unavailable', () => {
     expect(resolveReleaseConfig(undefined)).toEqual({
       companyModel: false,
-      threads: false,
     })
   })
 
@@ -15,14 +14,12 @@ describe('web release config', () => {
       status: 'loading',
       config: {
         companyModel: false,
-        threads: false,
       },
     })
     expect(resolveReleaseConfigState(null)).toEqual({
       status: 'ready',
       config: {
         companyModel: false,
-        threads: false,
       },
     })
   })

@@ -15,7 +15,6 @@ import { authorizeScopedRequest } from './lib/requestAuthorization'
 import {
   getArchivedChannelSnapshot,
   getArchivedMemberSnapshot,
-  getArchivedThreadSnapshot,
 } from './lib/projectExitArchive'
 import {
   claimMessageUploadIntent,
@@ -28,11 +27,7 @@ import { assertProjectSnapshotWritable } from './lib/projectSnapshotLock'
 import {
   allocateChannelSequence,
   assertReplyScope,
-  followMentionedThreadMembers,
-  requireThreadsEnabled,
-  threadsEnabled,
-  upsertThreadFollower,
-} from './lib/channelThreadPolicy'
+} from './lib/messagePolicy'
 
 const attachmentKind = v.union(v.literal('file'), v.literal('voice_note'))
 const previewErrorCode = v.union(
@@ -221,41 +216,6 @@ async function getGroupMembership(
     .unique()
 }
 
-async function markThreadAuthorRead(
-  ctx: MutationCtx,
-  thread: Doc<'channelThreads'>,
-  projectMember: Doc<'projectMembers'>,
-  userId: Id<'users'>,
-  channelSequence: number,
-  actingCompanyId?: Id<'companies'>,
-) {
-  const existing = await ctx.db
-    .query('channelThreadReadStates')
-    .withIndex('by_thread_project_member', (q) =>
-      q.eq('channelThreadId', thread._id).eq('projectMemberId', projectMember._id),
-    )
-    .unique()
-  const now = Date.now()
-  if (existing) {
-    await ctx.db.patch(existing._id, {
-      lastReadChannelSequence: Math.max(existing.lastReadChannelSequence, channelSequence),
-      updatedAt: now,
-    })
-    return
-  }
-  await ctx.db.insert('channelThreadReadStates', {
-    projectId: thread.projectId,
-    groupId: thread.groupId,
-    channelThreadId: thread._id,
-    userId,
-    projectMemberId: projectMember._id,
-    actingCompanyId,
-    lastReadChannelSequence: channelSequence,
-    createdAt: now,
-    updatedAt: now,
-  })
-}
-
 export const commitMediaPreview = internalMutation({
   args: {
     attachmentId: v.id('attachments'),
@@ -342,13 +302,6 @@ export async function buildMessageDetail(
   viewerProjectMemberId?: Id<'projectMembers'>,
   cutoff?: number,
   archivedChannelSnapshots?: Array<{ _id: Id<'groups'>; name: string }>,
-  archivedThreadSnapshots?: Array<{
-    _id: Id<'channelThreads'>
-    name: string
-    status: 'active' | 'archived'
-    replyCount?: number
-    latestReplyAt?: number
-  }>,
   archivedMemberSnapshots?: Array<ArchivedMemberSnapshot>,
   archiveSnapshotOperationId?: string,
 ) {
@@ -424,23 +377,6 @@ export async function buildMessageDetail(
   const sourceGroup = forwardedFrom && sourceGroupAccess && !normalizedChannelSnapshots
     ? await ctx.db.get(forwardedFrom.sourceGroupId)
     : null
-  const sourceThread = threadsEnabled() && !message.channelThreadId
-    ? await ctx.db
-        .query('channelThreads')
-        .withIndex('by_group_source', (q) =>
-          q.eq('groupId', message.groupId).eq('sourceMessageId', message._id),
-        )
-        .unique()
-    : null
-  const archiveSourceThreadSnapshot = cutoff && archiveSnapshotOperationId && sourceThread && viewerProjectMemberId
-    ? await getArchivedThreadSnapshot(ctx, archiveSnapshotOperationId, viewerProjectMemberId, sourceThread._id)
-    : null
-  const normalizedThreadSnapshots = archiveSourceThreadSnapshot
-    ? [...(archivedThreadSnapshots ?? []), archiveSourceThreadSnapshot]
-    : archivedThreadSnapshots
-  const sourceThreadSnapshot = sourceThread
-    ? normalizedThreadSnapshots?.find((snapshot) => snapshot._id === sourceThread._id)
-    : undefined
   return {
     message: message.forwardedFrom ? { ...message, forwardedFrom: undefined } : message,
     author,
@@ -455,7 +391,6 @@ export async function buildMessageDetail(
     replyTo:
       replyToMessage &&
       replyToMessage.groupId === message.groupId &&
-      replyToMessage.channelThreadId === message.channelThreadId &&
       (!cutoff || replyToMessage.createdAt <= cutoff)
         ? {
             messageId: replyToMessage._id,
@@ -475,15 +410,6 @@ export async function buildMessageDetail(
           sourceGroupId: sourceGroupAccess ? message.forwardedFrom.sourceGroupId : null,
           sourceMessageId: sourceGroupAccess ? message.forwardedFrom.sourceMessageId : null,
           sourceGroupName: sourceGroupSnapshot?.name ?? sourceGroup?.name ?? null,
-        }
-      : null,
-    channelThread: sourceThread && (!cutoff || sourceThreadSnapshot)
-      ? {
-          threadId: sourceThread._id,
-          name: sourceThreadSnapshot?.name ?? sourceThread.name,
-          status: sourceThreadSnapshot?.status ?? sourceThread.status,
-          replyCount: sourceThreadSnapshot?.replyCount ?? sourceThread.replyCount ?? 0,
-          latestReplyAt: sourceThreadSnapshot?.latestReplyAt ?? sourceThread.latestReplyAt ?? null,
         }
       : null,
   }
@@ -510,14 +436,10 @@ export const list = query({
     const cutoff = access.companyAccess?.entitlement?.exitAt
     return await ctx.db
       .query('messages')
-      .withIndex('by_group_thread_created_at', (q) => cutoff
+      .withIndex('by_group_created_at', (q) => cutoff
         ? q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined)
           .lte('createdAt', cutoff)
-        : q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined))
+        : q.eq('groupId', args.groupId))
       .order('desc')
       .take(boundedMessageLimit(args.limit))
   },
@@ -545,21 +467,16 @@ export const listDetailed = query({
     const cutoff = access.companyAccess?.entitlement?.exitAt
     const messages = await ctx.db
       .query('messages')
-      .withIndex('by_group_thread_created_at', (q) => cutoff
+      .withIndex('by_group_created_at', (q) => cutoff
         ? q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined)
           .lte('createdAt', cutoff)
-        : q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined))
+        : q.eq('groupId', args.groupId))
       .order('desc')
       .take(boundedMessageLimit(args.limit))
 
     const target = args.targetMessageId ? await ctx.db.get(args.targetMessageId) : null
     const targetIsVisible = target &&
       target.groupId === args.groupId &&
-      target.channelThreadId === undefined &&
       (!cutoff || target.createdAt <= cutoff)
     let selectedMessages = messages
     if (targetIsVisible && !messages.some((message) => message._id === target._id)) {
@@ -567,23 +484,17 @@ export const listDetailed = query({
       const [older, newer] = await Promise.all([
         ctx.db
           .query('messages')
-          .withIndex('by_group_thread_created_at', (q) => q
+          .withIndex('by_group_created_at', (q) => q
             .eq('groupId', args.groupId)
-            // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-            .eq('channelThreadId', undefined)
             .lt('createdAt', target.createdAt))
           .order('desc')
           .take(contextSize),
         ctx.db
           .query('messages')
-          .withIndex('by_group_thread_created_at', (q) => cutoff
+          .withIndex('by_group_created_at', (q) => cutoff
             ? q.eq('groupId', args.groupId)
-              // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-              .eq('channelThreadId', undefined)
               .gt('createdAt', target.createdAt).lte('createdAt', cutoff)
             : q.eq('groupId', args.groupId)
-              // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-              .eq('channelThreadId', undefined)
               .gt('createdAt', target.createdAt))
           .order('asc')
           .take(contextSize),
@@ -602,7 +513,6 @@ export const listDetailed = query({
         args.projectMemberId,
         cutoff,
         access.companyAccess?.entitlement?.channelSnapshots,
-        access.companyAccess?.entitlement?.threadSnapshots,
         access.companyAccess?.entitlement?.memberSnapshots,
         access.companyAccess?.entitlement?.snapshotOperationId,
       ),
@@ -633,14 +543,10 @@ export const listPage = query({
     const pageSize = Math.min(Math.max(args.paginationOpts.numItems, 1), 100)
     const result = await ctx.db
       .query('messages')
-      .withIndex('by_group_thread_created_at', (q) => cutoff
+      .withIndex('by_group_created_at', (q) => cutoff
         ? q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined)
           .lte('createdAt', cutoff)
-        : q.eq('groupId', args.groupId)
-          // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-          .eq('channelThreadId', undefined))
+        : q.eq('groupId', args.groupId))
       .order('desc')
       .paginate({ ...args.paginationOpts, numItems: pageSize })
     let page = [...result.page]
@@ -649,28 +555,25 @@ export const listPage = query({
       const targetIsVisible = target &&
         target.projectId === group.projectId &&
         target.groupId === args.groupId &&
-        target.channelThreadId === undefined &&
         (!cutoff || target.createdAt <= cutoff)
       if (targetIsVisible && !page.some((message) => message._id === target._id)) {
         const contextSize = Math.max(1, Math.floor((pageSize - 1) / 2))
         const [older, newer] = await Promise.all([
           ctx.db
             .query('messages')
-            .withIndex('by_group_thread_created_at', (q) => cutoff
+            .withIndex('by_group_created_at', (q) => cutoff
               // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-              ? q.eq('groupId', args.groupId).eq('channelThreadId', undefined)
+              ? q.eq('groupId', args.groupId)
                 .lt('createdAt', target.createdAt)
               // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-              : q.eq('groupId', args.groupId).eq('channelThreadId', undefined)
+              : q.eq('groupId', args.groupId)
                 .lt('createdAt', target.createdAt))
             .order('desc')
             .take(contextSize),
           ctx.db
             .query('messages')
-            .withIndex('by_group_thread_created_at', (q) => q
+            .withIndex('by_group_created_at', (q) => q
               .eq('groupId', args.groupId)
-              // eslint-disable-next-line unicorn/no-useless-undefined -- reason: Convex compares absent optional fields explicitly.
-              .eq('channelThreadId', undefined)
               .gt('createdAt', target.createdAt)
               .lte('createdAt', cutoff ?? Number.MAX_SAFE_INTEGER))
             .order('asc')
@@ -692,7 +595,6 @@ export const listPage = query({
           args.projectMemberId,
           cutoff,
           access.companyAccess?.entitlement?.channelSnapshots,
-          access.companyAccess?.entitlement?.threadSnapshots,
           access.companyAccess?.entitlement?.memberSnapshots,
           access.companyAccess?.entitlement?.snapshotOperationId,
         ),
@@ -713,7 +615,7 @@ export const send = mutation({
     mentionedProjectMemberIds: v.optional(v.array(v.id('projectMembers'))),
     replyToMessageId: v.optional(v.id('messages')),
     notificationPreview: v.optional(v.string()),
-    channelThreadId: v.optional(v.id('channelThreads')),
+
     idempotencyKey: v.optional(v.string()),
     attachments: v.optional(v.array(messageAttachment)),
   },
@@ -733,30 +635,12 @@ export const send = mutation({
     const uploadScope: MessageUploadScope = {
       projectId: args.projectId,
       groupId: args.groupId,
-      channelThreadId: args.channelThreadId,
+
       uploaderId: args.authorId,
       uploaderProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
     }
-    let channelThread = null
-    if (args.channelThreadId) {
-      requireThreadsEnabled()
-      if (
-        (group.status && group.status !== 'active') ||
-        (access.project.status && access.project.status !== 'active')
-      ) {
-        throw new Error('thread_parent_read_only')
-      }
-      channelThread = await ctx.db.get(args.channelThreadId)
-      if (
-        !channelThread ||
-        channelThread.projectId !== args.projectId ||
-        channelThread.groupId !== args.groupId
-      ) {
-        throw new Error('thread_access_changed')
-      }
-      if (channelThread.status !== 'active') throw new Error('thread_archived')
-    }
+
     if (args.idempotencyKey) {
       const existing = await ctx.db
         .query('messages')
@@ -769,8 +653,7 @@ export const send = mutation({
       if (existing) {
         if (
           existing.projectId !== args.projectId ||
-          existing.groupId !== args.groupId ||
-          existing.channelThreadId !== args.channelThreadId
+          existing.groupId !== args.groupId
         ) {
           throw new Error('idempotency_scope_mismatch')
         }
@@ -794,7 +677,7 @@ export const send = mutation({
       authorId: args.authorId,
       authorProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
-      channelThreadId: args.channelThreadId,
+
       channelSequence,
       idempotencyKey: args.idempotencyKey,
       body: args.body,
@@ -811,7 +694,7 @@ export const send = mutation({
         projectId: args.projectId,
         groupId: args.groupId,
         messageId,
-        channelThreadId: args.channelThreadId,
+
         storageId: intent.storageId,
         filename: input.filename,
         contentType: input.contentType,
@@ -847,7 +730,7 @@ export const send = mutation({
           actorId: args.authorId,
           actorProjectMemberId: projectMember._id,
           actingCompanyId: access.companyAccess?.company._id,
-          channelThreadId: args.channelThreadId,
+
           entityType: 'attachment',
           entityId: attachmentId,
           action: 'attachment.preserved',
@@ -862,37 +745,13 @@ export const send = mutation({
       ))
     }
 
-    if (channelThread) {
-      const createdAt = Date.now()
-      await ctx.db.patch(channelThread._id, {
-        replyCount: (channelThread.replyCount ?? 0) + 1,
-        latestReplyAt: createdAt,
-        latestChannelSequence: channelSequence,
-        updatedAt: createdAt,
-      })
-      await upsertThreadFollower(ctx, {
-        thread: channelThread,
-        userId: args.authorId,
-        projectMember,
-        actingCompanyId: access.companyAccess?.company._id,
-        reason: 'replied',
-      })
-      await followMentionedThreadMembers(
-        ctx,
-        channelThread,
-        args.mentions ?? [],
-        args.mentionedProjectMemberIds,
-      )
-      await markThreadAuthorRead(ctx, channelThread, projectMember, args.authorId, channelSequence, access.companyAccess?.company._id)
-    }
-
     await appendAuditEvent(ctx, {
       projectId: args.projectId,
       groupId: args.groupId,
       actorId: args.authorId,
       actorProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
-      channelThreadId: args.channelThreadId,
+
       entityType: 'message',
       entityId: messageId,
       action: 'message.sent',
@@ -901,7 +760,7 @@ export const send = mutation({
         mentionCount: args.mentions?.length ?? 0,
         replyToMessageId: args.replyToMessageId,
         channelSequence,
-        channelThreadId: args.channelThreadId,
+
       },
     })
 
@@ -918,7 +777,7 @@ export const forwardMessage = mutation({
     projectId: v.id('projects'),
     sourceMessageId: v.id('messages'),
     targetGroupId: v.id('groups'),
-    targetChannelThreadId: v.optional(v.id('channelThreads')),
+
     actorId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -933,7 +792,7 @@ export const forwardMessage = mutation({
     if (!sourceMessage || sourceMessage.projectId !== args.projectId) {
       throw new Error('source_message_not_found')
     }
-    if (sourceMessage.channelThreadId) requireThreadsEnabled()
+
     await authorizeScopedRequest(ctx, {
       projectId: args.projectId,
       groupId: sourceMessage.groupId,
@@ -958,24 +817,9 @@ export const forwardMessage = mutation({
       resolveProjectAccessProfile(access.project.accessProfile),
     )
     const projectMember = access.projectMember
-    let targetThread = null
-    if (args.targetChannelThreadId) {
-      requireThreadsEnabled()
-      if (
-        (targetGroup.status && targetGroup.status !== 'active') ||
-        (access.project.status && access.project.status !== 'active')
-      ) {
-        throw new Error('thread_parent_read_only')
-      }
-      targetThread = await ctx.db.get(args.targetChannelThreadId)
-      if (!targetThread || targetThread.groupId !== args.targetGroupId || targetThread.projectId !== args.projectId) {
-        throw new Error('thread_access_changed')
-      }
-      if (targetThread.status !== 'active') throw new Error('thread_archived')
-    }
+
     if (
-      sourceMessage.groupId === args.targetGroupId &&
-      sourceMessage.channelThreadId === args.targetChannelThreadId
+      sourceMessage.groupId === args.targetGroupId
     ) {
       throw new Error('forward_target_same_group')
     }
@@ -1041,7 +885,7 @@ export const forwardMessage = mutation({
       authorId: args.actorId,
       authorProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
-      channelThreadId: args.targetChannelThreadId,
+
       channelSequence,
       idempotencyKey: args.idempotencyKey,
       body,
@@ -1068,29 +912,6 @@ export const forwardMessage = mutation({
       notificationPreview: body || 'Forwarded a message.',
       createdAt: Date.now(),
     })
-    if (targetThread) {
-      const createdAt = Date.now()
-      await ctx.db.patch(targetThread._id, {
-        replyCount: (targetThread.replyCount ?? 0) + 1,
-        latestReplyAt: createdAt,
-        latestChannelSequence: channelSequence,
-        updatedAt: createdAt,
-      })
-      await upsertThreadFollower(ctx, {
-        thread: targetThread,
-        userId: args.actorId,
-        projectMember,
-        actingCompanyId: access.companyAccess?.company._id,
-        reason: 'replied',
-      })
-      await followMentionedThreadMembers(
-        ctx,
-        targetThread,
-        mentions,
-        mentionedProjectMemberIds,
-      )
-      await markThreadAuthorRead(ctx, targetThread, projectMember, args.actorId, channelSequence, access.companyAccess?.company._id)
-    }
 
     const copiedAttachmentIds = await Promise.all(
       attachmentsToCopy.map(async (attachment) =>
@@ -1098,7 +919,7 @@ export const forwardMessage = mutation({
           projectId: args.projectId,
           groupId: args.targetGroupId,
           messageId,
-          channelThreadId: args.targetChannelThreadId,
+
           storageId: attachment.storageId,
           filename: attachment.filename,
           contentType: attachment.contentType,
@@ -1124,7 +945,7 @@ export const forwardMessage = mutation({
       actorId: args.actorId,
       actorProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
-      channelThreadId: args.targetChannelThreadId,
+
       entityType: 'message',
       entityId: messageId,
       action: 'message.forwarded',
@@ -1134,7 +955,7 @@ export const forwardMessage = mutation({
         copiedAttachmentCount: copiedAttachmentIds.length,
         bodyPreview: body.slice(0, 180),
         channelSequence,
-        channelThreadId: args.targetChannelThreadId,
+
       },
     })
 
@@ -1164,20 +985,7 @@ export const remove = mutation({
       projectMemberId: args.projectMemberId,
     }, 'writeChannel')
     const projectMember = access.projectMember
-    const channelThread = message.channelThreadId
-      ? await ctx.db.get(message.channelThreadId)
-      : null
-    if (message.channelThreadId) {
-      requireThreadsEnabled()
-      if (
-        !channelThread ||
-        channelThread.projectId !== message.projectId ||
-        channelThread.groupId !== message.groupId
-      ) {
-        throw new Error('thread_access_changed')
-      }
-      if (channelThread.status !== 'active') throw new Error('thread_archived')
-    }
+
     const isAuthor = message.authorProjectMemberId
       ? message.authorProjectMemberId === projectMember._id
       : message.authorId === args.actorId
@@ -1209,7 +1017,7 @@ export const remove = mutation({
     await appendAuditEvent(ctx, {
       projectId: message.projectId,
       groupId: message.groupId,
-      channelThreadId: message.channelThreadId,
+
       actorId: args.actorId,
       actorProjectMemberId: projectMember._id,
       actingCompanyId: access.companyAccess?.company._id,
@@ -1234,20 +1042,6 @@ export const remove = mutation({
       ),
     )
 
-    if (channelThread) {
-      const remainingReplies = await ctx.db
-        .query('messages')
-        .withIndex('by_thread_created_at', (q) => q.eq('channelThreadId', channelThread._id))
-        .order('desc')
-        .collect()
-      const latestReply = remainingReplies[0]
-      await ctx.db.patch(channelThread._id, {
-        replyCount: remainingReplies.length,
-        latestReplyAt: latestReply?.createdAt,
-        latestChannelSequence: latestReply?.channelSequence,
-        updatedAt: Date.now(),
-      })
-    }
   },
 })
 
@@ -1257,7 +1051,7 @@ export const generateUploadUrl = mutation({
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
-    channelThreadId: v.optional(v.id('channelThreads')),
+
     intentKey: v.string(),
     filename: v.string(),
     contentType: v.string(),
@@ -1277,19 +1071,7 @@ export const generateUploadUrl = mutation({
       actingCompanyId: args.actingCompanyId,
       projectMemberId: args.projectMemberId,
     }, 'writeChannel')
-    if (args.channelThreadId) {
-      requireThreadsEnabled()
-      if (
-        (group.status && group.status !== 'active') ||
-        (access.project.status && access.project.status !== 'active')
-      ) {
-        throw new Error('thread_parent_read_only')
-      }
-      const thread = await ctx.db.get(args.channelThreadId)
-      if (!thread || thread.groupId !== group._id || thread.status !== 'active') {
-        throw new Error(thread?.status === 'archived' ? 'thread_archived' : 'thread_access_changed')
-      }
-    }
+
     const projectMember = access.projectMember
     const actingCompanyId = access.companyAccess?.company._id
     const existing = await ctx.db
@@ -1303,7 +1085,6 @@ export const generateUploadUrl = mutation({
       if (
         existing.projectId !== group.projectId ||
         existing.groupId !== group._id ||
-        existing.channelThreadId !== args.channelThreadId ||
         existing.uploaderId !== args.userId ||
         existing.actingCompanyId !== actingCompanyId ||
         existing.filename !== args.filename ||
@@ -1328,7 +1109,7 @@ export const generateUploadUrl = mutation({
           intentId: existing._id,
           uploadUrl: null,
           status: existing.status,
-          storageId: existing.storageId,
+          storageId: existing.storageId ?? null,
           expiresAt: existing.expiresAt,
         }
       }
@@ -1357,7 +1138,7 @@ export const generateUploadUrl = mutation({
     const intentId = await ctx.db.insert('messageUploadIntents', {
       projectId: group.projectId,
       groupId: group._id,
-      channelThreadId: args.channelThreadId,
+
       uploaderId: args.userId,
       uploaderProjectMemberId: projectMember._id,
       actingCompanyId,
@@ -1410,25 +1191,13 @@ export const claimUploadIntent = mutation({
     if (intent.actingCompanyId !== access.companyAccess?.company._id) {
       throw new Error('upload_intent_scope_mismatch')
     }
-    if (intent.channelThreadId) {
-      requireThreadsEnabled()
-      if (
-        (group.status && group.status !== 'active') ||
-        (access.project.status && access.project.status !== 'active')
-      ) {
-        throw new Error('thread_parent_read_only')
-      }
-      const thread = await ctx.db.get(intent.channelThreadId)
-      if (!thread || thread.groupId !== group._id || thread.status !== 'active') {
-        throw new Error(thread?.status === 'archived' ? 'thread_archived' : 'thread_access_changed')
-      }
-    }
+
     const uploaded = await markMessageUploadAsUploaded(ctx, {
       intentId: intent._id,
       scope: {
         projectId: intent.projectId,
         groupId: intent.groupId,
-        channelThreadId: intent.channelThreadId,
+
         uploaderId: args.userId,
         uploaderProjectMemberId: access.projectMember._id,
         actingCompanyId: access.companyAccess?.company._id,
@@ -1554,24 +1323,12 @@ export const attachFile = mutation({
     if (message.actingCompanyId !== representedCompanyId) {
       throw new Error('attachment_scope_mismatch')
     }
-    if (message.channelThreadId) {
-      requireThreadsEnabled()
-      if (
-        (group.status && group.status !== 'active') ||
-        (access.project.status && access.project.status !== 'active')
-      ) {
-        throw new Error('thread_parent_read_only')
-      }
-      const thread = await ctx.db.get(message.channelThreadId)
-      if (!thread || thread.status !== 'active') {
-        throw new Error(thread?.status === 'archived' ? 'thread_archived' : 'thread_access_changed')
-      }
-    }
+
     validateUploadMetadata(args)
     const uploadScope: MessageUploadScope = {
       projectId: args.projectId,
       groupId: args.groupId,
-      channelThreadId: message.channelThreadId,
+
       uploaderId: args.userId,
       uploaderProjectMemberId: projectMember._id,
       actingCompanyId: representedCompanyId,
@@ -1643,7 +1400,7 @@ export const attachFile = mutation({
       projectId: args.projectId,
       groupId: args.groupId,
       messageId: args.messageId,
-      channelThreadId: message.channelThreadId,
+
       storageId,
       filename: args.filename,
       contentType: args.contentType,

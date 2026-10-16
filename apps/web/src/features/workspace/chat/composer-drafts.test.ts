@@ -19,22 +19,24 @@ afterEach(() => {
 })
 
 describe('composer draft scope', () => {
-  it('separates actor, represented membership, project, channel, and thread', () => {
+  it('preserves the persisted Channel key', () => {
+    expect(getComposerDraftKey(baseScope)).toBe('user-a:legacy-company:legacy-membership:project-a:group-a:channel')
+  })
+
+  it('separates actor, represented membership, project, and Channel', () => {
     const represented = {
       ...baseScope,
       actingCompanyId: 'company-a',
       projectMemberId: 'membership-a',
-      threadId: 'thread-a',
     }
     const otherActor = { ...represented, actorId: 'user-b' }
     const otherMembership = { ...represented, projectMemberId: 'membership-b' }
-    const otherThread = { ...represented, threadId: 'thread-b' }
 
     expect(new Set([
       getComposerDraftKey(represented),
       getComposerDraftKey(otherActor),
       getComposerDraftKey(otherMembership),
-      getComposerDraftKey(otherThread),
+      getComposerDraftKey({ ...represented, groupId: 'other-group' }),
     ]).size).toBe(4)
   })
 

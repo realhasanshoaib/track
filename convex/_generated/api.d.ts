@@ -10,7 +10,6 @@
 
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
-import type * as channelThreads from "../channelThreads.js";
 import type * as channels from "../channels.js";
 import type * as companies from "../companies.js";
 import type * as companyMigration from "../companyMigration.js";
@@ -28,7 +27,6 @@ import type * as lib_apns from "../lib/apns.js";
 import type * as lib_archivedProjectSearch from "../lib/archivedProjectSearch.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_channelMembership from "../lib/channelMembership.js";
-import type * as lib_channelThreadPolicy from "../lib/channelThreadPolicy.js";
 import type * as lib_companyInvitations from "../lib/companyInvitations.js";
 import type * as lib_companyPolicy from "../lib/companyPolicy.js";
 import type * as lib_companyProjectLifecycle from "../lib/companyProjectLifecycle.js";
@@ -81,7 +79,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auth: typeof auth;
-  channelThreads: typeof channelThreads;
   channels: typeof channels;
   companies: typeof companies;
   companyMigration: typeof companyMigration;
@@ -99,7 +96,6 @@ declare const fullApi: ApiFromModules<{
   "lib/archivedProjectSearch": typeof lib_archivedProjectSearch;
   "lib/audit": typeof lib_audit;
   "lib/channelMembership": typeof lib_channelMembership;
-  "lib/channelThreadPolicy": typeof lib_channelThreadPolicy;
   "lib/companyInvitations": typeof lib_companyInvitations;
   "lib/companyPolicy": typeof lib_companyPolicy;
   "lib/companyProjectLifecycle": typeof lib_companyProjectLifecycle;

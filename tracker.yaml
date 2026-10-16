@@ -13,24 +13,6 @@ sizing: >-
   before sizing. Working entries have no remaining work to size. Waiting does not increase
   size. Revisit estimates when the work is inspected.
 outcomes:
-  - id: conversation.quote_replies_only
-    title: Replies quote a message, without side threads
-    area: conversation
-    state: planned
-    priority: P0
-    size: M
-    size_reason: Quote replies already exist; the work is removing threads and checking the jump to old messages.
-    summary: >-
-      Both apps can already reply by quoting a message. Side threads still exist next to that, with
-      their own pages, followers and read state.
-    remaining:
-      - Delete side threads, their followers and read state, and their screens in both apps.
-      - Make sure tapping a quote jumps to the original message even when it is outside the loaded page.
-    theory: theory.md#messages
-    code:
-      - convex/channelThreads.ts
-      - apps/mobile/src/app/conversation.tsx
-
   - id: groups.remove_company_collaboration
     title: Remove companies, relationships and exit archives
     area: groups

@@ -13,9 +13,8 @@ import {
 } from '#/components/ui/dialog'
 import { Input } from '#/components/ui/input'
 import { AttachmentTypeIcon } from '#/features/workspace/attachment-ui'
-import { useReleaseConfig } from '#/lib/release-config'
 
-export type ProjectSearchFilter = 'all' | 'messages' | 'files' | 'groups' | 'threads'
+export type ProjectSearchFilter = 'all' | 'messages' | 'files' | 'groups'
 
 export type ProjectSearchResult = {
   attachmentId?: Id<'attachments'>
@@ -24,10 +23,8 @@ export type ProjectSearchResult = {
   groupId?: Id<'groups'>
   groupName: string
   id: string
-  kind: 'message' | 'file' | 'group' | 'thread'
+  kind: 'message' | 'file' | 'group'
   messageId?: Id<'messages'>
-  threadId?: Id<'channelThreads'>
-  threadName?: string
   preview: string
   subtitle: string
   title: string
@@ -62,7 +59,6 @@ export function ProjectSearchDialog({
   total: number
   updating?: boolean
 }) {
-  const releaseConfig = useReleaseConfig()
   const resultButtonsRef = useRef<Array<HTMLButtonElement | null>>([])
   const flatResults = useMemo(
     () => sections.flatMap((section) => section.results),
@@ -90,7 +86,6 @@ export function ProjectSearchDialog({
     { Icon: MessagesSquare, label: 'Messages', value: 'messages' },
     { Icon: Paperclip, label: 'Files', value: 'files' },
     { Icon: FolderKanban, label: 'Groups', value: 'groups' },
-    ...(releaseConfig.threads ? [{ Icon: MessagesSquare, label: 'Threads', value: 'threads' as const }] : []),
   ]
   const hasQuery = query.trim().length >= 2
   let resultIndex = -1
@@ -134,7 +129,7 @@ export function ProjectSearchDialog({
             <span className="mono-label">Current project search</span>
             <DialogTitle>{projectName}</DialogTitle>
             <DialogDescription className="sr-only">
-              Search messages, files, groups, and threads in the current project.
+              Search messages, files, and groups in the current project.
             </DialogDescription>
           </div>
           <Button aria-label="Close project search" className="icon-button" onClick={onClose} type="button">
@@ -148,7 +143,7 @@ export function ProjectSearchDialog({
             className="track-project-search-input"
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             onKeyDown={handleScopedKeyboard}
-            placeholder="Search messages, files, groups, and threads..."
+            placeholder="Search messages, files, and groups..."
             value={query}
           />
           <span aria-live="polite">{updating ? 'Updating…' : `${total} results`}</span>

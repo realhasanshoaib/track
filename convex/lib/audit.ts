@@ -8,7 +8,7 @@ export async function appendAuditEvent(
     relationshipId?: Id<'relationships'>
     projectId?: Id<'projects'>
     groupId?: Id<'groups'>
-    channelThreadId?: Id<'channelThreads'>
+
     actorId?: Id<'users'>
     actorProjectMemberId?: Id<'projectMembers'>
     actingCompanyId?: Id<'companies'>

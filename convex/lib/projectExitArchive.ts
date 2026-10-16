@@ -31,21 +31,6 @@ export type ArchivedChannelSnapshot = {
   status?: string
 }
 
-export type ArchivedThreadSnapshot = {
-  _id: Id<'channelThreads'>
-  createdAt: number
-  groupId: Id<'groups'>
-  name: string
-  status: 'active' | 'archived'
-  revision: number
-  sourceAvailable: boolean
-  following: boolean
-  lastReadChannelSequence: number
-  replyCount?: number
-  latestReplyAt?: number
-  latestChannelSequence?: number
-}
-
 type SnapshotRow = Doc<'projectExitSnapshotStaging'>
 
 async function isVerified(
@@ -112,10 +97,6 @@ function channelSnapshotFromRow(row: SnapshotRow) {
   return row.payload.kind === 'channel' ? row.payload.snapshot : null
 }
 
-function threadSnapshotFromRow(row: SnapshotRow) {
-  return row.payload.kind === 'thread' ? row.payload.snapshot : null
-}
-
 export async function getArchivedMemberSnapshot(
   ctx: ArchiveReadCtx,
   operationId: string,
@@ -150,55 +131,6 @@ export async function getArchivedChannelSnapshot(
     )
     .first()
   return row ? channelSnapshotFromRow(row) : null
-}
-
-export async function getArchivedThreadSnapshot(
-  ctx: ArchiveReadCtx,
-  operationId: string,
-  projectMemberId: Id<'projectMembers'>,
-  threadId: Id<'channelThreads'>,
-) {
-  if (!(await isVerified(ctx, operationId))) return null
-  const row = await ctx.db
-    .query('projectExitSnapshotStaging')
-    .withIndex('by_operation_member_thread', (q) =>
-      q
-        .eq('operationId', operationId)
-        .eq('projectMemberId', projectMemberId)
-        .eq('threadId', threadId),
-    )
-    .first()
-  return row ? threadSnapshotFromRow(row) : null
-}
-
-export async function listArchivedThreadSnapshotsPage(
-  ctx: ArchiveReadCtx,
-  input: {
-    operationId: string
-    projectMemberId: Id<'projectMembers'>
-    cursor: string | null
-    numItems: number
-  },
-) {
-  if (!(await isVerified(ctx, input.operationId))) {
-    return { page: [], isDone: true, continueCursor: '' }
-  }
-  const result = await ctx.db
-    .query('projectExitSnapshotStaging')
-    .withIndex('by_operation_member_scope', (q) =>
-      q
-        .eq('operationId', input.operationId)
-        .eq('projectMemberId', input.projectMemberId)
-        .eq('scope', 'thread'),
-    )
-    .paginate({ cursor: input.cursor, numItems: input.numItems })
-  return {
-    ...result,
-    page: result.page.flatMap((row) => {
-      const snapshot = threadSnapshotFromRow(row)
-      return snapshot ? [snapshot] : []
-    }),
-  }
 }
 
 export async function listArchivedMemberSnapshotsPage(

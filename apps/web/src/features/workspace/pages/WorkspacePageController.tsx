@@ -31,7 +31,7 @@ import { useWorkspaceTypingIndicators } from '#/features/workspace/hooks/useWork
 import { useWorkspaceSynchronization } from '#/features/workspace/hooks/useWorkspaceSynchronization'
 import { useWorkspaceThreadInteractions } from '#/features/workspace/hooks/useWorkspaceThreadInteractions'
 import { useWorkspaceNavigation } from '#/features/workspace/hooks/useWorkspaceNavigation'
-import type { ProjectSearchFilter, ProjectSearchResult } from '#/features/workspace/search/ProjectSearchDialog'
+import type { ProjectSearchFilter } from '#/features/workspace/search/ProjectSearchDialog'
 import { authClient } from '#/lib/auth-client'
 import { disableDevAuthBypass, useDevAuthBypass } from '#/lib/dev-auth-bypass'
 import { useOAuthCallbackPending } from '#/lib/oauth-callback'
@@ -321,23 +321,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     voiceRecordingActive,
   })
 
-  const navigateToSearchResult = useCallback((result: ProjectSearchResult) => {
-    if (!activeProjectId) return
-
-    if (result.threadId && result.groupId) {
-      void navigate({
-        to: '/workspace/projects/$projectId/groups/$groupId/threads/$threadId',
-        params: {
-          groupId: result.groupId,
-          projectId: activeProjectId,
-          threadId: result.threadId,
-        },
-        search: { companyId: '', membershipId: '' },
-        hash: result.messageId ? `message-${result.messageId}` : undefined,
-      })
-    }
-  }, [activeProjectId, navigate])
-
   useWorkspaceSynchronization({
     acceptPendingInvitations,
     activeGroupId,
@@ -445,7 +428,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     latestThreadItemKey,
     messagesLoaded: messages !== undefined,
     navigateToGroup,
-    navigateToSearchResult,
     openProjectSearch,
     pendingFocusMessageId,
     setActiveChatMatchIndex,

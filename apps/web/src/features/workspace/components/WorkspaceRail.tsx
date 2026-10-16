@@ -1,6 +1,6 @@
 import { Bell, GripVertical, PanelRightClose, PanelRightOpen } from 'lucide-react'
 
-import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
+import type { Id } from '../../../../../../convex/_generated/dataModel'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,13 +16,10 @@ import { formatRailLabel } from '#/features/workspace/lib/formatting'
 import { notificationModes } from '#/features/workspace/constants'
 import { notificationPermissionLabels, type WebNotificationPermission } from '#/features/workspace/web-notifications'
 
-import { ChannelThreadBrowser } from '#/features/threads/ChannelThreadBrowser'
 import type { GroupMessageItem } from '#/features/workspace/thread-items'
-import { useReleaseConfig } from '#/lib/release-config'
 import { AttachmentTypeIcon } from '../attachment-ui'
 
 type WorkspaceRailProps = {
-  activeGroup: Doc<'groups'> | undefined
   activeProjectId: Id<'projects'> | null
   busyAction: string | null
   globalNotificationMode: (typeof notificationModes)[number]
@@ -36,7 +33,6 @@ type WorkspaceRailProps = {
   onEnableBrowserNotifications: () => void
   onStartResize: () => void
   railCollapsed: boolean
-  userId: Id<'users'>
   visibleMessages: Array<GroupMessageItem>
 }
 
@@ -109,7 +105,6 @@ function NotificationMenu({
 }
 
 export function WorkspaceRail({
-  activeGroup,
   activeProjectId,
   busyAction,
   globalNotificationMode,
@@ -123,10 +118,8 @@ export function WorkspaceRail({
   onEnableBrowserNotifications,
   onStartResize,
   railCollapsed,
-  userId,
   visibleMessages,
 }: WorkspaceRailProps) {
-  const releaseConfig = useReleaseConfig()
   const references = visibleMessages
     .flatMap((item) => item.attachments.map((file) => ({
       ...file,
@@ -224,16 +217,6 @@ export function WorkspaceRail({
         </div>
       </section>
 
-      {releaseConfig.threads && activeGroup && activeProjectId ? (
-        <ChannelThreadBrowser
-          groupId={activeGroup._id}
-          projectId={activeProjectId}
-          readOnly={activeGroup.status === 'archived'}
-          timelineMessages={visibleMessages}
-          userId={userId}
-          variant="rail"
-        />
-      ) : null}
     </aside>
   )
 }

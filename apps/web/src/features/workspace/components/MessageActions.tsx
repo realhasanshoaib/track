@@ -12,7 +12,6 @@ import type { GroupMessageItem, ReplyToMessagePreview } from '../thread-item-com
 import { getGroupAvatar } from '../group-avatar'
 import type { GroupReference } from '../group-types'
 
-
 export function MessageActions({
   activeGroupId,
   busyAction,
@@ -269,12 +268,12 @@ function ForwardMessagePopover({
   )
 }
 
-export function QuotedMessageBlock({ quote }: { quote: ReplyToMessagePreview }) {
+export function QuotedMessageBlock({ quote, onOpen }: { quote: ReplyToMessagePreview; onOpen: (messageId: ReplyToMessagePreview['messageId']) => void }) {
   return (
-    <div className="track-message-quote">
+    <button type="button" aria-label="Jump to quoted message" className="track-message-quote" onClick={() => onOpen(quote.messageId)}>
       <span>{quote.authorName}</span>
       <p>{quote.body || 'Attachment message'}</p>
-    </div>
+    </button>
   )
 }
 

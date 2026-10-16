@@ -3,7 +3,7 @@ import type { api } from '../../../../../../convex/_generated/api'
 import type { ProjectSearchResult } from '#/features/workspace/search/ProjectSearchDialog'
 
 export type ProjectSearchSection = {
-  key: 'messages' | 'files' | 'threads' | 'groups'
+  key: 'messages' | 'files' | 'groups'
   label: string
   results: ProjectSearchResult[]
 }
@@ -23,11 +23,6 @@ export function buildProjectSearchSections(
       key: 'files',
       label: 'Files',
       results: results?.files ?? [],
-    },
-    {
-      key: 'threads',
-      label: 'Threads',
-      results: results?.threads ?? [],
     },
     {
       key: 'groups',

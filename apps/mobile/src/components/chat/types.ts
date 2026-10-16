@@ -56,13 +56,7 @@ export type DetailedMessage = {
   authorCompany?: { companyId: Id<'companies'>; displayName: string } | null;
   attachments: AttachmentWithUrl[];
   replyTo?: { messageId: Id<'messages'>; authorName: string; body: string; createdAt: number } | null;
-  channelThread?: {
-    threadId: Id<'channelThreads'>;
-    name: string;
-    status: 'active' | 'archived';
-    replyCount: number;
-    latestReplyAt: number | null;
-  } | null;
+
 };
 
 /** An image that the full-screen viewer can present. */

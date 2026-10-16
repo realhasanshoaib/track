@@ -39,7 +39,6 @@ export type CompanyConversationTimelineProps = {
   onLoadMoreMessages?: (count: number) => void
   onRetryHistory?: () => void
   readOnly: boolean
-  targetMessageId?: Id<'messages'>
   visibleGroups: Array<GroupReference>
 }
 
@@ -130,7 +129,6 @@ export function CompanyConversationTimeline({
     )
   }
 
-
   const content = (
     <div className="track-thread">
       {combinedPageStatus === 'CanLoadMore' || combinedPageStatus === 'LoadingMore' ? (
@@ -178,7 +176,7 @@ export function CompanyConversationTimeline({
                 onOpenGroup={onOpenGroup}
                 onOpenMessageSource={onOpenMessageSource}
                 onReplyMessage={onReplyMessage}
-                threadContext={context}
+
               />
             )}
           </Fragment>

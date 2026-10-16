@@ -32,7 +32,7 @@ competing card. Hierarchy comes from typography, alignment, and surface tone
 before decoration.
 
 Conversation leads. Company, Project, and Channel context stays recognizable
-while people move between messages and threads. Dark mode keeps
+while people move between messages and quote replies. Dark mode keeps
 the same warm character rather than switching to a blue-black technology theme.
 
 ## 2. Color Palette & Roles
@@ -108,7 +108,7 @@ not to elevate every ordinary row.
 ### Navigation
 
 Group Projects under their Company and keep the current Project and Channel
-visible across conversation and thread views. Collapsed navigation keeps
+visible across conversation views. Collapsed navigation keeps
 identity, accessible names, and actions. Company badges explain representation
 without outranking the person's name. Do not reveal restricted Channel details
 in counts, snippets, or administrative explanations.

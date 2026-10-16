@@ -14,7 +14,7 @@ export const messageUploadTables = {
   messageUploadIntents: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
-    channelThreadId: v.optional(v.id('channelThreads')),
+
     uploaderId: v.id('users'),
     uploaderProjectMemberId: v.id('projectMembers'),
     actingCompanyId: v.optional(v.id('companies')),

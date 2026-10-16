@@ -21,12 +21,6 @@ import {
   captureExitBatch,
 } from "./lib/projectExitCapture";
 
-type ThreadStateBefore = {
-  name?: string;
-  revision?: number;
-  status?: "active" | "archived";
-};
-
 type ExitProjectSnapshot = Pick<Doc<"projects">, "name"> &
   Partial<
     Pick<
@@ -36,23 +30,6 @@ type ExitProjectSnapshot = Pick<Doc<"projects">, "name"> &
   > & {
     owningCompanyDisplayName?: string;
   };
-
-function isThreadStateBefore(value: unknown): value is ThreadStateBefore {
-  if (!value || typeof value !== "object") return false;
-  if ("name" in value && value.name !== undefined && typeof value.name !== "string") return false;
-  if (
-    "revision" in value &&
-    value.revision !== undefined &&
-    typeof value.revision !== "number"
-  ) return false;
-  if (
-    "status" in value &&
-    value.status !== undefined &&
-    value.status !== "active" &&
-    value.status !== "archived"
-  ) return false;
-  return true;
-}
 
 function decodeExitProjectSnapshot(
   ctx: MutationCtx,
@@ -89,35 +66,6 @@ function decodeExitProjectSnapshot(
       value.status === "archived")
   ) snapshot.status = value.status;
   return snapshot;
-}
-
-async function threadStateAtCutoff(
-  ctx: MutationCtx,
-  thread: Pick<Doc<"channelThreads">, "_id" | "name" | "revision" | "status">,
-  cutoff: number,
-) {
-  const events = await ctx.db
-    .query("auditEvents")
-    .withIndex("by_entity", (q) =>
-      q.eq("entityType", "channelThread").eq("entityId", thread._id),
-    )
-    .collect();
-  const state = {
-    name: thread.name,
-    revision: thread.revision,
-    status: thread.status,
-  };
-  const eventsAtCutoff = events.filter((item) => item.createdAt > cutoff);
-  // eslint-disable-next-line unicorn/no-array-sort -- reason: Copy first to preserve immutability while supporting the web ES2022 target.
-  for (const event of [...eventsAtCutoff].sort(
-    (left, right) => right.createdAt - left.createdAt,
-  )) {
-    if (!isThreadStateBefore(event.before)) continue;
-    if (event.before.name !== undefined) state.name = event.before.name;
-    if (event.before.revision !== undefined) state.revision = event.before.revision;
-    if (event.before.status !== undefined) state.status = event.before.status;
-  }
-  return state;
 }
 
 export const prepare = mutation({
@@ -359,23 +307,6 @@ async function boundedExitRows(
   return result.length <= archiveProjectionLimit ? result : [];
 }
 
-async function boundedThreadRows(
-  ctx: MutationCtx,
-  operationId: string,
-  projectMemberId: Doc<'projectMembers'>['_id'],
-) {
-  const result = await ctx.db
-    .query('projectExitSnapshotStaging')
-    .withIndex('by_operation_member_scope', (q) =>
-      q
-        .eq('operationId', operationId)
-        .eq('projectMemberId', projectMemberId)
-        .eq('scope', 'thread'),
-    )
-    .take(archiveProjectionLimit + 1);
-  return result.length <= archiveProjectionLimit ? result : [];
-}
-
 async function boundedChannelIds(
   ctx: MutationCtx,
   operationId: string,
@@ -426,10 +357,6 @@ export async function finalizeLegacyExit(
       (row) => row.snapshotOperationId === operation.operationId,
     );
     const channelIds = await boundedChannelIds(ctx, operation.operationId, projectMember._id);
-    const threadRows = await boundedThreadRows(ctx, operation.operationId, projectMember._id);
-    const threadSnapshots = threadRows.length > 0
-      ? threadRows.flatMap((row) => row.payload.kind === 'thread' ? [row.payload.snapshot] : [])
-      : undefined;
     const entitlementId = entitlement?._id ?? await ctx.db.insert('projectArchiveEntitlements', {
       projectId: project._id,
       projectCompanyId: participation._id,
@@ -441,7 +368,6 @@ export async function finalizeLegacyExit(
       channelIds,
       projectSnapshot,
       channelSnapshots,
-      threadSnapshots,
       memberSnapshots,
       retentionStatus: 'active',
       manifestHash: operation.operationId,
@@ -457,7 +383,6 @@ export async function finalizeLegacyExit(
       channelIds,
       projectSnapshot,
       channelSnapshots,
-      threadSnapshots,
       memberSnapshots,
       retentionStatus: 'active',
       manifestHash: operation.operationId,
@@ -611,81 +536,6 @@ export const finalize = mutation({
       const channelIds = channelMemberships.map(
         (membership) => membership.groupId,
       );
-      const threads = (
-        await Promise.all(
-          channelIds.map(async (groupId) => [
-            ...(await ctx.db
-              .query("channelThreads")
-              .withIndex("by_group_status_updated_at", (q) =>
-                q.eq("groupId", groupId).eq("status", "active"),
-              )
-              .collect()),
-            ...(await ctx.db
-              .query("channelThreads")
-              .withIndex("by_group_status_updated_at", (q) =>
-                q.eq("groupId", groupId).eq("status", "archived"),
-              )
-              .collect()),
-          ]),
-        )
-      ).flat();
-      const threadSnapshots = await Promise.all(
-        threads
-          .filter((thread) => thread.createdAt <= participation.exitCutoff!)
-          .map(async (thread) => {
-            const [sourceMessage, follower, readState, cutoffState, messages] = await Promise.all([
-              thread.sourceMessageId ? ctx.db.get(thread.sourceMessageId) : null,
-              ctx.db
-                .query("channelThreadFollowers")
-                .withIndex("by_thread_project_member", (q) =>
-                  q
-                    .eq("channelThreadId", thread._id)
-                    .eq("projectMemberId", projectMember._id),
-                )
-                .unique(),
-              ctx.db
-                .query("channelThreadReadStates")
-                .withIndex("by_thread_project_member", (q) =>
-                  q
-                    .eq("channelThreadId", thread._id)
-                    .eq("projectMemberId", projectMember._id),
-                )
-                .unique(),
-              threadStateAtCutoff(ctx, thread, participation.exitCutoff!),
-              ctx.db
-                .query("messages")
-                .withIndex("by_thread_created_at", (q) =>
-                  q
-                    .eq("channelThreadId", thread._id)
-                    .lte("createdAt", participation.exitCutoff!),
-                )
-                .collect(),
-            ]);
-            const latestMessage = messages.reduce<Doc<"messages"> | null>(
-              (latest, message) =>
-                !latest || message.createdAt > latest.createdAt ? message : latest,
-              null,
-            );
-            return {
-              _id: thread._id,
-              createdAt: thread.createdAt,
-              groupId: thread.groupId,
-              name: cutoffState.name,
-              status: cutoffState.status,
-              revision: cutoffState.revision,
-              sourceAvailable: Boolean(
-                sourceMessage &&
-                  sourceMessage.createdAt <= participation.exitCutoff!,
-              ),
-              following: follower?.preference === "following",
-              lastReadChannelSequence:
-                readState?.lastReadChannelSequence ?? 0,
-              replyCount: messages.length,
-              latestReplyAt: latestMessage?.createdAt,
-              latestChannelSequence: latestMessage?.channelSequence ?? 0,
-            };
-          }),
-      );
       await ctx.db.insert("projectArchiveEntitlements", {
         projectId: project._id,
         projectCompanyId: participation._id,
@@ -700,7 +550,6 @@ export const finalize = mutation({
           (group: { _id: Doc<"groups">["_id"] }) =>
             channelIds.includes(group._id),
         ),
-        threadSnapshots,
         memberSnapshots: participation.exitMemberSnapshots,
         retentionStatus: "active",
         manifestHash: participation._id,

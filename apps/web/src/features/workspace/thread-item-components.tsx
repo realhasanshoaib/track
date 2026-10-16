@@ -11,10 +11,6 @@ import { getAvatarTone, getInitials } from './identity'
 import { MarkdownText } from './markdown'
 import { VoiceNotePlayer, isAudioAttachment } from './voice-notes'
 
-
-import { threadHref } from '#/features/threads/thread-navigation'
-import type { RepresentedThreadContext } from '#/features/threads/thread-navigation'
-
 export type ReplyToMessagePreview = {
   messageId: Id<'messages'>
   authorName: string
@@ -59,13 +55,7 @@ export type GroupMessageItem = {
   attachments: Array<{ attachment: Doc<'attachments'>; url: string | null }>
   replyTo: ReplyToMessagePreview | null
   forwardedFrom: ForwardedMessagePreview | null
-  channelThread: {
-    threadId: Id<'channelThreads'>
-    name: string
-    status: 'active' | 'archived'
-    replyCount: number
-    latestReplyAt: number | null
-  } | null
+
 }
 
 export function getForwardedSourceLabel(forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>) {
@@ -94,7 +84,7 @@ export function MessageRow({
   onOpenMessageSource,
   onReplyMessage,
   searchQuery,
-  threadContext,
+
 }: {
   activeGroupId: Id<'groups'> | null
   busyAction: string | null
@@ -117,7 +107,7 @@ export function MessageRow({
   onOpenMessageSource: (groupId: Id<'groups'>, messageId: Id<'messages'>) => void
   onReplyMessage: (item: GroupMessageItem) => void
   searchQuery?: string
-  threadContext?: RepresentedThreadContext
+
 }) {
   const authorName = item.author?.displayName ?? 'Unknown Member'
   const canForward = canForwardMessages && groups.some((group) => group._id !== item.message.groupId)
@@ -168,7 +158,7 @@ export function MessageRow({
           </Badge>*/}
           <time>{new Date(item.message.createdAt).toLocaleTimeString()}</time>
         </div>
-        {item.replyTo ? <QuotedMessageBlock quote={item.replyTo} /> : null}
+        {item.replyTo ? <QuotedMessageBlock quote={item.replyTo} onOpen={(messageId) => onOpenMessageSource(item.message.groupId, messageId)} /> : null}
         {item.forwardedFrom ? (
           <ForwardedMessageBlock
             forwarded={item.forwardedFrom}
@@ -189,20 +179,7 @@ export function MessageRow({
           )}
           text={item.message.body}
         />
-        {item.channelThread ? (
-          <a
-            className="track-source-thread-link"
-            href={threadHref(
-              item.message.projectId,
-              item.message.groupId,
-              item.channelThread.threadId,
-              threadContext,
-            )}
-          >
-            <strong>{item.channelThread.name}</strong>
-            <span>{item.channelThread.replyCount} {item.channelThread.replyCount === 1 ? 'reply' : 'replies'}</span>
-          </a>
-        ) : null}
+        {null}
         {item.attachments.length > 0 ? (
           <div className="track-attachment-list">
             {item.attachments.map(({ attachment, url }) => {

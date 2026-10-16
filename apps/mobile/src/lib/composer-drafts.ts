@@ -4,7 +4,6 @@ export type MobileComposerDraftScope = {
   projectMemberId?: string;
   projectId: string;
   groupId: string;
-  threadId?: string;
 };
 
 export type MobileComposerDraft = {
@@ -21,7 +20,7 @@ export function composerDraftKey(scope: MobileComposerDraftScope) {
     scope.projectMemberId ?? 'legacy-membership',
     scope.projectId,
     scope.groupId,
-    scope.threadId ?? 'channel',
+    'channel',
   ].join(':');
 }
 

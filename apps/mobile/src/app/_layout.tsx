@@ -97,8 +97,6 @@ function AppLayout() {
                 <Stack.Screen name="company" options={{ title: 'Companies' }} />
                 <Stack.Screen name="groups" options={{ title: 'Channels' }} />
                 <Stack.Screen name="conversation" options={{ title: 'Conversation' }} />
-                <Stack.Screen name="threads" options={{ title: 'Threads' }} />
-                <Stack.Screen name="thread" options={{ title: 'Thread' }} />
               </Stack>
             </CompanyProvider>
           </PushNotificationBridge>

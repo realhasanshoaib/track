@@ -16,7 +16,6 @@ const scheduledTestBackends: Array<TestBackend> = []
 
 beforeEach(() => {
   vi.stubEnv('TRACK_COMPANY_MODEL_ENABLED', 'true')
-  vi.stubEnv('TRACK_THREADS_ENABLED', 'true')
 })
 
 afterEach(async () => {
@@ -1153,21 +1152,11 @@ describe('Company model authorization and lifecycle', () => {
       .query('groups')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
       .first())!._id)
-    const exitThreadId = await asUser(t, a).mutation(api.channelThreads.create, {
-      creatorId: a,
-      groupId,
-      idempotencyKey: 'exit-thread',
-      name: 'Exit snapshot thread',
-      projectId,
-      actingCompanyId: aCompany,
-      projectMemberId: aInitialMembership._id,
-    })
     await asUser(t, a).mutation(api.messages.send, {
       authorId: a,
       body: 'Snapshot this focused source.',
-      channelThreadId: exitThreadId,
       groupId,
-      idempotencyKey: 'exit-thread-message',
+      idempotencyKey: 'exit-message',
       projectId,
       actingCompanyId: aCompany,
       projectMemberId: aInitialMembership._id,
@@ -1254,30 +1243,6 @@ describe('Company model authorization and lifecycle', () => {
     expect(firstExit.aMember?.status).toBe('archived')
     expect(firstExit.entitlement).toMatchObject({ channelCount: 1, visibilityStatus: 'active' })
     expect(firstExit.archiveRows.filter((row) => row.scope === 'member')).toHaveLength(2)
-    const archivedThread = firstExit.archiveRows.find((row) =>
-      row.projectMemberId === firstExit.aMember?._id &&
-      row.payload.kind === 'thread' &&
-      row.payload.snapshot._id === exitThreadId,
-    )
-    if (!archivedThread || archivedThread.payload.kind !== 'thread') {
-      throw new Error('exit_thread_snapshot_missing')
-    }
-    expect(archivedThread.payload.snapshot.replyCount).toBe(1)
-    const archivedIdentity = {
-      actingCompanyId: aCompany,
-      projectMemberId: firstExit.aMember!._id,
-    }
-    expect(await asUser(t, a).query(api.channelThreads.listMessages, {
-      threadId: exitThreadId,
-      userId: a,
-      ...archivedIdentity,
-    })).toEqual([
-      expect.objectContaining({
-        author: expect.objectContaining({ displayName: 'company-a-owner' }),
-        authorRole: 'manager',
-      }),
-    ])
-
     const replacementOwner = await seedUser(t, 'company-a-replacement-owner')
     await addCompanyMember(t, aCompany, replacementOwner, 'owner')
     const formerOwnerMembership = await t.run(async (ctx) => await ctx.db
