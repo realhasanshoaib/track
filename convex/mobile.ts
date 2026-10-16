@@ -65,7 +65,9 @@ export const resolveNavigation = query({
         { ...args, claimedUserId: args.userId },
         args.groupId ? 'readChannel' : 'readProject',
       )
-      return { available: true, archived: false, canWrite: true }
+      const group = args.groupId ? await ctx.db.get(args.groupId) : null
+      const archived = group?.status === 'archived'
+      return { available: true, archived, canWrite: !archived }
     } catch {
       return { available: false, archived: false, canWrite: false }
     }

@@ -5,6 +5,23 @@ import { api } from './_generated/api'
 import schema from './schema'
 const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 describe('groups.listMembers', () => {
+  it('reports archived conversations as read-only in mobile navigation', async () => {
+    const t = convexTest(schema, modules)
+    const fixture = await seedChannel(t)
+    const actor = t.withIdentity({ subject: 'channel-owner' })
+    const args = { projectId: fixture.projectId, groupId: fixture.groupId, userId: fixture.ownerId }
+    expect(await actor.query(api.mobile.resolveNavigation, args)).toEqual({
+      available: true, archived: false, canWrite: true,
+    })
+    await t.run(async (ctx) => { await ctx.db.patch(fixture.groupId, { status: 'archived' }) })
+    expect(await actor.query(api.mobile.resolveNavigation, args)).toEqual({
+      available: true, archived: true, canWrite: false,
+    })
+    await expect(actor.mutation(api.messages.send, {
+      projectId: fixture.projectId, groupId: fixture.groupId, authorId: fixture.ownerId,
+      body: 'Archived write', mentions: [],
+    })).rejects.toThrow('group_archived')
+  })
   it('keeps legacy members visible and rejects Project-only or removed actors', async () => {
     const t = convexTest(schema, modules)
     const fixture = await seedChannel(t)
