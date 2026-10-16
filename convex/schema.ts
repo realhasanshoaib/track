@@ -82,7 +82,6 @@ const contentReportTargetType = v.union(
   v.literal('message'),
   v.literal('attachment'),
   v.literal('voice_note'),
-  v.literal('assistant_answer'),
   v.literal('task'),
   v.literal('task_comment'),
   v.literal('task_suggestion'),
@@ -97,29 +96,6 @@ const contentReportReason = v.union(
   v.literal('other'),
 )
 
-const jobStatus = v.union(
-  v.literal('queued'),
-  v.literal('running'),
-  v.literal('completed'),
-  v.literal('failed'),
-)
-
-const memoryBoxStatus = v.union(
-  v.literal('creating'),
-  v.literal('ready'),
-  v.literal('paused'),
-  v.literal('error'),
-  v.literal('deleted'),
-)
-
-const memoryImportSourceKind = v.union(
-  v.literal('paste'),
-  v.literal('file'),
-  v.literal('link'),
-  v.literal('chat_export'),
-  v.literal('track_attachment'),
-)
-
 const attachmentKind = v.union(v.literal('file'), v.literal('voice_note'))
 const mediaPreviewStatus = v.union(v.literal('pending'), v.literal('ready'), v.literal('failed'))
 const mediaPreviewErrorCode = v.union(
@@ -128,13 +104,6 @@ const mediaPreviewErrorCode = v.union(
   v.literal('missing_source'),
   v.literal('processor_failed'),
 )
-
-const evidenceItem = v.object({
-  messageId: v.optional(v.id('messages')),
-  attachmentId: v.optional(v.id('attachments')),
-  quote: v.string(),
-  reason: v.optional(v.string()),
-})
 
 const forwardedAttachmentSnapshot = v.object({
   filename: v.string(),
@@ -367,7 +336,6 @@ export default defineSchema({
     replyToMessageId: v.optional(v.id('messages')),
     forwardedFrom: v.optional(forwardedMessageSnapshot),
     notificationPreview: v.optional(v.string()),
-    trackInvocationId: v.optional(v.id('assistantStreams')),
     createdAt: v.number(),
   })
     .index('by_group_created_at', ['groupId', 'createdAt'])
@@ -514,12 +482,6 @@ export default defineSchema({
     uploadedBy: v.id('users'),
     uploadedByProjectMemberId: v.optional(v.id('projectMembers')),
     actingCompanyId: v.optional(v.id('companies')),
-    extractionStatus: v.union(
-      v.literal('preserved'),
-      v.literal('pending'),
-      v.literal('extracted'),
-      v.literal('failed'),
-    ),
     createdAt: v.number(),
   })
     .index('by_message', ['messageId'])
@@ -574,57 +536,6 @@ export default defineSchema({
     .index('by_relationship_created_at', ['relationshipId', 'createdAt'])
     .index('by_group_created_at', ['groupId', 'createdAt'])
     .index('by_entity', ['entityType', 'entityId']),
-
-  projectMemoryBoxes: defineTable({
-    projectId: v.id('projects'),
-    boxId: v.string(),
-    runtime: v.string(),
-    status: memoryBoxStatus,
-    schemaVersion: v.number(),
-    createdBy: v.id('users'),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    lastUsedAt: v.optional(v.number()),
-    lastContextUpdatedAt: v.optional(v.number()),
-    contextWritePendingRevision: v.optional(v.number()),
-    contextLength: v.optional(v.number()),
-    error: v.optional(v.string()),
-  })
-    .index('by_project', ['projectId'])
-    .index('by_box', ['boxId'])
-    .index('by_status_updated_at', ['status', 'updatedAt']),
-
-  memoryImports: defineTable({
-    projectId: v.id('projects'),
-    groupId: v.id('groups'),
-    actorId: v.id('users'),
-    actorProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
-    scope: v.optional(v.union(v.literal('project'), v.literal('channel'))),
-    status: jobStatus,
-    sourceKind: memoryImportSourceKind,
-    sourceStorageIds: v.array(v.id('_storage')),
-    sourceUrls: v.array(v.string()),
-    boxScratchPath: v.optional(v.string()),
-    summary: v.optional(v.string()),
-    error: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    completedAt: v.optional(v.number()),
-  })
-    .index('by_project_status', ['projectId', 'status'])
-    .index('by_project_created_at', ['projectId', 'createdAt'])
-    .index('by_group_created_at', ['groupId', 'createdAt'])
-    .index('by_status_updated_at', ['status', 'updatedAt']),
-
-  memoryPathLocks: defineTable({
-    projectId: v.id('projects'),
-    path: v.string(),
-    holderId: v.string(),
-    expiresAt: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index('by_project_path', ['projectId', 'path']),
 
   notificationSubscriptions: defineTable({
     userId: v.id('users'),
@@ -719,7 +630,6 @@ export default defineSchema({
     targetType: contentReportTargetType,
     targetMessageId: v.optional(v.id('messages')),
     targetAttachmentId: v.optional(v.id('attachments')),
-    targetAssistantStreamId: v.optional(v.id('assistantStreams')),
     targetTaskId: v.optional(v.id('tasks')),
     targetTaskCommentId: v.optional(v.id('taskComments')),
     targetTaskSuggestionId: v.optional(v.id('taskSuggestions')),
@@ -748,24 +658,6 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_status', ['status']),
-
-  assistantStreams: defineTable({
-    projectId: v.id('projects'),
-    groupId: v.id('groups'),
-    channelThreadId: v.optional(v.id('channelThreads')),
-    requesterId: v.id('users'),
-    requesterProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
-    promptMessageId: v.optional(v.id('messages')),
-    status: jobStatus,
-    answer: v.string(),
-    evidence: v.array(evidenceItem),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index('by_group_created_at', ['groupId', 'createdAt'])
-    .index('by_group_thread_created_at', ['groupId', 'channelThreadId', 'createdAt'])
-    .index('by_thread_created_at', ['channelThreadId', 'createdAt']),
 
   securityStepUps: defineTable({
     userId: v.id('users'),

@@ -15,7 +15,6 @@ export const exitSnapshotPhase = v.union(
   v.literal('channels'),
   v.literal('threads'),
   v.literal('tasks'),
-  v.literal('memory'),
   v.literal('complete'),
 )
 
@@ -23,7 +22,6 @@ export const exitSnapshotScope = v.union(
   v.literal('member'),
   v.literal('channel'),
   v.literal('thread'),
-  v.literal('memory'),
 )
 
 const memberSnapshot = v.object({
@@ -82,19 +80,7 @@ export const exitSnapshotPayload = v.union(
     kind: v.literal('thread'),
     snapshot: threadSnapshot,
   }),
-  v.object({
-    kind: v.literal('memory'),
-    snapshot: v.object({
-      scope: v.union(v.literal('project'), v.literal('channel')),
-      groupId: v.optional(v.id('groups')),
-      sourceKind: v.string(),
-      sourceIdentifier: v.string(),
-      sourceRevision: v.optional(v.number()),
-      contentHash: v.string(),
-      contentLength: v.number(),
-      snapshotIdentifier: v.string(),
-    }),
-  }),
+
 )
 
 export const projectExitTables = {

@@ -4,7 +4,6 @@ import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import {
   internalMutation,
-  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
@@ -161,32 +160,7 @@ export const prepare = mutation({
       }
     }
     const now = Date.now();
-    const memoryBox = await ctx.db
-      .query("projectMemoryBoxes")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .unique();
-    if (memoryBox?.contextWritePendingRevision) {
-      throw new Error("memory_context_update_in_progress");
-    }
-    const [queuedImport, runningImport] = await Promise.all([
-      ctx.db
-        .query("memoryImports")
-        .withIndex("by_project_status", (q) =>
-          q.eq("projectId", project._id).eq("status", "queued"),
-        )
-        .first(),
-      ctx.db
-        .query("memoryImports")
-        .withIndex("by_project_status", (q) =>
-          q.eq("projectId", project._id).eq("status", "running"),
-        )
-        .first(),
-    ]);
-    if (queuedImport || runningImport) {
-      throw new Error("memory_import_in_progress");
-    }
     const exitOperationId = crypto.randomUUID();
-    const snapshotPath = `archives/company-exits/${participation._id}/${now}/${exitOperationId}`;
     const owningCompany = project.owningCompanyId
       ? await ctx.db.get(project.owningCompanyId)
       : null;
@@ -207,8 +181,6 @@ export const prepare = mutation({
       exitPreparedAt: now,
       exitCutoff: now,
       exitOperationId,
-      exitContextRevision: memoryBox?.lastContextUpdatedAt,
-      exitMemoryBoxId: memoryBox?.boxId,
       exitOwningCompanyId: project.owningCompanyId,
       exitOwningCompanyDisplayName: owningCompany?.displayName,
       exitProjectSnapshot: {
@@ -225,9 +197,6 @@ export const prepare = mutation({
       exitSnapshotStatus: "capturing",
       exitSnapshotPhase: "members",
       exitSnapshotError: undefined,
-      memorySnapshotStatus: "pending",
-      memorySnapshotPath: snapshotPath,
-      memorySnapshotError: undefined,
       updatedAt: now,
     });
     await bumpProjectParticipants(ctx, project._id, now);
@@ -299,25 +268,16 @@ export const retrySnapshot = mutation({
       updatedAt: Date.now(),
     });
     await ctx.db.patch(participation._id, {
-      memorySnapshotStatus: "pending",
-      memorySnapshotError: undefined,
       exitSnapshotStatus: "capturing",
       exitSnapshotPhase: phase,
       exitSnapshotError: undefined,
       updatedAt: Date.now(),
     });
-    if (phase === "memory") {
-      await ctx.scheduler.runAfter(0, internal.projectExitActions.snapshot, {
-        projectCompanyId: participation._id,
-        operationId,
-      });
-    } else {
-      await ctx.scheduler.runAfter(0, internal.projectExit.captureBatch, {
-        projectCompanyId: participation._id,
-        operationId,
-        cursor: operation.cursor,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.projectExit.captureBatch, {
+      projectCompanyId: participation._id,
+      operationId,
+      cursor: operation.cursor,
+    });
     return participation._id;
   },
 });
@@ -337,7 +297,6 @@ export const cancel = mutation({
       (term) => term.companyId === args.actingCompanyId,
     );
     if (!participation) throw new Error("exit_not_pending");
-    const snapshotPath = participation.memorySnapshotPath;
     const operationId = participation.exitOperationId;
     if (operationId) {
       const operation = await ctx.db
@@ -366,7 +325,6 @@ export const cancel = mutation({
       exitPreparedBy: undefined,
       exitPreparedAt: undefined,
       exitCutoff: undefined,
-      exitContextRevision: undefined,
       exitOperationId: undefined,
       exitSnapshotStatus: "cancelled",
       exitSnapshotPhase: "complete",
@@ -376,13 +334,6 @@ export const cancel = mutation({
       exitProjectSnapshot: undefined,
       exitChannelSnapshots: undefined,
       exitMemberSnapshots: undefined,
-      memorySnapshotStatus: undefined,
-      memorySnapshotManifestHash: undefined,
-      memorySnapshotManifest: undefined,
-      memorySnapshotPath: snapshotPath,
-      memorySnapshotError: snapshotPath
-        ? "snapshot_cleanup_pending"
-        : undefined,
       updatedAt: Date.now(),
     });
     await bumpProjectParticipants(ctx, args.projectId, Date.now());
@@ -393,53 +344,7 @@ export const cancel = mutation({
         cursor: undefined,
       });
     }
-    if (snapshotPath) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.projectExitActions.cleanupSnapshot,
-        {
-          projectCompanyId: participation._id,
-          snapshotPath,
-          boxId: participation.exitMemoryBoxId,
-        },
-      );
-    }
     return participation._id;
-  },
-});
-
-export const retryCleanup = mutation({
-  args: { actingCompanyId: v.id("companies"), projectId: v.id("projects") },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx);
-    await requireCompanyAdmin(ctx, actor, args.actingCompanyId);
-    const terms = await ctx.db
-      .query("projectCompanies")
-      .withIndex("by_project_company_term", (q) =>
-        q.eq("projectId", args.projectId).eq("companyId", args.actingCompanyId),
-      )
-      .collect();
-    const term = terms.find(
-      (candidate) =>
-        candidate.status === "active" && candidate.memorySnapshotPath,
-    );
-    if (!term) throw new Error("snapshot_cleanup_unavailable");
-    const snapshotPath = term.memorySnapshotPath;
-    if (!snapshotPath) throw new Error("snapshot_cleanup_unavailable");
-    await ctx.db.patch(term._id, {
-      memorySnapshotError: "snapshot_cleanup_pending",
-      updatedAt: Date.now(),
-    });
-    await ctx.scheduler.runAfter(
-      0,
-      internal.projectExitActions.cleanupSnapshot,
-      {
-        projectCompanyId: term._id,
-        snapshotPath,
-        boxId: term.exitMemoryBoxId,
-      },
-    );
-    return term._id;
   },
 });
 
@@ -561,7 +466,7 @@ export async function finalizeLegacyExit(
       threadSnapshots,
       memberSnapshots,
       retentionStatus: 'active',
-      manifestHash: participation.memorySnapshotManifestHash ?? operation.operationId,
+      manifestHash: operation.operationId,
       snapshotOperationId: operation.operationId,
       visibilityStatus: 'staging',
       createdAt: now,
@@ -577,7 +482,7 @@ export async function finalizeLegacyExit(
       threadSnapshots,
       memberSnapshots,
       retentionStatus: 'active',
-      manifestHash: participation.memorySnapshotManifestHash ?? operation.operationId,
+      manifestHash: operation.operationId,
       snapshotOperationId: operation.operationId,
       visibilityStatus: 'active',
       updatedAt: now,
@@ -710,9 +615,6 @@ export const finalize = mutation({
       throw new Error("exit_snapshot_not_verified");
     }
     if (
-      participation.memorySnapshotStatus !== "verified" ||
-      !participation.memorySnapshotManifestHash ||
-      !participation.memorySnapshotManifest ||
       !participation.exitCutoff ||
       !participation.exitProjectSnapshot ||
       !participation.exitChannelSnapshots ||
@@ -832,7 +734,7 @@ export const finalize = mutation({
         threadSnapshots,
         memberSnapshots: participation.exitMemberSnapshots,
         retentionStatus: "active",
-        manifestHash: participation.memorySnapshotManifestHash,
+        manifestHash: participation._id,
         createdAt: now,
         updatedAt: now,
       });
@@ -842,37 +744,6 @@ export const finalize = mutation({
         projectId: project._id,
         channelIds,
       });
-      const manifest = participation.memorySnapshotManifest as {
-        sources?: Array<{
-          scope: "project" | "channel";
-          groupId?: string;
-          sourceKind: string;
-          sourceIdentifier: string;
-          sourceRevision?: number;
-          contentHash: string;
-          contentLength: number;
-          snapshotIdentifier: string;
-        }>;
-      };
-      for (const source of manifest.sources ?? []) {
-        if (
-          source.scope === "channel" &&
-          (!source.groupId || !channelIds.map(String).includes(source.groupId))
-        )
-          continue;
-        await ctx.db.insert("projectArchiveSnapshots", {
-          entitlementId,
-          scope: source.scope,
-          ...(source.groupId ? { groupId: source.groupId as never } : {}),
-          sourceKind: source.sourceKind,
-          sourceIdentifier: source.sourceIdentifier,
-          sourceRevision: source.sourceRevision,
-          contentHash: source.contentHash,
-          contentLength: source.contentLength,
-          snapshotIdentifier: source.snapshotIdentifier,
-          createdAt: now,
-        });
-      }
       await Promise.all(
         channelMemberships.map((membership) =>
           ctx.db.patch(membership._id, {
@@ -961,7 +832,7 @@ export const finalizeBatch = internalMutation({
         if (!entitlement) throw new Error("exit_archive_entitlement_missing");
         await ctx.db.patch(entitlement._id, {
           manifestHash:
-            participation.memorySnapshotManifestHash ?? args.operationId,
+            args.operationId,
           visibilityStatus: "active",
           updatedAt: now,
         });
@@ -1103,84 +974,10 @@ export const getStatus = query({
     return term
       ? {
           status: term.status,
-          snapshotStatus: term.exitSnapshotStatus ?? term.memorySnapshotStatus,
-          snapshotError: term.exitSnapshotError ?? term.memorySnapshotError,
+          snapshotStatus: term.exitSnapshotStatus,
+          snapshotError: term.exitSnapshotError,
         }
       : null;
-  },
-});
-
-export const getSnapshotInput = internalQuery({
-  args: {
-    projectCompanyId: v.id("projectCompanies"),
-    operationId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const participation = await ctx.db.get(args.projectCompanyId);
-    if (
-      !participation ||
-      participation.status !== "exit_pending" ||
-      !participation.exitCutoff ||
-      (args.operationId && participation.exitOperationId !== args.operationId)
-    )
-      return null;
-    const [project, company, memoryBox, members, imports] = await Promise.all([
-      ctx.db.get(participation.projectId),
-      ctx.db.get(participation.companyId),
-      ctx.db
-        .query("projectMemoryBoxes")
-        .withIndex("by_project", (q) =>
-          q.eq("projectId", participation.projectId),
-        )
-        .unique(),
-      ctx.db
-        .query("projectMembers")
-        .withIndex("by_project_company_status", (q) =>
-          q
-            .eq("projectId", participation.projectId)
-            .eq("companyId", participation.companyId)
-            .eq("status", "active"),
-        )
-        .collect(),
-      ctx.db
-        .query("memoryImports")
-        .withIndex("by_project_created_at", (q) =>
-          q.eq("projectId", participation.projectId),
-        )
-        .collect(),
-    ]);
-    if (!project || !company) return null;
-    const memberships = (
-      await Promise.all(
-        members.map(
-          async (member) =>
-            await ctx.db
-              .query("groupMembers")
-              .withIndex("by_project_member_status", (q) =>
-                q.eq("projectMemberId", member._id).eq("status", "active"),
-              )
-              .collect(),
-        ),
-      )
-    ).flat();
-    const channelIds = Array.from(
-      new Set(memberships.map((membership) => membership.groupId)),
-    );
-    return {
-      participation,
-      project,
-      company,
-      memoryBox,
-      channelIds,
-      imports: imports.filter(
-        (item) =>
-          item.status === "completed" &&
-          item.completedAt !== undefined &&
-          item.completedAt <= participation.exitCutoff! &&
-          ((item.scope ?? "channel") === "project" ||
-            Boolean(item.groupId && channelIds.includes(item.groupId))),
-      ),
-    };
   },
 });
 
@@ -1228,10 +1025,18 @@ export const captureBatch = internalMutation({
         exitSnapshotError: undefined,
         updatedAt: now,
       });
-      if (result.phase === "memory") {
-        await ctx.scheduler.runAfter(0, internal.projectExitActions.snapshot, {
-          projectCompanyId: args.projectCompanyId,
-          operationId: args.operationId,
+      if (result.phase === "complete") {
+        await ctx.db.patch(operation._id, {
+          status: "verified",
+          phase: "complete",
+          cursor: undefined,
+          verifiedAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.patch(participation._id, {
+          exitSnapshotStatus: "verified",
+          exitSnapshotPhase: "complete",
+          updatedAt: now,
         });
       } else {
         await ctx.scheduler.runAfter(0, internal.projectExit.captureBatch, {
@@ -1357,171 +1162,5 @@ export const cleanupCapture = internalMutation({
         cursor: JSON.stringify({ source: "entitlements", cursor: result.continueCursor }),
       });
     }
-  },
-});
-
-export const markSnapshotCleaned = internalMutation({
-  args: {
-    projectCompanyId: v.id("projectCompanies"),
-    snapshotPath: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const participation = await ctx.db.get(args.projectCompanyId);
-    if (
-      !participation ||
-      participation.memorySnapshotPath !== args.snapshotPath ||
-      participation.status !== "active"
-    )
-      return;
-    await ctx.db.patch(participation._id, {
-      memorySnapshotError: undefined,
-      memorySnapshotPath: undefined,
-      exitMemoryBoxId: undefined,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const markSnapshotCleanupFailed = internalMutation({
-  args: {
-    projectCompanyId: v.id("projectCompanies"),
-    snapshotPath: v.string(),
-    error: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const participation = await ctx.db.get(args.projectCompanyId);
-    if (
-      !participation ||
-      participation.status !== "active" ||
-      participation.memorySnapshotPath !== args.snapshotPath
-    )
-      return;
-    await ctx.db.patch(participation._id, {
-      memorySnapshotError: `snapshot_cleanup_failed:${args.error.slice(0, 400)}`,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const markSnapshotVerified = internalMutation({
-  args: {
-    projectCompanyId: v.id("projectCompanies"),
-    manifestHash: v.string(),
-    manifest: v.any(),
-    snapshotPath: v.string(),
-    snapshotBoxId: v.optional(v.string()),
-    operationId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const participation = await ctx.db.get(args.projectCompanyId);
-    if (
-      !participation ||
-      participation.status !== "exit_pending" ||
-      participation.exitOperationId !== args.operationId
-    ) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.projectExitActions.cleanupSnapshot,
-        {
-          projectCompanyId: args.projectCompanyId,
-          snapshotPath: args.snapshotPath,
-          boxId: args.snapshotBoxId,
-        },
-      );
-      return;
-    }
-    const operation = await ctx.db
-      .query("projectExitOperations")
-      .withIndex("by_project_company_operation", (q) =>
-        q
-          .eq("projectCompanyId", participation._id)
-          .eq("operationId", args.operationId),
-      )
-      .unique();
-    if (!operation || operation.status !== "capturing" || operation.phase !== "memory") {
-      await ctx.scheduler.runAfter(0, internal.projectExitActions.cleanupSnapshot, {
-        projectCompanyId: participation._id,
-        snapshotPath: args.snapshotPath,
-        boxId: args.snapshotBoxId,
-      });
-      return;
-    }
-    await ctx.db.patch(participation._id, {
-      memorySnapshotStatus: "verified",
-      memorySnapshotManifestHash: args.manifestHash,
-      memorySnapshotManifest: args.manifest,
-      memorySnapshotPath: args.snapshotPath,
-      memorySnapshotError: undefined,
-      exitSnapshotStatus: "verified",
-      exitSnapshotPhase: "complete",
-      exitSnapshotError: undefined,
-      updatedAt: Date.now(),
-    });
-    await ctx.db.patch(operation._id, {
-      status: "verified",
-      phase: "complete",
-      cursor: undefined,
-      error: undefined,
-      verifiedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const markSnapshotFailed = internalMutation({
-  args: {
-    projectCompanyId: v.id("projectCompanies"),
-    operationId: v.string(),
-    snapshotPath: v.string(),
-    snapshotBoxId: v.optional(v.string()),
-    error: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const participation = await ctx.db.get(args.projectCompanyId);
-    if (
-      !participation ||
-      participation.status !== "exit_pending" ||
-      participation.exitOperationId !== args.operationId
-    ) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.projectExitActions.cleanupSnapshot,
-        {
-          projectCompanyId: args.projectCompanyId,
-          snapshotPath: args.snapshotPath,
-          boxId: args.snapshotBoxId,
-        },
-      );
-      return;
-    }
-    const operation = await ctx.db
-      .query("projectExitOperations")
-      .withIndex("by_project_company_operation", (q) =>
-        q
-          .eq("projectCompanyId", participation._id)
-          .eq("operationId", args.operationId),
-      )
-      .unique();
-    if (!operation) {
-      await ctx.scheduler.runAfter(0, internal.projectExitActions.cleanupSnapshot, {
-        projectCompanyId: participation._id,
-        snapshotPath: args.snapshotPath,
-        boxId: args.snapshotBoxId,
-      });
-      return;
-    }
-    await ctx.db.patch(participation._id, {
-      memorySnapshotStatus: "failed",
-      memorySnapshotError: args.error.slice(0, 500),
-      exitSnapshotStatus: "failed",
-      exitSnapshotPhase: operation.phase,
-      exitSnapshotError: args.error.slice(0, 500),
-      updatedAt: Date.now(),
-    });
-    await ctx.db.patch(operation._id, {
-      status: "failed",
-      error: args.error.slice(0, 500),
-      updatedAt: Date.now(),
-    });
   },
 });

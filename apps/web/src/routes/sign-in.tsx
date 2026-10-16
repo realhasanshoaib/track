@@ -38,14 +38,6 @@ const previewMessages = [
     tone: 's-2',
     time: '4:52:45 PM',
     body: 'capture supplier verification and product review as an official launch requirement.',
-    mention: '@track',
-  },
-  {
-    initials: 'TA',
-    name: 'Track Assistant',
-    tone: 's-3',
-    time: '4:59:45 PM',
-    body: 'Noted. I will keep that visible in the launch conversation and preserve the exact wording for review.',
   },
   {
     initials: 'FR',
@@ -95,13 +87,6 @@ const previewMessages = [
     tone: 's-2',
     time: '5:52:45 PM',
     body: 'Agreed. Keep the launch copy factual and make the review promise easy for ops to defend.',
-  },
-  {
-    initials: 'TA',
-    name: 'Track Assistant',
-    tone: 's-3',
-    time: '5:59:45 PM',
-    body: 'I am keeping the supplier review, delivery promise, and reorder workflow in this thread for the next pass.',
   },
 ]
 
@@ -335,7 +320,7 @@ export function SignInExperience({ variant }: { variant: SignInVariant }) {
                 <h1>Keep project conversation and evidence connected.</h1>
                 <p>
                   Track keeps project teams aligned around decisions,
-                  source context, shared memory, and permission-aware answers.
+                  messages, attachments, and search.
                 </p>
               </div>
               <div className="track-auth-proof">
@@ -514,7 +499,6 @@ function ConversationPreview({ variant }: { variant: Exclude<SignInVariant, 'def
                 <time>{message.time}</time>
               </div>
               <p>
-                {message.mention ? <span className="track-auth-mention">{message.mention}</span> : null}
                 {message.body}
               </p>
             </div>

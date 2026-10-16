@@ -7,14 +7,12 @@ import type {
 } from '@track/shared/tasks';
 
 const referenceLabels: Record<TaskReferenceType, string> = {
-  assistant_answer: 'Assistant answer',
   attachment: 'Attachment',
-  memory_excerpt: 'Imported memory',
   message: 'Conversation message',
 };
 
-export function taskReferenceLabel(type: string) {
-  return referenceLabels[type as TaskReferenceType] ?? type.replaceAll('_', ' ');
+export function taskReferenceLabel(type: TaskReferenceType) {
+  return referenceLabels[type];
 }
 
 /** Explains why a reference cannot be opened, or returns null when it can. */

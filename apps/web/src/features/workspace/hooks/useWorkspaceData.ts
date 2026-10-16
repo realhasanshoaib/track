@@ -8,20 +8,6 @@ import { getActiveChannelMembers } from '#/features/workspace/lib/channel-header
 import { filterVisibleProjectGroups } from '#/features/workspace/lib/route-state'
 import type { ProjectSearchFilter } from '#/features/workspace/search/ProjectSearchDialog'
 
-type PageStatus = 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted'
-
-function combinePageStatus(messageStatus: PageStatus, assistantStatus: PageStatus): PageStatus {
-  if (messageStatus === 'LoadingFirstPage' || assistantStatus === 'LoadingFirstPage') {
-    return 'LoadingFirstPage'
-  }
-  if (messageStatus === 'LoadingMore' || assistantStatus === 'LoadingMore') {
-    return 'LoadingMore'
-  }
-  if (messageStatus === 'CanLoadMore' || assistantStatus === 'CanLoadMore') {
-    return 'CanLoadMore'
-  }
-  return 'Exhausted'
-}
 
 export function useWorkspaceData({
   activeGroupId,
@@ -113,23 +99,10 @@ export function useWorkspaceData({
         }
       : 'skip',
   )
-  const assistantPage = usePaginatedQuery(
-    api.assistant.listForGroupPage,
-    trackUserId && confirmedActiveGroupId
-      ? {
-          userId: trackUserId,
-          groupId: confirmedActiveGroupId,
-          targetMessageId: targetMessageId ?? undefined,
-        }
-      : 'skip',
-    { initialNumItems: 80 },
-  )
   const messages = messagePage.status === 'LoadingFirstPage' ? undefined : messagePage.results
-  const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results
-  const messagePageStatus = combinePageStatus(messagePage.status, assistantPage.status)
+  const messagePageStatus = messagePage.status
   const loadMoreMessages = (count: number) => {
     if (messagePage.status === 'CanLoadMore') messagePage.loadMore(count)
-    if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(count)
   }
   const projectItems = useMemo(
     () =>
@@ -158,10 +131,6 @@ export function useWorkspaceData({
     () => (messages ?? []) as Array<GroupMessageItem>,
     [messages],
   )
-  const groupAssistantStreams = useMemo(
-    () => (assistantStreams ?? []) as Array<Doc<'assistantStreams'>>,
-    [assistantStreams],
-  )
   const activeProject = projectItems.find((item) => item.project._id === activeProjectId)
   const activeGroup = visibleGroups.find((group) => group._id === activeGroupId)
   const activeChannelMembers = useMemo(
@@ -182,7 +151,6 @@ export function useWorkspaceData({
     currentAvatarUrl,
     currentTrackProfileIncomplete,
     currentTrackUser,
-    groupAssistantStreams,
     groupMessages,
     groups,
     messages,

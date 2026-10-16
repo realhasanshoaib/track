@@ -1,4 +1,4 @@
 appId: ai.q9labs.track
 ---
-- tapOn: Message General or ask @track…
+- tapOn: Message
 - inputText: Push notifications are ready for project updates.

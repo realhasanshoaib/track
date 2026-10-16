@@ -92,7 +92,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     () => typeof document === 'undefined' || document.visibilityState === 'visible',
   )
   const [voiceRecordingActive, setVoiceRecordingActive] = useState(false)
-  const [memoryImportOpen, setMemoryImportOpen] = useState(false)
   const navigation = useWorkspaceNavigation({ activeProjectId, setActiveGroupId, setMobileNavOpen })
   const { navigateToGroup, navigateToProject, navigateToProjectSettings } = navigation
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -161,7 +160,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     currentAvatarUrl,
     currentTrackProfileIncomplete,
     currentTrackUser,
-    groupAssistantStreams,
     groupMessages,
     groups,
     hasMoreMessages,
@@ -191,16 +189,16 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     historyLoadingRef.current = true
     historyAnchorRef.current = {
       height: element.scrollHeight,
-      count: (messages?.length ?? 0) + groupAssistantStreams.length,
+      count: (messages?.length ?? 0),
       top: element.scrollTop,
     }
     loadMoreMessages(80)
-  }, [groupAssistantStreams.length, hasMoreMessages, loadMoreMessages, messagePageStatus, messages])
+  }, [hasMoreMessages, loadMoreMessages, messagePageStatus, messages])
 
   useEffect(() => {
     const anchor = historyAnchorRef.current
     if (!anchor || !messages || messagePageStatus === 'LoadingMore') return
-    const currentCount = messages.length + groupAssistantStreams.length
+    const currentCount = messages.length
     if (currentCount <= anchor.count && messagePageStatus !== 'Exhausted') return
     historyAnchorRef.current = null
     historyLoadingRef.current = false
@@ -209,7 +207,7 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
       if (!element) return
       element.scrollTop = anchor.top + (element.scrollHeight - anchor.height)
     })
-  }, [groupAssistantStreams.length, messagePageStatus, messages])
+  }, [messagePageStatus, messages])
 
   useEffect(() => {
     if (typeof document === 'undefined') return () => {}
@@ -306,7 +304,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
     activeGroup,
     chatSearchQuery,
     currentUserId: trackUserId,
-    groupAssistantStreams,
     groupMessages,
     projectSearchResults,
   })
@@ -675,7 +672,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
           flashingMessageId,
           loadingOlderMessages,
           logoutConfirmOpen,
-          memoryImportOpen,
           mentionIndex,
           mentionOptionRefs,
           mobileNavOpen,
@@ -700,10 +696,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
             setComposer(value)
             setComposerCursor(cursor)
           },
-          onMemoryImportBusyChange: (busy) => {
-            setBusyAction(busy ? 'memory-import' : null)
-            if (busy) setUiError(null)
-          },
           onOpenProjectSearch: openProjectSearch,
           onSearchClose: () => {
             setChatSearchQuery('')
@@ -719,7 +711,6 @@ export function WorkspacePage({ groupId, projectId, view = 'home' }: WorkspacePa
           setChatSearchQuery,
           setComposerCursor,
           setEmojiPickerOpen,
-          setMemoryImportOpen,
           setMentionIndex,
           setMobileNavOpen,
           setNavCollapsed,

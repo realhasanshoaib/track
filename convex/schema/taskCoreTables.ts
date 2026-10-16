@@ -117,9 +117,6 @@ export const taskCoreTables = {
     channelThreadId: v.optional(v.id('channelThreads')),
     messageId: v.optional(v.id('messages')),
     attachmentId: v.optional(v.id('attachments')),
-    assistantStreamId: v.optional(v.id('assistantStreams')),
-    memoryImportId: v.optional(v.id('memoryImports')),
-    sourceIdentifier: v.optional(v.string()),
     quote: v.optional(v.string()),
     availability: taskReferenceAvailability,
     isPrimary: v.boolean(),
@@ -132,8 +129,7 @@ export const taskCoreTables = {
     .index('by_task_rank', ['taskId', 'rank'])
     .index('by_project_created_at', ['projectId', 'createdAt'])
     .index('by_message', ['messageId'])
-    .index('by_attachment', ['attachmentId'])
-    .index('by_assistant_stream', ['assistantStreamId']),
+    .index('by_attachment', ['attachmentId']),
 
   taskComments: defineTable({
     projectId: v.id('projects'),

@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AssistantMark } from '@/components/chat/assistant-mark';
 import { ColoredAvatar } from '@/components/colored-avatar';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
@@ -47,11 +46,7 @@ export function MentionSuggestions({
             onSelect(candidate);
           }}
           style={[styles.row, index > 0 && { borderTopColor: theme.hairline, borderTopWidth: StyleSheet.hairlineWidth }]}>
-          {candidate.kind === 'assistant' ? (
-            <AssistantMark size={AVATAR_SIZE} />
-          ) : (
             <ColoredAvatar label={candidate.label} seed={candidate.id} size={AVATAR_SIZE} />
-          )}
           <View style={styles.body}>
             <ThemedText numberOfLines={1} type="smallBold">
               {candidate.label}

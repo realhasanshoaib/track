@@ -5,12 +5,11 @@ import {
   isTerminalTaskState,
   normalizeTaskText,
   resolveTaskCapabilities,
-  taskSuggestionFingerprint,
 } from '@track/shared/tasks'
 import { v } from 'convex/values'
 
 import type { Doc } from './_generated/dataModel'
-import { internalMutation, mutation, query } from './_generated/server'
+import { mutation, query } from './_generated/server'
 import { requireAuthenticatedActor } from './lib/actorContext'
 import { appendAuditEvent } from './lib/audit'
 import { threadsEnabled } from './lib/channelThreadPolicy'
@@ -62,68 +61,6 @@ async function suggestionReferenceVisible(
   const message = await ctx.db.get(reference.messageId)
   return !message?.channelThreadId || threadsEnabled()
 }
-
-export const createExplicit = internalMutation({
-  args: {
-    projectId: v.id('projects'), groupId: v.id('groups'), requesterId: v.id('users'),
-    projectMemberId: v.optional(v.id('projectMembers')), actingCompanyId: v.optional(v.id('companies')),
-    promptMessageId: v.id('messages'), question: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const promptMessage = await ctx.db.get(args.promptMessageId)
-    if (!promptMessage || (promptMessage.channelThreadId && !threadsEnabled()) ||
-      promptMessage.projectId !== args.projectId || promptMessage.groupId !== args.groupId ||
-      promptMessage.authorId !== args.requesterId) throw new Error('task_access_changed')
-    const projectMember = args.projectMemberId
-      ? await ctx.db.get(args.projectMemberId)
-      : await ctx.db.query('projectMembers').withIndex('by_project_user', (q) =>
-          q.eq('projectId', args.projectId).eq('userId', args.requesterId),
-        ).unique()
-    if (!projectMember || projectMember.projectId !== args.projectId || projectMember.userId !== args.requesterId ||
-      (projectMember.status !== undefined && projectMember.status !== 'active') ||
-      (args.actingCompanyId && projectMember.companyId !== args.actingCompanyId)) {
-      throw new Error('task_access_changed')
-    }
-    await requireEligibleTaskMember(ctx, {
-      projectId: args.projectId, groupId: args.groupId, projectMemberId: projectMember._id,
-    })
-    await assertProjectSnapshotWritable(ctx, args.projectId)
-    const requested = args.question.replace(/@track/gi, '').replace(/\b(create|make|add)\s+(a\s+)?task\b/gi, '').replace(/\b(for|from)\s+this\b/gi, '').trim()
-    const messages = await ctx.db.query('messages')
-      .withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId)).order('desc').take(20)
-    const prior = messages.find((message) => (!message.channelThreadId || threadsEnabled()) &&
-      message._id !== promptMessage._id && message.body.trim() && !/@track/i.test(message.body))
-    const source = requested.length >= 8 ? promptMessage : prior
-    const title = normalizeTaskText(requested.length >= 8 ? requested : prior?.body ?? '').slice(0, 180)
-    if (!isTaskTitle(title) || !source) return { status: 'clarify' as const }
-    const sourceIds = Array.from(new Set([String(source._id), String(promptMessage._id)]))
-    const fingerprint = taskSuggestionFingerprint({
-      projectId: String(args.projectId), groupId: String(args.groupId), sourceIds, title,
-    })
-    const existing = await ctx.db.query('taskSuggestions').withIndex('by_project_fingerprint', (q) =>
-      q.eq('projectId', args.projectId).eq('fingerprint', fingerprint),
-    ).unique()
-    if (existing) return { status: 'ready' as const, suggestionId: existing._id }
-    const now = Date.now()
-    const suggestionId = await ctx.db.insert('taskSuggestions', {
-      projectId: args.projectId, groupId: args.groupId, proposedTitle: title,
-      proposedPriority: 'none', status: 'pending', confidence: 1,
-      groundingReason: 'Explicit task request grounded in this Channel conversation.', fingerprint,
-      modelVersion: 'explicit-human-intent', promptVersion: 'explicit-task-v1', createdAt: now, updatedAt: now,
-    })
-    for (const [index, messageId] of [source._id, ...(source._id === promptMessage._id ? [] : [promptMessage._id])].entries()) {
-      const message = await ctx.db.get(messageId)
-      if (!message) continue
-      await ctx.db.insert('taskSuggestionReferences', {
-        projectId: args.projectId, suggestionId, type: 'message', groupId: args.groupId,
-        channelThreadId: message.channelThreadId, messageId,
-        quote: message.body.slice(0, 280), availability: 'available', isPrimary: index === 0,
-        rank: String(index + 1).padStart(8, '0'), createdAt: now, updatedAt: now,
-      })
-    }
-    return { status: 'ready' as const, suggestionId }
-  },
-})
 
 export const list = query({
   args: { projectId: v.id('projects'), ...identityArgs },
@@ -320,7 +257,6 @@ export const accept = mutation({
       projectId: task.projectId, taskId: task._id, type: reference.type, groupId: reference.groupId,
       channelThreadId: reference.channelThreadId, messageId: reference.messageId,
       attachmentId: reference.attachmentId,
-      memoryImportId: reference.memoryImportId, sourceIdentifier: reference.sourceIdentifier,
       quote: reference.quote, availability: reference.availability, isPrimary: reference.isPrimary,
       actorProjectMemberId: access.projectMember._id, actingCompanyId: access.actingCompanyId,
       rank: reference.rank, createdAt: now, updatedAt: now,
@@ -404,7 +340,6 @@ export const linkToExisting = mutation({
         projectId: taskPolicy.task.projectId, taskId: taskPolicy.task._id, type: reference.type,
         groupId: reference.groupId, channelThreadId: reference.channelThreadId,
         messageId: reference.messageId, attachmentId: reference.attachmentId,
-        memoryImportId: reference.memoryImportId, sourceIdentifier: reference.sourceIdentifier,
         quote: reference.quote, availability: reference.availability, isPrimary: false,
         actorProjectMemberId: suggestionPolicy.projectMember._id,
         actingCompanyId: suggestionPolicy.actingCompanyId,

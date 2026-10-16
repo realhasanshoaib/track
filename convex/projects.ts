@@ -2,7 +2,6 @@ import { v } from 'convex/values'
 import { canAdministerCompany } from '@track/shared/company'
 
 import { mutation, query } from './_generated/server'
-import { internal } from './_generated/api'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { canRoleJoinDefaultGroup, requireProjectManager, requireProjectMember, requireProjectOwner } from './lib/permissions'
@@ -235,12 +234,8 @@ export const remove = mutation({
       messages,
       attachments,
       typingIndicators,
-      assistantStreams,
       auditEvents,
       groupNotificationSettings,
-      memoryBoxes,
-      memoryImports,
-      memoryPathLocks,
       channelThreads,
       channelThreadFollowers,
       channelThreadReadStates,
@@ -255,12 +250,8 @@ export const remove = mutation({
       ctx.db.query('messages').withIndex('by_project_created_at', (q) => q.eq('projectId', args.projectId)).collect(),
       ctx.db.query('attachments').collect(),
       ctx.db.query('typingIndicators').collect(),
-      ctx.db.query('assistantStreams').collect(),
       ctx.db.query('auditEvents').withIndex('by_project_created_at', (q) => q.eq('projectId', args.projectId)).collect(),
       ctx.db.query('groupNotificationSettings').collect(),
-      ctx.db.query('projectMemoryBoxes').withIndex('by_project', (q) => q.eq('projectId', args.projectId)).collect(),
-      ctx.db.query('memoryImports').withIndex('by_project_created_at', (q) => q.eq('projectId', args.projectId)).collect(),
-      ctx.db.query('memoryPathLocks').collect(),
       ctx.db.query('channelThreads').withIndex('by_project', (q) => q.eq('projectId', args.projectId)).collect(),
       ctx.db.query('channelThreadFollowers').withIndex('by_project', (q) => q.eq('projectId', args.projectId)).collect(),
       ctx.db.query('channelThreadReadStates').withIndex('by_project', (q) => q.eq('projectId', args.projectId)).collect(),
@@ -280,32 +271,13 @@ export const remove = mutation({
     await Promise.all(projectAttachments.map((attachment) => ctx.storage.delete(attachment.storageId).catch(() => undefined)))
     for (const message of messages) await invalidateTaskEvidence(ctx, { messageId: message._id })
     for (const attachment of projectAttachments) await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
-    for (const stream of assistantStreams.filter((candidate) => candidate.projectId === args.projectId)) {
-      await invalidateTaskEvidence(ctx, { assistantStreamId: stream._id })
-    }
     await deleteTaskProjectData(ctx, args.projectId)
-    for (const row of memoryBoxes) {
-      await ctx.scheduler.runAfter(0, (internal as any).memoryActions.deleteMemoryBoxById, {
-        actorId: args.userId,
-        boxId: row.boxId,
-        projectId: args.projectId,
-      })
-    }
-
     for (const row of groupNotificationSettings) {
       if (groupIds.has(row.groupId)) await ctx.db.delete(row._id)
     }
-    for (const row of memoryPathLocks) {
-      if (row.projectId === args.projectId) await ctx.db.delete(row._id)
-    }
-    for (const row of memoryImports) await ctx.db.delete(row._id)
-    for (const row of memoryBoxes) await ctx.db.delete(row._id)
     for (const row of channelThreadReadStates) await ctx.db.delete(row._id)
     for (const row of channelThreadFollowers) await ctx.db.delete(row._id)
     for (const row of channelThreads) await ctx.db.delete(row._id)
-    for (const row of assistantStreams) {
-      if (row.projectId === args.projectId) await ctx.db.delete(row._id)
-    }
     for (const row of typingIndicators) {
       if (row.projectId === args.projectId) await ctx.db.delete(row._id)
     }

@@ -32,8 +32,7 @@ competing card. Hierarchy comes from typography, alignment, and surface tone
 before decoration.
 
 Conversation leads. Company, Project, and Channel context stays recognizable
-while people move between messages, tasks, and threads. Assistant answers are
-visibly distinct but do not dominate the human conversation. Dark mode keeps
+while people move between messages, tasks, and threads. Dark mode keeps
 the same warm character rather than switching to a blue-black technology theme.
 
 ## 2. Color Palette & Roles

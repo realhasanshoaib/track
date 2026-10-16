@@ -765,46 +765,6 @@ describe('task management authorization and invariants', () => {
       .collect())).toHaveLength(0)
   })
 
-  it('creates an idempotent grounded suggestion for explicit assistant task intent', async () => {
-    const fixture = await seedLegacyProject()
-    const messageId = await fixture.t.run(
-      async (ctx) =>
-        await ctx.db.insert('messages', {
-          projectId: fixture.projectId,
-          groupId: fixture.groupId,
-          authorId: fixture.ownerId,
-          authorProjectMemberId: fixture.ownerMemberId,
-          channelSequence: 1,
-          body: '@track create a task to publish the release notes',
-          mentions: [],
-          attachmentIds: [],
-          createdAt: Date.now(),
-        }),
-    )
-    const first = await fixture.t.mutation(
-      internal.taskSuggestions.createExplicit,
-      {
-        projectId: fixture.projectId,
-        groupId: fixture.groupId,
-        requesterId: fixture.ownerId,
-        promptMessageId: messageId,
-        question: '@track create a task to publish the release notes',
-      },
-    )
-    const second = await fixture.t.mutation(
-      internal.taskSuggestions.createExplicit,
-      {
-        projectId: fixture.projectId,
-        groupId: fixture.groupId,
-        requesterId: fixture.ownerId,
-        promptMessageId: messageId,
-        question: '@track create a task to publish the release notes',
-      },
-    )
-    expect(first).toMatchObject({ status: 'ready' })
-    expect(second).toEqual(first)
-  })
-
   it('schedules assignment delivery and due reminders for accepted suggestions', async () => {
     const fixture = await seedLegacyProject()
     const owner = fixture.t.withIdentity({ subject: 'owner' })

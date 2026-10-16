@@ -50,8 +50,6 @@ export const taskAutomationTables = {
     channelThreadId: v.optional(v.id('channelThreads')),
     messageId: v.optional(v.id('messages')),
     attachmentId: v.optional(v.id('attachments')),
-    memoryImportId: v.optional(v.id('memoryImports')),
-    sourceIdentifier: v.optional(v.string()),
     quote: v.optional(v.string()),
     availability: taskReferenceAvailability,
     isPrimary: v.boolean(),
@@ -127,7 +125,6 @@ export const taskAutomationTables = {
     groupId: v.optional(v.id('groups')),
     messageId: v.optional(v.id('messages')),
     attachmentId: v.optional(v.id('attachments')),
-    assistantStreamId: v.optional(v.id('assistantStreams')),
     payload: v.any(),
     redactedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -141,7 +138,6 @@ export const taskAutomationTables = {
       filterFields: ['entitlementId', 'sourceTable'],
     })
     .index('by_entitlement_message', ['entitlementId', 'messageId'])
-    .index('by_entitlement_assistant', ['entitlementId', 'assistantStreamId'])
     .index('by_entitlement_source', [
       'entitlementId',
       'sourceTable',
@@ -149,7 +145,6 @@ export const taskAutomationTables = {
     ])
     .index('by_message', ['messageId'])
     .index('by_attachment', ['attachmentId'])
-    .index('by_assistant_stream', ['assistantStreamId'])
     .index('by_project', ['projectId']),
 
   taskExitSnapshotStaging: defineTable({
@@ -161,7 +156,6 @@ export const taskAutomationTables = {
     taskSearchText: v.optional(v.string()),
     messageId: v.optional(v.id('messages')),
     attachmentId: v.optional(v.id('attachments')),
-    assistantStreamId: v.optional(v.id('assistantStreams')),
     sourceTable: v.string(),
     sourceId: v.string(),
     groupId: v.optional(v.id('groups')),
@@ -189,11 +183,6 @@ export const taskAutomationTables = {
       'projectCompanyId',
       'operationId',
       'messageId',
-    ])
-    .index('by_project_company_operation_assistant', [
-      'projectCompanyId',
-      'operationId',
-      'assistantStreamId',
     ])
     .searchIndex('search_task_text', {
       searchField: 'taskSearchText',

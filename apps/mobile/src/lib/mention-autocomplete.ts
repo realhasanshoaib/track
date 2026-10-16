@@ -8,7 +8,7 @@ export type MentionCandidate = {
   /** The token written after `@`, already normalised. */
   handle: string;
   id: string;
-  kind: 'assistant' | 'member';
+  kind: 'member';
   label: string;
   subtitle: string | null;
 };
@@ -28,14 +28,6 @@ const LEADING_SPACE = /^\s/;
 const WHITESPACE = /\s/;
 
 export const MentionSuggestionLimit = 5;
-
-const ASSISTANT: MentionCandidate = {
-  handle: 'track',
-  id: 'assistant',
-  kind: 'assistant',
-  label: 'Track',
-  subtitle: 'Ask the assistant',
-};
 
 /** Normalises a name or email into the token form mentions are matched by. */
 export function mentionHandle(value: string): string {
@@ -94,7 +86,7 @@ export function filterMentionCandidates(
 }
 
 /**
- * Builds the suggestion list: the assistant first, then members by name. A
+ * Builds the suggestion list: members by name. A
  * display name shared by two members cannot be resolved on send, so those
  * members fall back to the local part of their email.
  */
@@ -124,11 +116,11 @@ export function buildMentionCandidates(members: MentionMember[]): MentionCandida
   const uses = new Map<string, number>();
   for (const row of rows) uses.set(row.primary, (uses.get(row.primary) ?? 0) + 1);
 
-  const candidates: MentionCandidate[] = [ASSISTANT];
+  const candidates: MentionCandidate[] = [];
   for (const row of [...rows].sort((a, b) => a.label.localeCompare(b.label))) {
     const ambiguous = !row.primary || (uses.get(row.primary) ?? 0) > 1;
     const handle = ambiguous ? row.alternate || row.primary : row.primary;
-    if (!handle || handle === ASSISTANT.handle) continue;
+    if (!handle) continue;
     candidates.push({ handle, id: row.id, kind: 'member', label: row.label, subtitle: row.subtitle });
   }
   return candidates;

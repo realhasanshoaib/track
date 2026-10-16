@@ -11,7 +11,6 @@ const knownCompanyErrors: ReadonlyMap<string, string> = new Map([
   ["exit_snapshot_not_verified", "The exit snapshot is not ready to finalize."],
   ["last_channel_steward", "The Channel needs another steward before this change."],
   ["last_project_manager", "The Project needs another manager before this change."],
-  ["memory_context_update_in_progress", "A memory update is still in progress. Try again shortly."],
   ["project_lifecycle_conflict", "This Project changed while you were working. Refresh and try again."],
   ["project_manager_required", "Only a Project manager can change this Project."],
   ["project_ownership_transfer_required", "Transfer Project ownership before this Company exits."],
@@ -19,7 +18,6 @@ const knownCompanyErrors: ReadonlyMap<string, string> = new Map([
   ["project_unavailable", "This Project is unavailable or your access changed."],
   ["shared_project_unavailable", "This shared Project is unavailable or your access changed."],
   ["snapshot_cleanup_unavailable", "The exit snapshot cleanup is not available yet."],
-  ["snapshot_memory_provider_unavailable", "The memory provider is unavailable. Try the snapshot again."],
   ["snapshot_source_unavailable", "The exit snapshot source is unavailable. Try again."],
 ]);
 
@@ -36,9 +34,6 @@ export function formatSnapshotError(snapshotError: string | null | undefined) {
   if (!snapshotError) return null;
   if (snapshotError.startsWith("snapshot_cleanup")) {
     return "Exit snapshot cleanup needs attention. Retry cleanup to continue.";
-  }
-  if (snapshotError.startsWith("snapshot_memory")) {
-    return "The memory provider is unavailable. Retry the snapshot to continue.";
   }
   if (snapshotError.startsWith("snapshot_")) {
     return "The exit snapshot could not be verified. Retry it before finalizing.";

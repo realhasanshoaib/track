@@ -823,7 +823,6 @@ export const send = mutation({
         uploadedBy: args.authorId,
         uploadedByProjectMemberId: projectMember._id,
         actingCompanyId: access.companyAccess?.company._id,
-        extractionStatus: 'preserved',
         createdAt: Date.now(),
       })
       await scheduleMediaPreview(ctx, {
@@ -1114,7 +1113,6 @@ export const forwardMessage = mutation({
           uploadedBy: args.actorId,
           uploadedByProjectMemberId: projectMember._id,
           actingCompanyId: access.companyAccess?.company._id,
-          extractionStatus: attachment.extractionStatus,
           createdAt: Date.now(),
         }),
       ),
@@ -1231,24 +1229,6 @@ export const remove = mutation({
     })
 
     await invalidateTaskEvidence(ctx, { messageId: message._id })
-    const deletingAttachmentIdStrings = new Set(message.attachmentIds.map(String))
-    const assistantStreams = await ctx.db
-      .query('assistantStreams')
-      .withIndex('by_group_created_at', (q) => q.eq('groupId', message.groupId))
-      .collect()
-    await Promise.all(assistantStreams.map(async (stream) => {
-      const evidence = stream.evidence.filter((item) =>
-        item.messageId !== message._id &&
-        (!item.attachmentId || !deletingAttachmentIdStrings.has(String(item.attachmentId))),
-      )
-      const clearsPrompt = stream.promptMessageId === message._id
-      if (evidence.length === stream.evidence.length && !clearsPrompt) return
-      await ctx.db.patch(stream._id, {
-        evidence,
-        promptMessageId: clearsPrompt ? undefined : stream.promptMessageId,
-        updatedAt: Date.now(),
-      })
-    }))
     for (const attachment of attachments) {
       if (!attachment) continue
       await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
@@ -1680,7 +1660,6 @@ export const attachFile = mutation({
       uploadedBy: args.userId,
       uploadedByProjectMemberId: projectMember._id,
       actingCompanyId: representedCompanyId,
-      extractionStatus: 'preserved',
       createdAt: Date.now(),
     })
     await scheduleMediaPreview(ctx, {

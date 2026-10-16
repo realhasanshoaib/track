@@ -1,5 +1,5 @@
 import { parseMentions } from '@track/shared'
-import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react'
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import { api } from '../../../../../convex/_generated/api'
@@ -18,8 +18,6 @@ import { isUploadResponse } from '#/features/workspace/chat/message-send'
 import { getMentionHandle } from '#/features/workspace/identity'
 import { MarkdownText } from '#/features/workspace/markdown'
 import {
-  AssistantInlineTasks,
-  CreateTaskFromAssistant,
   CreateTaskFromMessage,
   MessageInlineTasks,
 } from '#/features/tasks/ConversationTaskActions'
@@ -75,20 +73,7 @@ export function ThreadConversationPage({
     scopedArgs ? { ...scopedArgs, targetMessageId } : 'skip',
     { initialNumItems: 50 },
   )
-  const assistantPage = usePaginatedQuery(
-    api.assistant.listForThreadPage,
-    scopedArgs ? { ...scopedArgs, targetMessageId } : 'skip',
-    { initialNumItems: 50 },
-  )
-  const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results
-  const combinedMessagePageStatus =
-    messagePageStatus === 'LoadingFirstPage' || assistantPage.status === 'LoadingFirstPage'
-      ? 'LoadingFirstPage'
-      : messagePageStatus === 'LoadingMore' || assistantPage.status === 'LoadingMore'
-        ? 'LoadingMore'
-        : messagePageStatus === 'CanLoadMore' || assistantPage.status === 'CanLoadMore'
-          ? 'CanLoadMore'
-          : 'Exhausted'
+  const combinedMessagePageStatus = messagePageStatus
   const projectMembersPage = usePaginatedQuery(
     api.mobile.listProjectMembersPage,
     currentUser && navigation?.available
@@ -114,7 +99,6 @@ export function ThreadConversationPage({
   const attachFile = useMutation(api.messages.attachFile)
   const deleteMessage = useMutation(api.messages.remove)
   const createReport = useMutation(api.reports.create)
-  const askTrack = useAction(api.assistant.ask)
   const [composerState, setComposerState] = useState<{ scopeKey: string | null; value: string }>({ scopeKey: null, value: '' })
   const [renameValue, setRenameValue] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
@@ -202,8 +186,7 @@ export function ThreadConversationPage({
     return handles
   }, [projectMembers])
   const streamItems = useMemo(() => {
-    const items = [
-      ...[...new Map(
+    const items = [...new Map(
         ((messages ?? []) as Array<ThreadMessageDetail>)
           .map((item) => [item.message._id, item] as const),
       ).values()].map((item) => ({
@@ -211,18 +194,11 @@ export function ThreadConversationPage({
         id: item.message._id,
         kind: 'message' as const,
         item,
-      })),
-      ...((assistantStreams ?? []) as Array<Doc<'assistantStreams'>>).map((item) => ({
-        at: item.createdAt,
-        id: item._id,
-        kind: 'assistant' as const,
-        item,
-      })),
-    ]
+      }))
     // eslint-disable-next-line unicorn/no-array-sort -- reason: Sort a newly copied array while supporting the web ES2022 target.
     items.sort((a, b) => a.at - b.at)
     return items
-  }, [assistantStreams, messages])
+  }, [messages])
 
   const acknowledgeViewedSequence = useCallback((sequence: number) => {
     if (!scopedArgs || !tabVisible || navigation?.readStateImmutable || sequence <= acknowledgedSequenceRef.current) return
@@ -269,8 +245,7 @@ export function ThreadConversationPage({
       top: list.scrollTop,
     }
     if (messagePageStatus === 'CanLoadMore') loadMoreMessages(50)
-    if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(50)
-  }, [assistantPage, combinedMessagePageStatus, loadMoreMessages, messagePageStatus, streamItems.length])
+  }, [combinedMessagePageStatus, loadMoreMessages, messagePageStatus, streamItems.length])
 
   useEffect(() => {
     const anchor = historyAnchorRef.current
@@ -318,18 +293,6 @@ export function ThreadConversationPage({
         notificationPreview: attachment && !body ? 'Sent an attachment.' : undefined,
       })
       if (attachment) await uploadAttachment(messageId, attachment)
-      if (parseMentions(body).includes('track')) {
-        await askTrack({
-          projectId,
-          groupId,
-          channelThreadId: threadId,
-          requesterId: currentUser._id,
-          actingCompanyId: context?.actingCompanyId,
-          projectMemberId: context?.projectMemberId,
-          promptMessageId: messageId,
-          question: body,
-        })
-      }
       sendKey.current = null
       setComposer('')
       setAttachment(null)
@@ -471,8 +434,7 @@ export function ThreadConversationPage({
   if (!navigation.available || !thread) return <Unavailable backHref={backHref} />
 
   const archived = thread.thread.status === 'archived' || navigation.archived
-  const taskLinkMessageIds = streamItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : [])
-  const taskLinkAssistantStreamIds = streamItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.item._id] : [])
+  const taskLinkMessageIds = streamItems.map((entry) => entry.item.message._id)
   const conversationContent = (
     <main className="track-thread-route" aria-busy={busy}>
       <header className="track-thread-route-header">
@@ -529,26 +491,7 @@ export function ThreadConversationPage({
         {messagePageStatus === 'CanLoadMore' ? (
           <Button onClick={loadMoreThreadMessages} variant="outline">Load older replies</Button>
         ) : null}
-        {streamItems.length === 0 ? <p>{messagePageStatus === 'LoadingFirstPage' ? 'Loading replies…' : 'No replies yet.'}</p> : streamItems.map((entry) => entry.kind === 'assistant' ? (
-          <article className="track-thread-message assistant" key={entry.id}>
-            <header>
-              <strong>Track Assistant</strong>
-              {releaseConfig.tasks && !archived ? (
-                <CreateTaskFromAssistant
-                  identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
-                  stream={entry.item}
-                />
-              ) : null}
-            </header>
-            <MarkdownText text={entry.item.answer || entry.item.status} />
-            {releaseConfig.tasks ? (
-              <AssistantInlineTasks
-                identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
-                stream={entry.item}
-              />
-            ) : null}
-          </article>
-        ) : (
+        {streamItems.length === 0 ? <p>{messagePageStatus === 'LoadingFirstPage' ? 'Loading replies…' : 'No replies yet.'}</p> : streamItems.map((entry) => (
           <article
             className="track-thread-message"
             data-channel-sequence={entry.item.message.channelSequence}
@@ -631,7 +574,6 @@ export function ThreadConversationPage({
 
   const conversation = releaseConfig.tasks ? (
     <TaskLinkBatchProvider
-      assistantStreamIds={taskLinkAssistantStreamIds}
       identity={{ actingCompanyId: context?.actingCompanyId, projectMemberId: context?.projectMemberId }}
       messageIds={taskLinkMessageIds}
     >

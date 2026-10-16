@@ -109,13 +109,6 @@
       "message": "Unsafe type assertion: type '{ group: { _creationTime: number; _id: Id<\"groups\">; archivedAt?: number | undefined; createdAt: number; createdBy: Id<\"users\">; kind: \"commercials\" | \"custom\" | \"general\" | \"internal\"; ... 5 more ...; updatedAt: number; }; membership: { ...; }; lastMessage: { ...; } | null; unreadCount: number; }[]' is more narrow than the original type."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d7620dc2d72acdec231b82c20bac017692d87d0a9a9252ffc809628242a4d105",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 129,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
       "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "b173e81852732d7a38a4bb865dc795c88bad9d43d4f89d493328c62bf34b0d3e",
       "path": "apps/mobile/src/app/conversation.tsx",
@@ -142,20 +135,6 @@
       "path": "apps/mobile/src/app/conversation.tsx",
       "line": 135,
       "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "403941dd7b94c4870c32d17c0c5df7f62725fe616f34b00578e5af1334857ca8",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 138,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "3b6ad8a8a245045b73eb0c8fd9762f05918a2b63b2da2a616f19cccc348f1892",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 142,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
     },
     {
       "code": "typescript(no-unnecessary-type-assertion)",
@@ -207,46 +186,11 @@
       "message": "Do not use useless `undefined`."
     },
     {
-      "code": "unicorn(no-array-reverse)",
-      "fingerprint": "6df572b2fb48c81e7496a95d5303750c4c1422d735ea41940d090a1ea73a1cc2",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 311,
-      "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
-    },
-    {
       "code": "unicorn(no-useless-undefined)",
       "fingerprint": "ff3fb42783872ac45129e1ac961bd51adf399ac5190af6b6aca8afdf829ff891",
       "path": "apps/mobile/src/app/conversation.tsx",
       "line": 316,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "23ff7d6b77c8c8e66be078bba5128a00bfc606a9a9eff3c80117ef9b754612bc",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 343,
-      "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "df09a60327ef97de43ed20e9e630e838abfcbbab6572bae69362d3adcb8e7a8c",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 344,
-      "message": "Unsafe type assertion: type 'Id<\"_storage\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4797620ef7e123f2fbcf41a22affa5e63922f245bed8af4db7a550ae063b44c1",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 353,
-      "message": "Unsafe type assertion: type 'Id<\"messages\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "39415a2277b32fd19228e8c0ac879ce1de73b1ee1c646a03111e8d7e63483ec2",
-      "path": "apps/mobile/src/app/conversation.tsx",
-      "line": 364,
-      "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -366,13 +310,6 @@
       "path": "apps/mobile/src/app/groups.tsx",
       "line": 53,
       "message": "Unsafe type assertion: type 'Id<\"projectMembers\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "9264435e472945d1806452429662d11bb818d2614ac3deb98fcce7612f75743f",
-      "path": "apps/mobile/src/app/groups.tsx",
-      "line": 57,
-      "message": "Unsafe type assertion: type 'MobileGroup[]' is more narrow than the original type."
     },
     {
       "code": "typescript(no-unnecessary-type-assertion)",
@@ -690,13 +627,6 @@
       "message": "This assertion is unnecessary since it does not change the type of the expression."
     },
     {
-      "code": "react(preserve-manual-memoization)",
-      "fingerprint": "24fad8591fdba8e0b19da4ed56ec1338d71a7aa29a87a9fc6c51781eb7fea67a",
-      "path": "apps/mobile/src/app/task.tsx",
-      "line": 157,
-      "message": "Existing memoization could not be preserved"
-    },
-    {
       "code": "typescript(no-unnecessary-type-assertion)",
       "fingerprint": "4a25307c3ac5ae6d42f7c29e37aa7b1e021043ff14ef453352765bd8728d3682",
       "path": "apps/mobile/src/app/task.tsx",
@@ -816,20 +746,6 @@
       "message": "Unsafe type assertion: type 'Id<\"projectMembers\">' is more narrow than the original type."
     },
     {
-      "code": "react(purity)",
-      "fingerprint": "0c9919f69d89e17ac81e504427a6edbbb492894d22cd9ce97e5d3e3c11013e93",
-      "path": "apps/mobile/src/app/tasks.tsx",
-      "line": 194,
-      "message": "Cannot call impure function during render"
-    },
-    {
-      "code": "react(purity)",
-      "fingerprint": "0c9919f69d89e17ac81e504427a6edbbb492894d22cd9ce97e5d3e3c11013e93",
-      "path": "apps/mobile/src/app/tasks.tsx",
-      "line": 194,
-      "message": "Cannot call impure function during render"
-    },
-    {
       "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "bbe9402d3ac9feaacd201bc1cb48964f5543bdd03cedaed8efda010ef625fc1f",
       "path": "apps/mobile/src/app/tasks.tsx",
@@ -893,32 +809,11 @@
       "message": "Unsafe type assertion: type 'Id<\"projectMembers\"> | undefined' is more narrow than the original type."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d7620dc2d72acdec231b82c20bac017692d87d0a9a9252ffc809628242a4d105",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 94,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
       "code": "react(set-state-in-effect)",
       "fingerprint": "6df76dc2aca00e873fadecda9699f7d49704ac1f7016559de086a24f9a238dc2",
       "path": "apps/mobile/src/app/thread.tsx",
       "line": 103,
       "message": "Calling setState synchronously within an effect can trigger cascading renders"
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "51b81714bee6d1a64fff374bcd9c45e3db31b88cf26bdc3a7c7fddee3ca457d3",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 106,
-      "message": "This condition will always return the same value since the types have no overlap."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "6c314d29567c1c7b7cbee899016e6626bd9d421c1f582aef1cf93b2d555ceb47",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 107,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "typescript(no-unnecessary-condition)",
@@ -940,55 +835,6 @@
       "path": "apps/mobile/src/app/thread.tsx",
       "line": 114,
       "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "a1a61f0588a4be82688295a6cc87b83f5f047930a23de1b9659a94be1cd5f57e",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 121,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "8d909e51d4aeaf6cbb469fc4c273c0c98077af90d4481c9f616c21f0c8e0192d",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 128,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "23ff7d6b77c8c8e66be078bba5128a00bfc606a9a9eff3c80117ef9b754612bc",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 158,
-      "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "df09a60327ef97de43ed20e9e630e838abfcbbab6572bae69362d3adcb8e7a8c",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 159,
-      "message": "Unsafe type assertion: type 'Id<\"_storage\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4797620ef7e123f2fbcf41a22affa5e63922f245bed8af4db7a550ae063b44c1",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 175,
-      "message": "Unsafe type assertion: type 'Id<\"messages\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "39415a2277b32fd19228e8c0ac879ce1de73b1ee1c646a03111e8d7e63483ec2",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 186,
-      "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "react-hooks(exhaustive-deps)",
-      "fingerprint": "d27423ce1e8040a3430a7851376a3ad2265baf19b9fb3ae979a1b7320a185580",
-      "path": "apps/mobile/src/app/thread.tsx",
-      "line": 295,
-      "message": "React hook useCallback depends on `taskIdentity`, which changes every render"
     },
     {
       "code": "typescript(no-unnecessary-type-assertion)",
@@ -1101,13 +947,6 @@
       "path": "apps/mobile/src/app/threads.tsx",
       "line": 202,
       "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "react(immutability)",
-      "fingerprint": "6ba6d0d1d87e9e55b23a720d416b487892b2994945f2bacf0d6c7828e958cd30",
-      "path": "apps/mobile/src/components/chat/assistant-message.tsx",
-      "line": 163,
-      "message": "This value cannot be modified"
     },
     {
       "code": "typescript(no-misused-promises)",
@@ -1733,20 +1572,6 @@
       "message": "This value cannot be modified"
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "f3d14c75ba9f0c30a3ab412585a5b89d66f02de7c9a64892a383f6616b1e9778",
-      "path": "apps/mobile/src/components/thread-row.tsx",
-      "line": 144,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-conversion)",
-      "fingerprint": "d174aadb783a99872f9e93f24eedf8714d804ab9977384e31a96b1c41ddc21a2",
-      "path": "apps/mobile/src/components/thread-row.tsx",
-      "line": 146,
-      "message": "This type conversion does not change the type or value of the expression."
-    },
-    {
       "code": "typescript(no-duplicate-type-constituents)",
       "fingerprint": "6a7ab3283e5d94af6c613fe23d0dde5299a875b2e7810577e0d25ace96b9f732",
       "path": "apps/mobile/src/constants/theme.ts",
@@ -2069,13 +1894,6 @@
       "message": "Prefer `addEventListener()` over their `on`-function counterparts."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "247c33ee25223410efc9f8b68650adb614dd844aa432515f448906f274f65606",
-      "path": "apps/mobile/src/lib/attachment-upload.ts",
-      "line": 82,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
       "code": "unicorn(prefer-add-event-listener)",
       "fingerprint": "de8fee5b845c8553188e748d74feba5f90936a9eeb2ed8e3a8e9c2df31ac5fff",
       "path": "apps/mobile/src/lib/attachment-upload.ts",
@@ -2350,20 +2168,6 @@
     },
     {
       "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "e64bae310dc64dde909f9af73c595377d089d844cc86c88e2415be2f23a22433",
-      "path": "apps/mobile/src/lib/task-presentation.ts",
-      "line": 17,
-      "message": "Unnecessary optional chain on a non-nullish value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "e64bae310dc64dde909f9af73c595377d089d844cc86c88e2415be2f23a22433",
-      "path": "apps/mobile/src/lib/task-presentation.ts",
-      "line": 17,
-      "message": "Unsafe type assertion: type '\"assistant_answer\" | \"attachment\" | \"memory_excerpt\" | \"message\"' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "876cd67b5eeef39fc34fbf557f094ad8dd2a109ee023d0635695b6dc157e25c5",
       "path": "apps/mobile/src/lib/task-presentation.ts",
       "line": 156,
@@ -2524,13 +2328,6 @@
       "message": "Unnecessary optional chain on a non-nullish value."
     },
     {
-      "code": "eslint(eqeqeq)",
-      "fingerprint": "86bed94feef74f9b98447c59794f26fef6ec2c8234b37c43b93f3fe0fe11984d",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 80,
-      "message": "Expected !== and instead saw !="
-    },
-    {
       "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "42f3d2748cab773ffaf37d73fb2955a5496bc15681985e410be917676fa5f683",
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
@@ -2592,34 +2389,6 @@
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
       "line": 212,
       "message": "Unsafe member access .channel on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4ae679120914f860939d83c4d6d6e1fb908009807d1565cad2cec7941beaf0a6",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 213,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4ae679120914f860939d83c4d6d6e1fb908009807d1565cad2cec7941beaf0a6",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 213,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "react(set-state-in-effect)",
-      "fingerprint": "1c7fd7640bd2e8417ad8670f4492ac571b2522c17da872ac018060513d84993d",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 233,
-      "message": "Calling setState synchronously within an effect can trigger cascading renders"
-    },
-    {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "cec797f9fba4f5b323b37bdaec21b82fa46316ffbbd1b3e5aba38a12593d4d0c",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 234,
-      "message": "Found extra effect dependencies"
     },
     {
       "code": "typescript(no-unsafe-return)",
@@ -2706,20 +2475,6 @@
       "message": "Unsafe argument of type any assigned to a parameter of type { _creationTime: number; _id: Id<\"groups\">; archivedAt?: number | undefined; createdAt: number; createdBy: Id<\"users\">; kind: \"commercials\" | \"custom\" | \"general\" | \"internal\"; ... 5 more ...; updatedAt: number; }."
     },
     {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "e2a90b63cc9728828aaa6a6ecbc7ed3e586c4ea320e7079ac13df831e930710a",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 476,
-      "message": "Unsafe argument of type any assigned to a parameter of type Id<\"groups\">."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "e2a90b63cc9728828aaa6a6ecbc7ed3e586c4ea320e7079ac13df831e930710a",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 476,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
       "code": "typescript(no-unsafe-member-access)",
       "fingerprint": "4cd0f3523b5139512163fb0aad10dd2983746c6be9a0e23023d45a0ac0161f4f",
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
@@ -2745,20 +2500,6 @@
       "fingerprint": "d0a6a9c34ad9f008a6080afa8e5e6f618d42f208e9e4b2cb69fac61799afb8a2",
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
       "line": 487,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "a3de6b2e11d707e3642eccd24e732344e018810d5d32b208ee36ead473ed13d7",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 488,
-      "message": "Unsafe argument of type any assigned to a parameter of type SetStateAction<Id<\"groups\"> | null>."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "a3de6b2e11d707e3642eccd24e732344e018810d5d32b208ee36ead473ed13d7",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 488,
       "message": "Unsafe member access ._id on an `any` value."
     },
     {
@@ -2797,13 +2538,6 @@
       "message": "Unsafe assignment of an any value."
     },
     {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "83f61bd4f2250e2b0902dbf3b2be11910cd3766fc682da5f7b1b0f2fd3b13ec4",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 632,
-      "message": "Unsafe member access .name on an `any` value."
-    },
-    {
       "code": "typescript(no-unsafe-assignment)",
       "fingerprint": "fef1072cbb3a8f230c2fd9ad23f14edee1ad83bc05973a413ca1a5d28f4dd0b1",
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
@@ -2811,60 +2545,11 @@
       "message": "Unsafe assignment of an any value."
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "301a10bcd799c09e6d425f18bb494e3f035769bc4edb12770dab0ad4885bee91",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 666,
-      "message": "Unnecessary conditional, value is always truthy."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "38a29d6a4f2d69e8e457a673e20dbc0cb45bc886e2dd06e845f18aa3687e1817",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 814,
-      "message": "Unsafe member access .name on an `any` value."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "3a2106b521862e076229be25690f7f9a6654505f9e58833a8c3aa636a2237ca3",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 825,
-      "message": "Forbidden non-null assertion."
-    },
-    {
       "code": "typescript(no-unsafe-member-access)",
       "fingerprint": "44ebaf2c45d8cce686a731c05092f993269de5628286d5b8c54279c79533de4e",
       "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
       "line": 885,
       "message": "Unsafe member access .kind on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "096649dfe293867318bc49e8181cc97e82e6777726210acd9fbc01cf4c484142",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 886,
-      "message": "Unsafe member access .status on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "dc7f69c88ba317773a9a54a69886c990d061c99de52fd1512958e2757772766b",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 887,
-      "message": "Unsafe member access .status on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b342c802d6c01a13b2997a41e0fd2213949f83aaf5adebfd622b371bf04bd844",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 897,
-      "message": "Unsafe member access .status on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "2a08a267f7662bc82bffb6a2ca71eaa23e61839c4042e48d9644e66fd21fbcf7",
-      "path": "apps/web/src/features/company/CompanyProjectPage.tsx",
-      "line": 915,
-      "message": "Unsafe member access .status on an `any` value."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -3196,20 +2881,6 @@
       "message": "A form label must be associated with a control."
     },
     {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "054f98c86bc407210382e158001a081f7a07b961a7ba3e569054e5b991e93bdc",
-      "path": "apps/web/src/features/tasks/ConversationTaskActions.tsx",
-      "line": 106,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "3f91997849d8d1a76e9af0777d868db79a21bfc5b20ef7b27d792e144d998186",
-      "path": "apps/web/src/features/tasks/ConversationTaskActions.tsx",
-      "line": 112,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
       "code": "typescript(no-non-null-assertion)",
       "fingerprint": "b282704d26c54f68069f33c89dfa5196d696f3747d16711529778cd70cda37f8",
       "path": "apps/web/src/features/tasks/TaskAdminDialog.tsx",
@@ -3343,48 +3014,6 @@
       "message": "Unsafe type assertion: type 'TaskDetail | null | undefined' is more narrow than the original type."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "76395a641391b79223135ad6cbdba9b5cbf8ab2378153df4c77ab21f552fc491",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 53,
-      "message": "Unsafe type assertion: type 'TaskView[] | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "react(set-state-in-effect)",
-      "fingerprint": "2b06f8f111b79525c748f56d52972fc01273c6f71582f97c9054eec8ea9b5dbe",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 77,
-      "message": "Calling setState synchronously within an effect can trigger cascading renders"
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "b1ae08310279dd99fb6b7f9f8ab82e906f5e3ed12aa4bf0f32ef54e9185b2dbf",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 108,
-      "message": "Unsafe type assertion: type '\"high\" | \"low\" | \"medium\" | \"none\" | \"urgent\"' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "28ffbaa6a802972290e8b8ab6be6bf12f0a27e7216ed4da03c4c166222301561",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 110,
-      "message": "Unsafe type assertion: type 'Id<\"taskWorkflowStates\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "58dc43e25173374d2837e712b031a98c9dc9f7340f8bdfc13fbff54af6715a47",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 111,
-      "message": "Unsafe type assertion: type 'Id<\"projectMembers\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a748912e8e1c92ac1ed4419e8a9571eecf70434abcd4255ab1b79f9cc8c9a7a2",
-      "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
-      "line": 185,
-      "message": "Unsafe type assertion: type '\"high\" | \"low\" | \"medium\" | \"none\" | \"urgent\"' is more narrow than the original type."
-    },
-    {
       "code": "jsx-a11y(label-has-associated-control)",
       "fingerprint": "5c4d81ce9accc08cccd9cdc246898021f3567955422ff24181f165405b498d62",
       "path": "apps/web/src/features/tasks/TaskDetailDrawer.tsx",
@@ -3439,20 +3068,6 @@
       "path": "apps/web/src/features/tasks/TaskProjectPage.tsx",
       "line": 53,
       "message": "Unsafe type assertion: type 'Id<\"projects\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "9e6448950570fbe07037db53d2f254828204a7f30c4f5058983ed21aafddd0bf",
-      "path": "apps/web/src/features/tasks/TaskProjectPage.tsx",
-      "line": 60,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "142f3d80175a781a846552d8494d45ac3695b7e9569293d57eb073249ea4989a",
-      "path": "apps/web/src/features/tasks/TaskProjectPage.tsx",
-      "line": 72,
-      "message": "Unsafe type assertion: type 'TaskView[] | undefined' is more narrow than the original type."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -3526,13 +3141,6 @@
     },
     {
       "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "b9a919ae71014ef8bb89a672d55515ea9be53bff0b6977234c947f56af62933b",
-      "path": "apps/web/src/features/tasks/TaskProjectPage.tsx",
-      "line": 257,
-      "message": "This condition will always return the same value since the types have no overlap."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
       "fingerprint": "e339f9203e345139352c68a37411faa7f757bed193e88727d2936794225c13d0",
       "path": "apps/web/src/features/tasks/TaskProjectPage.tsx",
       "line": 287,
@@ -3602,13 +3210,6 @@
       "message": "Prefer `img` over `role` attribute `img`."
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "bf2810e9a42cc766d46af24fbcc845b799397027577fc29670eb479be9997639",
-      "path": "apps/web/src/features/tasks/ui/TaskVisuals.tsx",
-      "line": 49,
-      "message": "Unnecessary conditional, value is always falsy."
-    },
-    {
       "code": "jsx-a11y(prefer-tag-over-role)",
       "fingerprint": "273c014858d79ef6efaa7a9478684abbb496b142cac25b6aa28e0204829bc327",
       "path": "apps/web/src/features/threads/ChannelThreadBrowser.tsx",
@@ -3663,20 +3264,6 @@
       "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
       "line": 60,
       "message": "Unsafe type assertion: type 'Id<\"messages\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "5b5a3ddcb7b12127dca3a3d12ae770530ba2060b6fa08c26ca97013fd1011df4",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 103,
-      "message": "Unnecessary conditional, value is always falsy."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "7e6b748964b6afe82c80a61d892356aa5b987953cb0fac3a58a9f03da4640caf",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 104,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "react(set-state-in-effect)",
@@ -3754,20 +3341,6 @@
       "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
       "line": 135,
       "message": "Unsafe type assertion: type 'ThreadMessageDetail[]' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "aa0f84b06b2e135d9dee5535caaeb04a1196a08342a2162c8557cff755164094",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 143,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "fcf09026ac80913dc5f39ffaddacad48e21fc29ef9294566bbf27658d7aa2bda",
-      "path": "apps/web/src/features/threads/ThreadConversationPage.tsx",
-      "line": 149,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -3855,13 +3428,6 @@
     },
     {
       "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "fa3f7fb916d52a2e2e4d623d55aff289a9bcfc289197b4c282d0e382088f2943",
-      "path": "apps/web/src/features/workspace/chat/message-send-retry.test.ts",
-      "line": 48,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
       "fingerprint": "bbf30ff459aa077258de16c2e41a9d77e01731761e6d12c03bb50c0496644a29",
       "path": "apps/web/src/features/workspace/chat/message-send-retry.test.ts",
       "line": 76,
@@ -3873,13 +3439,6 @@
       "path": "apps/web/src/features/workspace/chat/message-send-retry.ts",
       "line": 49,
       "message": "Prefer using nullish coalescing operator (`??=`) instead of an assignment expression, as it is simpler to read."
-    },
-    {
-      "code": "typescript(no-redundant-type-constituents)",
-      "fingerprint": "578d502bff088da34821c208875f877c875c2f644aee0619b90af34aa77d8014",
-      "path": "apps/web/src/features/workspace/chat/message-send-retry.ts",
-      "line": 58,
-      "message": "'unknown' overrides all other types in this union type."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -3966,13 +3525,6 @@
       "message": "Unnecessary conditional, value is always falsy."
     },
     {
-      "code": "typescript(no-unnecessary-condition)",
-      "fingerprint": "311e54a0c32607a311c2b8218be9553a45d650487f90ca54827f9cce76236b0e",
-      "path": "apps/web/src/features/workspace/components/GroupChatPage.tsx",
-      "line": 238,
-      "message": "Unnecessary comparison between literal values."
-    },
-    {
       "code": "typescript(prefer-nullish-coalescing)",
       "fingerprint": "06796986161a71ee2c4a2f2889c5c90c9a458eaef85edc606333d7713b099ce0",
       "path": "apps/web/src/features/workspace/components/MessageActions.tsx",
@@ -4020,55 +3572,6 @@
       "path": "apps/web/src/features/workspace/components/MessageActions.tsx",
       "line": 248,
       "message": "Prefer `option` over `role` attribute `option`."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "9e7ec68c4a907f12db63768888e9f240568677f5c171acdc5cd1ab520f8633de",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 71,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "9e7ec68c4a907f12db63768888e9f240568677f5c171acdc5cd1ab520f8633de",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 71,
-      "message": "Unsafe member access .memoryActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "9e7ec68c4a907f12db63768888e9f240568677f5c171acdc5cd1ab520f8633de",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 71,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4f53255477518a572fc77427e0f783682221d77f71317fa736e768abe62ad69c",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 130,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4f8d7bbe72284e55ee531aed3cc036eb7b9ce4099ad63f76d2b20366db8d6cfa",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 139,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "7c0a29b0250e1314371ba0b3a79e6cecb87f362d004a1b875eed0a90e286d3f7",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 208,
-      "message": "Prefer `img` over `role` attribute `img`."
-    },
-    {
-      "code": "jsx-a11y(no-noninteractive-element-interactions)",
-      "fingerprint": "54fce323234ef271a4a0314d5a0f8b6bc9dec9d84ae90a65e805a451f52efbb1",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "line": 254,
-      "message": "Non-interactive elements should not be assigned mouse or keyboard event listeners."
     },
     {
       "code": "unicorn(consistent-function-scoping)",
@@ -4159,13 +3662,6 @@
       "fingerprint": "32204ee4bac4240ae7d7a4d4017aaa051243b9552edff24f17784d19e89d86cb",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceData.ts",
       "line": 58,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "7c77186fec2344f8cca2016dff63d806c6f93f2f0e47391164d2fb2cf0dbfe93",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceData.ts",
-      "line": 123,
       "message": "This assertion is unnecessary since it does not change the type of the expression."
     },
     {
@@ -4288,13 +3784,6 @@
       "message": "Found extra effect dependencies"
     },
     {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "6f54b9c38ba5bf3456743d787f1b8b921edebc094c9de714db524225f44945ef",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceSynchronization.ts",
-      "line": 105,
-      "message": "Found extra effect dependencies"
-    },
-    {
       "code": "typescript(consistent-return)",
       "fingerprint": "cf8a2e35f5b5b72b4c432c1393f4bad9537e155737b2f8f5772fd25f99c0d398",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceSynchronization.ts",
@@ -4309,25 +3798,11 @@
       "message": "React Hook useEffect has missing dependencies: 'requestThreadScrollToLatest', 'shouldFollowLatestRef', 'lastLoadedGroupIdRef', and 'composerRef.current'"
     },
     {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "1a32f619d8c9906c6dcfa1deec51fc60937446117093150a1cb1da2257489e8d",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 134,
-      "message": "Found missing effect dependencies"
-    },
-    {
       "code": "react-hooks(exhaustive-deps)",
       "fingerprint": "2d93fcbb2b09f12299e65b81eb6f446ecd3469b751dfd9acecf320ddcebad4b7",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
       "line": 137,
       "message": "React Hook useEffect has a missing dependency: 'lastLoadedGroupIdRef'"
-    },
-    {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "262bf597512c20a2444dd9ca2e722754dff90df93e60cc270504d24728405e5c",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 138,
-      "message": "Found missing effect dependencies"
     },
     {
       "code": "react(exhaustive-effect-dependencies)",
@@ -4344,25 +3819,11 @@
       "message": "React Hook useEffect has a missing dependency: 'composerRef.current'"
     },
     {
-      "code": "react-hooks(exhaustive-deps)",
-      "fingerprint": "499666dcab7540dbb80549b47e056869f650b2a5ac4a5cc2576a18cf5fa4d318",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 146,
-      "message": "React Hook useEffect has missing dependencies: 'shouldFollowLatestRef', and 'requestThreadScrollToLatest'"
-    },
-    {
       "code": "react(exhaustive-effect-dependencies)",
       "fingerprint": "7281c7c454cf69582ef841e5072b301dd49204937e284767ce155f84f46d3176",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
       "line": 147,
       "message": "Found missing/extra effect dependencies"
-    },
-    {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "71c969809d8cf5e787fa629e419e23c3a9b88c9f2a7f2f14cd7a4867df1a4403",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 151,
-      "message": "Found extra effect dependencies"
     },
     {
       "code": "react-hooks(exhaustive-deps)",
@@ -4372,13 +3833,6 @@
       "message": "React Hook useEffect has missing dependencies: 'requestThreadItemScroll', and 'requestMessageFlash'"
     },
     {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "f6ba0d81778438de02c1352165196e1d12f3e46cc0045511dcc2e2aaa659d579",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 162,
-      "message": "Found missing effect dependencies"
-    },
-    {
       "code": "react-hooks(exhaustive-deps)",
       "fingerprint": "35f85bf8e75cec590f1fdea9f8fcc088452e3df5576dd9dff7b4d5438542b359",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
@@ -4386,25 +3840,11 @@
       "message": "React Hook useEffect has a missing dependency: 'requestMessageFocus'"
     },
     {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "59dd1965e69cf7403c4e35607a2684ccc7fa2db60bd2f33b5cb328d762ed2154",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 169,
-      "message": "Found missing effect dependencies"
-    },
-    {
       "code": "react-hooks(exhaustive-deps)",
       "fingerprint": "8965ddc6974c3e635215e40c3d2aa678cb767503a68ab7e77caea6f49169fc5f",
       "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
       "line": 187,
       "message": "React Hook useEffect has missing dependencies: 'composerRef', and 'composerRef.current.value'"
-    },
-    {
-      "code": "react(exhaustive-effect-dependencies)",
-      "fingerprint": "92183ededbe7722ce851ade3e3d1e8d1327e27a50bec66acf63b2bcd1a21aba0",
-      "path": "apps/web/src/features/workspace/hooks/useWorkspaceThreadInteractions.ts",
-      "line": 195,
-      "message": "Found missing effect dependencies"
     },
     {
       "code": "unicorn(no-useless-undefined)",
@@ -4470,20 +3910,6 @@
       "message": "Unnecessary optional chain on a non-nullish value."
     },
     {
-      "code": "react-hooks(exhaustive-deps)",
-      "fingerprint": "7e2d515ba31dfcaf296db9b91b015dc1b3082c3da4cfbb552c0a9109155037f8",
-      "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
-      "line": 105,
-      "message": "The ref's value `.current` is accessed directly in the effect cleanup function."
-    },
-    {
-      "code": "react-hooks(exhaustive-deps)",
-      "fingerprint": "56c4b0ca1f6ff46a82b7379ca782f85c0a78e70f3215b5732fd0b4c0b8125f5a",
-      "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
-      "line": 106,
-      "message": "The ref's value `.current` is accessed directly in the effect cleanup function."
-    },
-    {
       "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "3c31f6a0818c56c6e39ffc72ca8829170c33b18ebff5057a5efe38e090fcf483",
       "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
@@ -4503,20 +3929,6 @@
       "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
       "line": 118,
       "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "2abd11f57a61d2d75d0075f1c85e9d0cfe0625e05b5130effb7bf940b15998d7",
-      "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
-      "line": 339,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "6089d6bbcaf7a6beff01d80506149f2c16a963a376935c8ca7ae63a1cc290528",
-      "path": "apps/web/src/features/workspace/pages/WorkspacePageController.tsx",
-      "line": 356,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "typescript(consistent-type-imports)",
@@ -4680,13 +4092,6 @@
       "message": "Prefer `dialog` over `role` attribute `dialog`."
     },
     {
-      "code": "typescript(consistent-return)",
-      "fingerprint": "3644d9c30d1238f9a329d8b8f7f1b077919b96c7b40ee930b8917c58c554e1de",
-      "path": "apps/web/src/features/workspace/search/ProjectSearchDialog.tsx",
-      "line": 92,
-      "message": "Function expected no return value."
-    },
-    {
       "code": "react(set-state-in-effect)",
       "fingerprint": "3cfa6c21d9de0c8bcb92e1bfcd66e21dc5f5916fc234d4d4c89e488913770cc9",
       "path": "apps/web/src/features/workspace/search/ProjectSearchDialog.tsx",
@@ -4716,13 +4121,6 @@
     },
     {
       "code": "jsx-a11y(prefer-tag-over-role)",
-      "fingerprint": "71e5699a3c8b70a03a14803de41518f19bf4651c96e5e53524a524d5713f4ae0",
-      "path": "apps/web/src/features/workspace/search/ProjectSearchDialog.tsx",
-      "line": 130,
-      "message": "Prefer `dialog` over `role` attribute `dialog`."
-    },
-    {
-      "code": "jsx-a11y(prefer-tag-over-role)",
       "fingerprint": "1dda75d62c2d2f52088be349477bf51b7095222814a27d59f148fc82b2a9f90d",
       "path": "apps/web/src/features/workspace/search/ProjectSearchDialog.tsx",
       "line": 158,
@@ -4734,13 +4132,6 @@
       "path": "apps/web/src/features/workspace/search/ProjectSearchDialog.tsx",
       "line": 207,
       "message": "Prefer `option` over `role` attribute `option`."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "b216dc5473bcc1a3ef8b54d66c73bff54888df675496b8eaaaddad4e54e2408f",
-      "path": "apps/web/src/features/workspace/search/chat-thread-data.ts",
-      "line": 38,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -5079,13 +4470,6 @@
       "message": "Unsafe assignment of an any value."
     },
     {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "ff3992a2cfa5604eb2d5122aa365549662ad45733b2fcf43996d3d8595523374",
-      "path": "apps/web/src/lib/convex-client.ts",
-      "line": 12,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
       "code": "typescript(no-unsafe-assignment)",
       "fingerprint": "dba3f4e21bbe704c4b908a48b5b4f0695443b32217f1790b05aa6e75c064555b",
       "path": "apps/web/src/lib/dev-auth-bypass.ts",
@@ -5161,20 +4545,6 @@
       "path": "apps/web/src/routes/__root.tsx",
       "line": 172,
       "message": "Function expected no return value."
-    },
-    {
-      "code": "react(no-unstable-nested-components)",
-      "fingerprint": "24819ccdbcb21111b18c813a91c903e75430139c1cdcb1dca000990d77ad9ff8",
-      "path": "apps/web/src/routes/__root.tsx",
-      "line": 205,
-      "message": "Do not define components during render."
-    },
-    {
-      "code": "unicorn(consistent-function-scoping)",
-      "fingerprint": "24819ccdbcb21111b18c813a91c903e75430139c1cdcb1dca000990d77ad9ff8",
-      "path": "apps/web/src/routes/__root.tsx",
-      "line": 205,
-      "message": "Function `TrackDevtoolsPanel` does not capture any variables from its parent scope"
     },
     {
       "code": "typescript(prefer-nullish-coalescing)",
@@ -5329,153 +4699,6 @@
       "path": "apps/web/src/routes/workspace.tsx",
       "line": 15,
       "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "66349de7c0e2b1091bc1bfb2591be018c0a1bf8746b9104e23c854aba4052c03",
-      "path": "convex/assistant.ts",
-      "line": 115,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "fa216ebc5bfbf8f930a3869f5409ae598d4ff06dff8000bd4727bcfe1b050029",
-      "path": "convex/assistant.ts",
-      "line": 116,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "0f817a660fb4ad473e52f7b06c5359abbf100df0d1e236095f07b137dca69b0b",
-      "path": "convex/assistant.ts",
-      "line": 179,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "0f817a660fb4ad473e52f7b06c5359abbf100df0d1e236095f07b137dca69b0b",
-      "path": "convex/assistant.ts",
-      "line": 179,
-      "message": "Unsafe member access .taskSuggestions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0f817a660fb4ad473e52f7b06c5359abbf100df0d1e236095f07b137dca69b0b",
-      "path": "convex/assistant.ts",
-      "line": 179,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0f817a660fb4ad473e52f7b06c5359abbf100df0d1e236095f07b137dca69b0b",
-      "path": "convex/assistant.ts",
-      "line": 179,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "4ee797b3b4bd18bf044c995b4e5211ee0eeac9cba4153c92732a4b41f3138552",
-      "path": "convex/assistant.ts",
-      "line": 216,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4ee797b3b4bd18bf044c995b4e5211ee0eeac9cba4153c92732a4b41f3138552",
-      "path": "convex/assistant.ts",
-      "line": 216,
-      "message": "Unsafe member access .assistantNode on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-return)",
-      "fingerprint": "4ee797b3b4bd18bf044c995b4e5211ee0eeac9cba4153c92732a4b41f3138552",
-      "path": "convex/assistant.ts",
-      "line": 216,
-      "message": "Unsafe return of a value of type `any`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4ee797b3b4bd18bf044c995b4e5211ee0eeac9cba4153c92732a4b41f3138552",
-      "path": "convex/assistant.ts",
-      "line": 216,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "unicorn(no-array-reverse)",
-      "fingerprint": "f6a1664ad3745aecd46ad26fd75009632d1087a53f39ae666f4e2790e719eaf4",
-      "path": "convex/assistant.ts",
-      "line": 260,
-      "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "934025d537e538582a39db2956886d3ffe7bbf26cbd74711cde1983dcb8a7678",
-      "path": "convex/assistant.ts",
-      "line": 580,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "934025d537e538582a39db2956886d3ffe7bbf26cbd74711cde1983dcb8a7678",
-      "path": "convex/assistant.ts",
-      "line": 580,
-      "message": "Unsafe member access .assistantNode on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-return)",
-      "fingerprint": "934025d537e538582a39db2956886d3ffe7bbf26cbd74711cde1983dcb8a7678",
-      "path": "convex/assistant.ts",
-      "line": 580,
-      "message": "Unsafe return of a value of type `any`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "934025d537e538582a39db2956886d3ffe7bbf26cbd74711cde1983dcb8a7678",
-      "path": "convex/assistant.ts",
-      "line": 580,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "f15a8e656316a11842dc7de9ba667aeb5ddb3133d29c156460785814ffef8109",
-      "path": "convex/assistantNode.ts",
-      "line": 317,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "0e38a13d51adc17c42e3351b4186fa8bd22eff25828465a7faf13e1468ccc875",
-      "path": "convex/assistantNode.ts",
-      "line": 323,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "0e38a13d51adc17c42e3351b4186fa8bd22eff25828465a7faf13e1468ccc875",
-      "path": "convex/assistantNode.ts",
-      "line": 323,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "0e38a13d51adc17c42e3351b4186fa8bd22eff25828465a7faf13e1468ccc875",
-      "path": "convex/assistantNode.ts",
-      "line": 323,
-      "message": "Unsafe member access .memoryActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0e38a13d51adc17c42e3351b4186fa8bd22eff25828465a7faf13e1468ccc875",
-      "path": "convex/assistantNode.ts",
-      "line": 323,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "unicorn(no-array-reverse)",
-      "fingerprint": "f6a1664ad3745aecd46ad26fd75009632d1087a53f39ae666f4e2790e719eaf4",
-      "path": "convex/assistantNode.ts",
-      "line": 394,
-      "message": "Use `Array#toReversed()` instead of `Array#reverse()`."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -5696,24 +4919,10 @@
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "3ff12fade859bb4d423146e0b948a16243712ee100f78f976cf001042811290e",
-      "path": "convex/channelThreads.ts",
-      "line": 182,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "10799a7046aafb5b147fda58fd60f4b2f59c067e8f79b94be8c0ff15d20423e0",
       "path": "convex/channelThreads.ts",
       "line": 299,
       "message": "Unsafe type assertion: type 'Id<\"groups\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ed79f674a83b9378bc8277e0c5b46fd7ccdafd250bf145757f69d805f3112538",
-      "path": "convex/channelThreads.ts",
-      "line": 316,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -5742,27 +4951,6 @@
       "path": "convex/channels.ts",
       "line": 52,
       "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-return)",
-      "fingerprint": "83bbcb25a084c79a416220d1f743be86facc28c43f55d199955dfebc71f82749",
-      "path": "convex/channels.ts",
-      "line": 72,
-      "message": "Unsafe return of a value of type `any[]`."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "63e9a18280669e3038e6a4b8a7aec8403c0dd667fd249f555b20782a5b29c555",
-      "path": "convex/channels.ts",
-      "line": 73,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-return)",
-      "fingerprint": "32008b692c5a7ad79bb53b126d0db0006c0ef0f83e378f88cfb6fd79ff2479c4",
-      "path": "convex/channels.ts",
-      "line": 74,
-      "message": "Unsafe return of a value of type `any`."
     },
     {
       "code": "typescript(no-unsafe-return)",
@@ -6444,76 +5632,6 @@
       "message": "Unsafe member access .displayName on an `any` value."
     },
     {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "29d314e537a89e32f19f7539441f0a11d4c127f9bdd662592df6effd0c0a1728",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1489,
-      "message": "Unsafe member access .projectId on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "29d314e537a89e32f19f7539441f0a11d4c127f9bdd662592df6effd0c0a1728",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1489,
-      "message": "Unsafe member access .companyId on an `any` value."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "b3ea678152dc20321f7cad836f783ab7c56797efd816df4b1207858f5219c45c",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1490,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b3ea678152dc20321f7cad836f783ab7c56797efd816df4b1207858f5219c45c",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1490,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b3ea678152dc20321f7cad836f783ab7c56797efd816df4b1207858f5219c45c",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1490,
-      "message": "Unsafe member access .status on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "9b0cf257c289ef5b875be3338a430379bf50f0f8fa8cf0a3ab2cad8045525cc6",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1491,
-      "message": "Unsafe argument of type any assigned to a parameter of type Id<string>."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "9b0cf257c289ef5b875be3338a430379bf50f0f8fa8cf0a3ab2cad8045525cc6",
-      "path": "convex/companyRelationships.test.ts",
-      "line": 1491,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "691347975805830cce6c6a1249da53d8feb8bc9702b703a7bab81a2c24acee3a",
-      "path": "convex/crons.ts",
-      "line": 7,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "691347975805830cce6c6a1249da53d8feb8bc9702b703a7bab81a2c24acee3a",
-      "path": "convex/crons.ts",
-      "line": 7,
-      "message": "Unsafe member access .memoryActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "691347975805830cce6c6a1249da53d8feb8bc9702b703a7bab81a2c24acee3a",
-      "path": "convex/crons.ts",
-      "line": 7,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
       "code": "unicorn(no-useless-undefined)",
       "fingerprint": "bfbc6d2d87485e01c2e8857c1835c823f8f9f8837bbbc77425c2b7a8d907b72a",
       "path": "convex/demoSeed.ts",
@@ -6570,27 +5688,6 @@
       "message": "Do not use useless `undefined`."
     },
     {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "74a621be734025757a46ddc23063bc2c57ca3f69d567b6661b2352c1d15d0485",
-      "path": "convex/lib/ai.ts",
-      "line": 80,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(consistent-return)",
-      "fingerprint": "444e54d909968a5a31ef7c42e0435feacd00cc4315ca2e09e322c1e9c7b068d7",
-      "path": "convex/lib/ai.ts",
-      "line": 97,
-      "message": "Async function 'generateTrackText' expected a return value."
-    },
-    {
-      "code": "typescript(consistent-return)",
-      "fingerprint": "3b2a02657ce4208e578c6b49b47dbd57ffd458d205a4bc5658eb72460e3dc3dd",
-      "path": "convex/lib/ai.ts",
-      "line": 126,
-      "message": "Async function 'generateTrackDocumentNotes' expected a return value."
-    },
-    {
       "code": "typescript(no-unnecessary-type-conversion)",
       "fingerprint": "e3ce6c4d39ef4f209789a22973b34aa52cc1a5e962687b2c7150b9c33ebf429d",
       "path": "convex/lib/apns.ts",
@@ -6617,34 +5714,6 @@
       "path": "convex/lib/apns.ts",
       "line": 219,
       "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "18712c03a65fbdfb52fd5c59d4213a8d260f5636fdc5d5daa7f3f9bf87892c22",
-      "path": "convex/lib/assistantAttachments.ts",
-      "line": 55,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
-    },
-    {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "f992c3a208ed37eea02d52b52f31a3102a59627aa0aa6c486477d104fe7db9c4",
-      "path": "convex/lib/attachmentTextExtraction.ts",
-      "line": 63,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
-    },
-    {
-      "code": "typescript(no-redundant-type-constituents)",
-      "fingerprint": "e2e132256eaf75f7990aad81bf87a0dc4b3788f0e2e75ccf5ad7fa426f871c2f",
-      "path": "convex/lib/box.ts",
-      "line": 25,
-      "message": "\"\\\"creating\\\"\" | \"\\\"deleted\\\"\" | \"\\\"error\\\"\" | \"\\\"paused\\\"\" | \"\\\"ready\\\"\" is overridden by string in this union type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "511ed87574d2e15917a3922247495cfa4969a49eceec2632ba11f167bf60fe20",
-      "path": "convex/lib/companyPolicy.ts",
-      "line": 163,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
@@ -6683,69 +5752,6 @@
     },
     {
       "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "edb3cd4fb40eb8044bf81dfe13ecfee4bb43a81e13b00401d137d3309b77b3d9",
-      "path": "convex/lib/taskData.ts",
-      "line": 176,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "8b53cc4a6c28dab04ecf6b603470625f9f76a9e915c6027d7ca11f4c036ac476",
-      "path": "convex/lib/taskData.ts",
-      "line": 177,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "236d03f42dd6ca4c54565dd5c42c5ffaa8e566b5d376d3cadf40591e8b5c11fc",
-      "path": "convex/lib/taskData.ts",
-      "line": 178,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d2293e464cce2e12f4ae88dc461a9461e7ed8f9d7c5e93bf812a344ae17ccf73",
-      "path": "convex/lib/taskData.ts",
-      "line": 180,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "5c3bfe833a10b064a36ab47560bf2491e2a9ebd87c5e731be3178f2e98a1b8f9",
-      "path": "convex/lib/taskData.ts",
-      "line": 181,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "85b2209a4b57f6d8ba680d35d3f8d4694928872aa45fe6f420c3cbda1488bc86",
-      "path": "convex/lib/taskData.ts",
-      "line": 193,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "9a03649a41405d229a5634cbbd07428a2164637760f6c92630f96ce3ca7de337",
-      "path": "convex/lib/taskData.ts",
-      "line": 203,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "8d573fb859280648ef63292b7165426ddac953cdf1525c085a5fadd1783ed445",
-      "path": "convex/lib/taskData.ts",
-      "line": 205,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "f31591d3447b4415461ee676f01cc1e1144525bb59dcd945806c9c2df7958dee",
-      "path": "convex/lib/taskData.ts",
-      "line": 208,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
       "fingerprint": "47d8c3b4f96c970dce9183af3d4b6b7c6331f4232957bfd9d33867a58d5dac32",
       "path": "convex/lib/taskEvidence.ts",
       "line": 78,
@@ -6766,74 +5772,11 @@
       "message": "Do not use useless `undefined`."
     },
     {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "922489e71daa91f72785450159895364a5fbb9c717baa47835c2249a139a966c",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 310,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "6aee3420e072f1fd2d67f8fb55cfdebd4e0be14771521000f6bf0dacd53e83cb",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 311,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "8cf76c755cfcde50db365f05cce91296359344a46ae381e3c2c966d35b0f87ea",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 342,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "6ab8f3b7a2732a0d33e360681eb68a66de4ec50d54e034c0d0155bc9aa7de3fc",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 349,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "317af3fe10381a497de3f590ef0ef209d5073254d56697240d060a81ddf29772",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 355,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "6ab8f3b7a2732a0d33e360681eb68a66de4ec50d54e034c0d0155bc9aa7de3fc",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 361,
-      "message": "Unsafe type assertion: type 'Id<\"groups\"> | undefined' is more narrow than the original type."
-    },
-    {
       "code": "unicorn(no-useless-undefined)",
       "fingerprint": "13cf6334087e1b03bcee72b9f39b2206da138d9963a1f2c5cf413e3f20761999",
       "path": "convex/lib/taskLifecycle.ts",
       "line": 365,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "630980e91e8acbf18f6763eae64cf58eb16342e56fa193ecf9883509c5d3e414",
-      "path": "convex/lib/taskLifecycle.ts",
-      "line": 386,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "e9bc3ceb3d751235f23a799b3554aa5db7e3e5fbc23257f374f0674464183d63",
-      "path": "convex/lib/taskModel.ts",
-      "line": 38,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "43fcd0df00c8940a320ed48c2bf69d13ae734e5afd6c1efb624400e1005227c7",
-      "path": "convex/lib/taskModel.ts",
-      "line": 53,
-      "message": "Unsafe type assertion: type '\"high\" | \"low\" | \"medium\" | \"none\" | \"urgent\" | undefined' is more narrow than the original type."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -6897,307 +5840,6 @@
       "path": "convex/lib/taskPolicy.ts",
       "line": 191,
       "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "a152f9716f05c37b95c840680abc9bb209ba690811b5bcce85fd1cc332886226",
-      "path": "convex/memory.test.ts",
-      "line": 26,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "a152f9716f05c37b95c840680abc9bb209ba690811b5bcce85fd1cc332886226",
-      "path": "convex/memory.test.ts",
-      "line": 26,
-      "message": "Unsafe member access .memory on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a152f9716f05c37b95c840680abc9bb209ba690811b5bcce85fd1cc332886226",
-      "path": "convex/memory.test.ts",
-      "line": 26,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "860a2ef8eef1667af179441f3a5840a48a0c226a46644a13ae09d8173f50735d",
-      "path": "convex/memory.test.ts",
-      "line": 31,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "860a2ef8eef1667af179441f3a5840a48a0c226a46644a13ae09d8173f50735d",
-      "path": "convex/memory.test.ts",
-      "line": 31,
-      "message": "Unsafe member access .memory on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "860a2ef8eef1667af179441f3a5840a48a0c226a46644a13ae09d8173f50735d",
-      "path": "convex/memory.test.ts",
-      "line": 31,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "860a2ef8eef1667af179441f3a5840a48a0c226a46644a13ae09d8173f50735d",
-      "path": "convex/memory.test.ts",
-      "line": 31,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "1bc40ef277df736031f875bf271c022abf9bfbe7c109e623d85eebec311a1f7c",
-      "path": "convex/memory.test.ts",
-      "line": 41,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "1bc40ef277df736031f875bf271c022abf9bfbe7c109e623d85eebec311a1f7c",
-      "path": "convex/memory.test.ts",
-      "line": 41,
-      "message": "Unsafe member access .memory on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "1bc40ef277df736031f875bf271c022abf9bfbe7c109e623d85eebec311a1f7c",
-      "path": "convex/memory.test.ts",
-      "line": 41,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "179bcbad4176cd82c9e6048c66e8fd9e25c41b3c29140fb626371156d32fa39d",
-      "path": "convex/memory.test.ts",
-      "line": 49,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "179bcbad4176cd82c9e6048c66e8fd9e25c41b3c29140fb626371156d32fa39d",
-      "path": "convex/memory.test.ts",
-      "line": 49,
-      "message": "Unsafe member access .memory on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "179bcbad4176cd82c9e6048c66e8fd9e25c41b3c29140fb626371156d32fa39d",
-      "path": "convex/memory.test.ts",
-      "line": 49,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "17e96891299ff6c867b0d662dbe4dd36b2964caf0be796702e391602542f5b65",
-      "path": "convex/memory.test.ts",
-      "line": 60,
-      "message": "'imports' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "bb6bcdf9e8a4bdfeb06012dea5a9ed08ad04a88ab154fdf0f2c32ba0f3c899b2",
-      "path": "convex/memory.test.ts",
-      "line": 64,
-      "message": "'auditActions' is already declared in the upper scope."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "60769b4953f2adf1fe3547befd878edfb709950f4bbc38a03178bd221e251691",
-      "path": "convex/memory.test.ts",
-      "line": 93,
-      "message": "'otherProjectId' is already declared in the upper scope."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "869d77bfaa0612b531bfeae8e69db878771bbb1b6639ebb639553c3a4d2681ff",
-      "path": "convex/memory.test.ts",
-      "line": 112,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "869d77bfaa0612b531bfeae8e69db878771bbb1b6639ebb639553c3a4d2681ff",
-      "path": "convex/memory.test.ts",
-      "line": 112,
-      "message": "Unsafe member access .memory on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "869d77bfaa0612b531bfeae8e69db878771bbb1b6639ebb639553c3a4d2681ff",
-      "path": "convex/memory.test.ts",
-      "line": 112,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 25,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 25,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 25,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 53,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 53,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "78edb6ad3d7f8f527a82ebd75d5dc211e18c970cd3baa9cc7fe17e14428fc063",
-      "path": "convex/memory.ts",
-      "line": 53,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "ae716697824a9fab9e1a45a698981672231b53aee94c26552ea4748e536bab58",
-      "path": "convex/memory.ts",
-      "line": 63,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "ae716697824a9fab9e1a45a698981672231b53aee94c26552ea4748e536bab58",
-      "path": "convex/memory.ts",
-      "line": 63,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "ae716697824a9fab9e1a45a698981672231b53aee94c26552ea4748e536bab58",
-      "path": "convex/memory.ts",
-      "line": 102,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "ae716697824a9fab9e1a45a698981672231b53aee94c26552ea4748e536bab58",
-      "path": "convex/memory.ts",
-      "line": 102,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "c136889e161ff31604451b7dace7a4027395e91c36f40ff1e5d6eb18af697d80",
-      "path": "convex/memory.ts",
-      "line": 467,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "ac6e43e1f8d8cf3a1deaf37e0b8a63b91f0c919cf3c86349ff73c5a63388533d",
-      "path": "convex/memoryActions.ts",
-      "line": 331,
-      "message": "This assertion is unnecessary since the receiver accepts the original type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "7f23af269a879f0e90cc654d06d642ea56df3b47daa4ec32f297bd14e3a14254",
-      "path": "convex/memoryActions.ts",
-      "line": 610,
-      "message": "Unsafe type assertion: type '\"node\"' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "0b625c1988b3a8ac7de0b8286f268219190f63e917985a8c23e73713891668e5",
-      "path": "convex/memoryActions.ts",
-      "line": 611,
-      "message": "Unsafe type assertion: type '\"small\"' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(prefer-nullish-coalescing)",
-      "fingerprint": "5c90bcc026ddbd1f76f6e26f1ceda58187849fbc877bf1ae8371954082618a75",
-      "path": "convex/memoryActions.ts",
-      "line": 861,
-      "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
-    },
-    {
-      "code": "eslint(no-shadow)",
-      "fingerprint": "e934584676e92831d9a2b2daa134b1514a371ead7f3e8770b9b6ebcab595b523",
-      "path": "convex/memoryActions.ts",
-      "line": 946,
-      "message": "'action' is already declared in the upper scope."
-    },
-    {
-      "code": "typescript(prefer-nullish-coalescing)",
-      "fingerprint": "7b82c73c5de12cc2ac08bd7a769fcb1b8c9e18f119ba5f347bca944c783ea67e",
-      "path": "convex/memoryActions.ts",
-      "line": 985,
-      "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "f1bee265bede32a735b64c83f8b9bbeb2bfb284790bac05d0fe4ad0be93aa80c",
-      "path": "convex/messages.ts",
-      "line": 140,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "a04daf69f86acc796a7cb590cd03ebe25ac0c9ca2a14c0bbedcccb8151e7cdf4",
-      "path": "convex/messages.ts",
-      "line": 146,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "28d8331aefb055d4a24bbf3396469173a968c9e545607bdfbd80e289969bfd12",
-      "path": "convex/messages.ts",
-      "line": 150,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "66349de7c0e2b1091bc1bfb2591be018c0a1bf8746b9104e23c854aba4052c03",
-      "path": "convex/messages.ts",
-      "line": 236,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "fa216ebc5bfbf8f930a3869f5409ae598d4ff06dff8000bd4727bcfe1b050029",
-      "path": "convex/messages.ts",
-      "line": 237,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "66349de7c0e2b1091bc1bfb2591be018c0a1bf8746b9104e23c854aba4052c03",
-      "path": "convex/messages.ts",
-      "line": 266,
-      "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "fa216ebc5bfbf8f930a3869f5409ae598d4ff06dff8000bd4727bcfe1b050029",
-      "path": "convex/messages.ts",
-      "line": 267,
-      "message": "Do not use useless `undefined`."
     },
     {
       "code": "typescript(no-explicit-any)",
@@ -7270,13 +5912,6 @@
       "message": "'readState' is already declared in the upper scope."
     },
     {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "8b1bd4dd7e4c09cd90a20cd3a4dec01ac59c555a0f236e9e41b6b535f49e7c47",
-      "path": "convex/mobile.ts",
-      "line": 140,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
       "code": "typescript(no-unsafe-return)",
       "fingerprint": "316679d0c46664a061348766c83fb525b48c12edae6c6f22b9b4dae5f0530090",
       "path": "convex/mobile.ts",
@@ -7310,13 +5945,6 @@
       "path": "convex/mobile.ts",
       "line": 257,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "1819808ae7e09c3d927a603d81c774c4882059736e20c451aa850e4ff7ad1480",
-      "path": "convex/mobile.ts",
-      "line": 261,
-      "message": "Unsafe assignment of an any value."
     },
     {
       "code": "typescript(no-unsafe-assignment)",
@@ -7445,104 +6073,6 @@
       "message": "'request' is already declared in the upper scope."
     },
     {
-      "code": "unicorn(no-array-sort)",
-      "fingerprint": "7f2f108d56d9d4d4bb9c6e6bae7cd45e1bfa5e9872a3d2b07f1d615baf3cbe3f",
-      "path": "convex/projectExit.ts",
-      "line": 45,
-      "message": "Use `Array#toSorted()` instead of `Array#sort()`."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "f79af8897d1f8cc722ade7eff29aaa3a104ca72abec5f8c5f27ed18ec9c285a1",
-      "path": "convex/projectExit.ts",
-      "line": 46,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 191,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 191,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 191,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 223,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 223,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "6e5d99a8a14252250134840d232fdf0526f0da86a5a75f13ddabdfe90edfd161",
-      "path": "convex/projectExit.ts",
-      "line": 223,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 274,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 274,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 274,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 308,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 308,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 308,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
       "code": "typescript(no-non-null-assertion)",
       "fingerprint": "2e2ff77fd5bbd997c81106104117ba18ce56ffdf2cb105d2879270ebc7462494",
       "path": "convex/projectExit.ts",
@@ -7578,20 +6108,6 @@
       "message": "Unsafe assignment of an any value."
     },
     {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "3a7c782fad5d91124014cb172e9c76ddc2b5efcaae0ac75471d22b2072d741e7",
-      "path": "convex/projectExit.ts",
-      "line": 484,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a878af623cbdffcbb2b11c044a46df4507d847673d44a06050ed26a709e93bf0",
-      "path": "convex/projectExit.ts",
-      "line": 505,
-      "message": "Unsafe type assertion: type 'never' is more narrow than the original type."
-    },
-    {
       "code": "unicorn(no-array-sort)",
       "fingerprint": "68fcb21767f16ddcfb59247256932342eb5abf578d5e3d9a6f28c7e763305a31",
       "path": "convex/projectExit.ts",
@@ -7604,846 +6120,6 @@
       "path": "convex/projectExit.ts",
       "line": 584,
       "message": "Unnecessary conditional, value is always truthy."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "0884494fad0ff4bac58faa2016c5ea4abe979011f53e9a4e1ecd8d2d46ab7419",
-      "path": "convex/projectExit.ts",
-      "line": 660,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-conversion)",
-      "fingerprint": "ed8d0efd6df28ac6fbf33738eafa09f7ab5bf3c736f582b5f4f9109bdf75fafa",
-      "path": "convex/projectExit.ts",
-      "line": 662,
-      "message": "This type conversion does not change the type or value of the expression."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 729,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 729,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 729,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "06a578d859815a5e0c0610465ef29f76def53ed94e2b389786dfbdabba88241f",
-      "path": "convex/projectExit.ts",
-      "line": 741,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 766,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 766,
-      "message": "Unsafe member access .projectExitActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "d8705968dd694f4dbfacac3101f6f2dbe0fe74b875dcad5669af284384c1daad",
-      "path": "convex/projectExit.ts",
-      "line": 766,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "a2c398b29d958334299059e70cef778c4f79d5651565a98acad50041e1fdf5bb",
-      "path": "convex/projectExitActions.ts",
-      "line": 21,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "cce5421a0e42d5998b116926c8c1cf3737b43e49fd61df448799a167aea20999",
-      "path": "convex/projectExitActions.ts",
-      "line": 23,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "c3cd0b729511cf93b29897da352f4853560dbd352bcbca4269a83ad3f9236874",
-      "path": "convex/projectExitActions.ts",
-      "line": 24,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "c3cd0b729511cf93b29897da352f4853560dbd352bcbca4269a83ad3f9236874",
-      "path": "convex/projectExitActions.ts",
-      "line": 24,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "efacb3b97fd58b63663e43fb5c70e2f0cc4d55c49400d3fb2997d326c30f29ae",
-      "path": "convex/projectExitActions.ts",
-      "line": 38,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "efacb3b97fd58b63663e43fb5c70e2f0cc4d55c49400d3fb2997d326c30f29ae",
-      "path": "convex/projectExitActions.ts",
-      "line": 38,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "436e1ad4483e5e7fcd71f34cbb7d4ec9928a820e146061f6b4de3cbb503cb663",
-      "path": "convex/projectExitActions.ts",
-      "line": 39,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "436e1ad4483e5e7fcd71f34cbb7d4ec9928a820e146061f6b4de3cbb503cb663",
-      "path": "convex/projectExitActions.ts",
-      "line": 39,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b72e70a4c4f16d8d73836f087db7c4173d0be1b091661621c93561c361e83f4b",
-      "path": "convex/projectExitActions.ts",
-      "line": 43,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b72e70a4c4f16d8d73836f087db7c4173d0be1b091661621c93561c361e83f4b",
-      "path": "convex/projectExitActions.ts",
-      "line": 43,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4bda89f105d1c92da954c7c97be26c3f907ba834886b29923572568cde1927ed",
-      "path": "convex/projectExitActions.ts",
-      "line": 44,
-      "message": "Unsafe member access .imports on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4bda89f105d1c92da954c7c97be26c3f907ba834886b29923572568cde1927ed",
-      "path": "convex/projectExitActions.ts",
-      "line": 44,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "35ad8b9070c0250ab43285455e022209b19a3361de6a6d1d06afbc3ff1a9e2e9",
-      "path": "convex/projectExitActions.ts",
-      "line": 45,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "20c9dde5c1f15968d1de833c96c52c08a1c922d895796f5ecf514f075ddc0da4",
-      "path": "convex/projectExitActions.ts",
-      "line": 47,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6a1830e83860e1c365929e04ca4f6c3849e52f34a00128eea2dfd63d26726367",
-      "path": "convex/projectExitActions.ts",
-      "line": 48,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6a1830e83860e1c365929e04ca4f6c3849e52f34a00128eea2dfd63d26726367",
-      "path": "convex/projectExitActions.ts",
-      "line": 48,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "545eeeefe11143d326099305f1b09dc483389bee88aa589d0a4910591489a480",
-      "path": "convex/projectExitActions.ts",
-      "line": 52,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "545eeeefe11143d326099305f1b09dc483389bee88aa589d0a4910591489a480",
-      "path": "convex/projectExitActions.ts",
-      "line": 52,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "0ed7a9a92bea46edca607bab0b15a6ae0c21176abb5373bc08ef1d9c79187773",
-      "path": "convex/projectExitActions.ts",
-      "line": 53,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "0ed7a9a92bea46edca607bab0b15a6ae0c21176abb5373bc08ef1d9c79187773",
-      "path": "convex/projectExitActions.ts",
-      "line": 53,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "fd673a20dc6c9aa8eaf3f20a862b5d00ecd320494cf95148d0afdd1dff37255a",
-      "path": "convex/projectExitActions.ts",
-      "line": 54,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unnecessary-type-assertion)",
-      "fingerprint": "fd673a20dc6c9aa8eaf3f20a862b5d00ecd320494cf95148d0afdd1dff37255a",
-      "path": "convex/projectExitActions.ts",
-      "line": 54,
-      "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "fd673a20dc6c9aa8eaf3f20a862b5d00ecd320494cf95148d0afdd1dff37255a",
-      "path": "convex/projectExitActions.ts",
-      "line": 54,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "fd673a20dc6c9aa8eaf3f20a862b5d00ecd320494cf95148d0afdd1dff37255a",
-      "path": "convex/projectExitActions.ts",
-      "line": 54,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "fd673a20dc6c9aa8eaf3f20a862b5d00ecd320494cf95148d0afdd1dff37255a",
-      "path": "convex/projectExitActions.ts",
-      "line": 54,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "603c3c90e75aab50741c8248af4a440b06a19497c5d12ddf31ef72cb429eab2a",
-      "path": "convex/projectExitActions.ts",
-      "line": 57,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d802f4df231cdbc8f510e1ea18317dd80324c8b620e3610172e5530aa3a3c5de",
-      "path": "convex/projectExitActions.ts",
-      "line": 60,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "ca7faeb43899677e1f38b1cc7c96d56ebf9bf3f5f969a0912d79cb1b9c899606",
-      "path": "convex/projectExitActions.ts",
-      "line": 61,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "ca7faeb43899677e1f38b1cc7c96d56ebf9bf3f5f969a0912d79cb1b9c899606",
-      "path": "convex/projectExitActions.ts",
-      "line": 61,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "534cc7e6a4ee34467c8bd5f4f600eeb43934d6f2a9dd0b8253a05f6a2ae4c5bd",
-      "path": "convex/projectExitActions.ts",
-      "line": 69,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "534cc7e6a4ee34467c8bd5f4f600eeb43934d6f2a9dd0b8253a05f6a2ae4c5bd",
-      "path": "convex/projectExitActions.ts",
-      "line": 69,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "e094af641b7572eee8199bdf1f264a00222e76ba2fa982522241fe27ec9a734e",
-      "path": "convex/projectExitActions.ts",
-      "line": 75,
-      "message": "Unsafe member access .imports on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "d74d9501ffadddc8aede327e961ba74b3ac01cff00546e8ca234b531e0d69e2f",
-      "path": "convex/projectExitActions.ts",
-      "line": 77,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "d74d9501ffadddc8aede327e961ba74b3ac01cff00546e8ca234b531e0d69e2f",
-      "path": "convex/projectExitActions.ts",
-      "line": 77,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "032d830fe8ab703c09ce67b6e0fc48455e4d9fa1857fcc6dd51c3981006ddfc3",
-      "path": "convex/projectExitActions.ts",
-      "line": 78,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "032d830fe8ab703c09ce67b6e0fc48455e4d9fa1857fcc6dd51c3981006ddfc3",
-      "path": "convex/projectExitActions.ts",
-      "line": 78,
-      "message": "Unsafe member access .scope on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "2eec813066b7a84de150b577c82a6d44a9a1fad63275dc8293e41fc36f22e764",
-      "path": "convex/projectExitActions.ts",
-      "line": 79,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "2eec813066b7a84de150b577c82a6d44a9a1fad63275dc8293e41fc36f22e764",
-      "path": "convex/projectExitActions.ts",
-      "line": 79,
-      "message": "Unsafe member access .groupId on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "994dd4b8f60b4a09d0c782928b77fe3c8367698f7f827cd33611857bb5456f99",
-      "path": "convex/projectExitActions.ts",
-      "line": 80,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "994dd4b8f60b4a09d0c782928b77fe3c8367698f7f827cd33611857bb5456f99",
-      "path": "convex/projectExitActions.ts",
-      "line": 80,
-      "message": "Unsafe member access .sourceKind on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "ce8973db66b9113f9232a8109afcfbbd14f50cfc83cb78acd07c2e0b65d95a9b",
-      "path": "convex/projectExitActions.ts",
-      "line": 81,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "ce8973db66b9113f9232a8109afcfbbd14f50cfc83cb78acd07c2e0b65d95a9b",
-      "path": "convex/projectExitActions.ts",
-      "line": 81,
-      "message": "Unsafe member access .sourceStorageIds on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "33150488f53c26fdecb9798afb357426483047e74a88effabdf4d6b434e51263",
-      "path": "convex/projectExitActions.ts",
-      "line": 82,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "33150488f53c26fdecb9798afb357426483047e74a88effabdf4d6b434e51263",
-      "path": "convex/projectExitActions.ts",
-      "line": 82,
-      "message": "Unsafe member access .sourceUrls on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "fbd825d26e1ca447a5f69f7acde65c28e6c1c2c153e9c07907d26a844b591088",
-      "path": "convex/projectExitActions.ts",
-      "line": 83,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "fbd825d26e1ca447a5f69f7acde65c28e6c1c2c153e9c07907d26a844b591088",
-      "path": "convex/projectExitActions.ts",
-      "line": 83,
-      "message": "Unsafe member access .completedAt on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "00581b7fae886616dd5f8b4a376d12888a4dc41d53e80a9f180c563439b4b8d8",
-      "path": "convex/projectExitActions.ts",
-      "line": 85,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "00581b7fae886616dd5f8b4a376d12888a4dc41d53e80a9f180c563439b4b8d8",
-      "path": "convex/projectExitActions.ts",
-      "line": 85,
-      "message": "Unsafe member access .scope on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4254fdce7fa5a578a35188568f168e1059267872cd976662a232988b8f4801d8",
-      "path": "convex/projectExitActions.ts",
-      "line": 86,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4254fdce7fa5a578a35188568f168e1059267872cd976662a232988b8f4801d8",
-      "path": "convex/projectExitActions.ts",
-      "line": 86,
-      "message": "Unsafe member access .boxScratchPath on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "91a88a2122088d7b9f2f5f034651e47b6cb8b8c23fa4ec2cff5991d927819234",
-      "path": "convex/projectExitActions.ts",
-      "line": 87,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "91a88a2122088d7b9f2f5f034651e47b6cb8b8c23fa4ec2cff5991d927819234",
-      "path": "convex/projectExitActions.ts",
-      "line": 87,
-      "message": "Unsafe member access .boxScratchPath on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "ae168c1877c7ca541341efad25e9f3d71c4a333b4836b91f106df848ede3bd18",
-      "path": "convex/projectExitActions.ts",
-      "line": 88,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "8d442c1983945bf149549555e8b2fd4996c8062228c717e2d70a6396a734b405",
-      "path": "convex/projectExitActions.ts",
-      "line": 89,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "8d442c1983945bf149549555e8b2fd4996c8062228c717e2d70a6396a734b405",
-      "path": "convex/projectExitActions.ts",
-      "line": 89,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "df55a1fec94630d3c32371e7154611f1ae27e23155440a9f0d362ac2ed22b58f",
-      "path": "convex/projectExitActions.ts",
-      "line": 90,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "68c0c20f1d174342e8b349d09b11fe19d6374121b87b4ca5299af5ec6dcd92e8",
-      "path": "convex/projectExitActions.ts",
-      "line": 93,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "68c0c20f1d174342e8b349d09b11fe19d6374121b87b4ca5299af5ec6dcd92e8",
-      "path": "convex/projectExitActions.ts",
-      "line": 93,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "55f8b1d6fa7a69e1294d0410e94b359adcd9278cb73a7c032c7b4777a220ea66",
-      "path": "convex/projectExitActions.ts",
-      "line": 94,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "a257d1971a273c8085131838a35f92258db328637fcc1d12b5ac27cc059ae588",
-      "path": "convex/projectExitActions.ts",
-      "line": 97,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "a257d1971a273c8085131838a35f92258db328637fcc1d12b5ac27cc059ae588",
-      "path": "convex/projectExitActions.ts",
-      "line": 97,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "42efd023f46a1674f4c21a9cb9feabf1996c55b4f06fae71aad6dd85eb656828",
-      "path": "convex/projectExitActions.ts",
-      "line": 101,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "42efd023f46a1674f4c21a9cb9feabf1996c55b4f06fae71aad6dd85eb656828",
-      "path": "convex/projectExitActions.ts",
-      "line": 101,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "9ca1f5471e3c3255968572fe06e51ee1c5840418803e1dbcd6f648ca59720c03",
-      "path": "convex/projectExitActions.ts",
-      "line": 104,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "9ca1f5471e3c3255968572fe06e51ee1c5840418803e1dbcd6f648ca59720c03",
-      "path": "convex/projectExitActions.ts",
-      "line": 104,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "a84aa69ac63a24e1a4b543a46df0a2707192548fbff30fd273cb31e82ecd8d67",
-      "path": "convex/projectExitActions.ts",
-      "line": 113,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "a84aa69ac63a24e1a4b543a46df0a2707192548fbff30fd273cb31e82ecd8d67",
-      "path": "convex/projectExitActions.ts",
-      "line": 113,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "84e6c1c1e35aa9ecfbe57eeecfa1037343666d3ac6ac2577b59f9c35856cc443",
-      "path": "convex/projectExitActions.ts",
-      "line": 115,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "886ea8b72bbf3d4daf72dcd20584eb765e605c9250cfb0cca70339bd176920e1",
-      "path": "convex/projectExitActions.ts",
-      "line": 116,
-      "message": "Unsafe member access .groupId on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "6d94e042baeff9bbd66a7dec2b084119589e7a6c65dd02387556db4ae2839431",
-      "path": "convex/projectExitActions.ts",
-      "line": 118,
-      "message": "Unsafe member access ._id on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b73be5e0a0861b426ab889753e52c6fd506dd54adde241fe57e209c076c280e2",
-      "path": "convex/projectExitActions.ts",
-      "line": 119,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b73be5e0a0861b426ab889753e52c6fd506dd54adde241fe57e209c076c280e2",
-      "path": "convex/projectExitActions.ts",
-      "line": 119,
-      "message": "Unsafe member access .completedAt on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b73be5e0a0861b426ab889753e52c6fd506dd54adde241fe57e209c076c280e2",
-      "path": "convex/projectExitActions.ts",
-      "line": 119,
-      "message": "Unsafe member access .updatedAt on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "5bfb81d4767140d783fbe2235c3b7a482b05d4dde3316c3f38899edb0aeca0e4",
-      "path": "convex/projectExitActions.ts",
-      "line": 127,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "5bfb81d4767140d783fbe2235c3b7a482b05d4dde3316c3f38899edb0aeca0e4",
-      "path": "convex/projectExitActions.ts",
-      "line": 127,
-      "message": "Unsafe member access .project on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "52e3ef7db15ed5b56a8994566a9cb62cd15cb398a904542eb3155f9ff0d98ef5",
-      "path": "convex/projectExitActions.ts",
-      "line": 128,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "52e3ef7db15ed5b56a8994566a9cb62cd15cb398a904542eb3155f9ff0d98ef5",
-      "path": "convex/projectExitActions.ts",
-      "line": 128,
-      "message": "Unsafe member access .company on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "4a1752b3cef983947b239d8d34f49b80957fb8272debcc9283be8372b68d7cfc",
-      "path": "convex/projectExitActions.ts",
-      "line": 129,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4a1752b3cef983947b239d8d34f49b80957fb8272debcc9283be8372b68d7cfc",
-      "path": "convex/projectExitActions.ts",
-      "line": 129,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "35ad8b9070c0250ab43285455e022209b19a3361de6a6d1d06afbc3ff1a9e2e9",
-      "path": "convex/projectExitActions.ts",
-      "line": 133,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "143e85e234573014e231c4538ed6456c111714872871ff739fba475bcd630db4",
-      "path": "convex/projectExitActions.ts",
-      "line": 134,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "143e85e234573014e231c4538ed6456c111714872871ff739fba475bcd630db4",
-      "path": "convex/projectExitActions.ts",
-      "line": 134,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-argument)",
-      "fingerprint": "8b529b8f9627a18157def4b88094d2de89cd054ec33fe82ca19418cac78fd6f1",
-      "path": "convex/projectExitActions.ts",
-      "line": 135,
-      "message": "Unsafe argument of type any assigned to a parameter of type string."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "8b529b8f9627a18157def4b88094d2de89cd054ec33fe82ca19418cac78fd6f1",
-      "path": "convex/projectExitActions.ts",
-      "line": 135,
-      "message": "Unsafe member access .memoryBox on an `any` value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "11c47e8db52bbe50095f9cd1c63352f67e10d1e1c6bcb46407d1b04aaac6c9f1",
-      "path": "convex/projectExitActions.ts",
-      "line": 138,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "11c47e8db52bbe50095f9cd1c63352f67e10d1e1c6bcb46407d1b04aaac6c9f1",
-      "path": "convex/projectExitActions.ts",
-      "line": 138,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "11c47e8db52bbe50095f9cd1c63352f67e10d1e1c6bcb46407d1b04aaac6c9f1",
-      "path": "convex/projectExitActions.ts",
-      "line": 138,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "dffecc5f5fd2e7176408312ce7feeb8515e972616cfd2e473bff4325cb28f86b",
-      "path": "convex/projectExitActions.ts",
-      "line": 139,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "dffecc5f5fd2e7176408312ce7feeb8515e972616cfd2e473bff4325cb28f86b",
-      "path": "convex/projectExitActions.ts",
-      "line": 139,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "42ddfb6f7ff7b7411fca3ce39695e31629d0333ca4b2a58f52dd58197fada9d3",
-      "path": "convex/projectExitActions.ts",
-      "line": 142,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b6708d1afba9b2f3c0fba9a9f8e8be037947c3fdfe0438dff8c7de32ceefd181",
-      "path": "convex/projectExitActions.ts",
-      "line": 143,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b6708d1afba9b2f3c0fba9a9f8e8be037947c3fdfe0438dff8c7de32ceefd181",
-      "path": "convex/projectExitActions.ts",
-      "line": 143,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "00bbeb1801ee3e112386c19c103eaa52497828de39a852f7f02c230945bf73c1",
-      "path": "convex/projectExitActions.ts",
-      "line": 147,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "00bbeb1801ee3e112386c19c103eaa52497828de39a852f7f02c230945bf73c1",
-      "path": "convex/projectExitActions.ts",
-      "line": 147,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "00bbeb1801ee3e112386c19c103eaa52497828de39a852f7f02c230945bf73c1",
-      "path": "convex/projectExitActions.ts",
-      "line": 147,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "dffecc5f5fd2e7176408312ce7feeb8515e972616cfd2e473bff4325cb28f86b",
-      "path": "convex/projectExitActions.ts",
-      "line": 148,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "dffecc5f5fd2e7176408312ce7feeb8515e972616cfd2e473bff4325cb28f86b",
-      "path": "convex/projectExitActions.ts",
-      "line": 148,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "42ddfb6f7ff7b7411fca3ce39695e31629d0333ca4b2a58f52dd58197fada9d3",
-      "path": "convex/projectExitActions.ts",
-      "line": 150,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-assignment)",
-      "fingerprint": "b6708d1afba9b2f3c0fba9a9f8e8be037947c3fdfe0438dff8c7de32ceefd181",
-      "path": "convex/projectExitActions.ts",
-      "line": 151,
-      "message": "Unsafe assignment of an any value."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b6708d1afba9b2f3c0fba9a9f8e8be037947c3fdfe0438dff8c7de32ceefd181",
-      "path": "convex/projectExitActions.ts",
-      "line": 151,
-      "message": "Unsafe member access .participation on an `any` value."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "4e6723e0aaa16c8f2050a8d2ac904cec8c123143a21539606e7f1e76288104c5",
-      "path": "convex/projectExitActions.ts",
-      "line": 172,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "4e6723e0aaa16c8f2050a8d2ac904cec8c123143a21539606e7f1e76288104c5",
-      "path": "convex/projectExitActions.ts",
-      "line": 172,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "4e6723e0aaa16c8f2050a8d2ac904cec8c123143a21539606e7f1e76288104c5",
-      "path": "convex/projectExitActions.ts",
-      "line": 172,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "b9954293c334bf1b9b5b10d251ae4d9b12863624a53167be22cd6f5e596552d2",
-      "path": "convex/projectExitActions.ts",
-      "line": 177,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "b9954293c334bf1b9b5b10d251ae4d9b12863624a53167be22cd6f5e596552d2",
-      "path": "convex/projectExitActions.ts",
-      "line": 177,
-      "message": "Unsafe member access .projectExit on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "b9954293c334bf1b9b5b10d251ae4d9b12863624a53167be22cd6f5e596552d2",
-      "path": "convex/projectExitActions.ts",
-      "line": 177,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
     },
     {
       "code": "eslint(no-shadow)",
@@ -8472,27 +6148,6 @@
       "path": "convex/projects.ts",
       "line": 246,
       "message": "Do not use useless `undefined`."
-    },
-    {
-      "code": "typescript(no-explicit-any)",
-      "fingerprint": "1e725865786bdb6f1f9ed8dbd6ccdabbb6033abf23f5253161bcc4bf962bd8b9",
-      "path": "convex/projects.ts",
-      "line": 254,
-      "message": "Unexpected `any`. Specify a different type."
-    },
-    {
-      "code": "typescript(no-unsafe-member-access)",
-      "fingerprint": "1e725865786bdb6f1f9ed8dbd6ccdabbb6033abf23f5253161bcc4bf962bd8b9",
-      "path": "convex/projects.ts",
-      "line": 254,
-      "message": "Unsafe member access .memoryActions on an `any` value."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "1e725865786bdb6f1f9ed8dbd6ccdabbb6033abf23f5253161bcc4bf962bd8b9",
-      "path": "convex/projects.ts",
-      "line": 254,
-      "message": "Unsafe assertion to `any` detected: consider using a more specific type to ensure safety."
     },
     {
       "code": "typescript(no-non-null-assertion)",
@@ -9412,55 +7067,6 @@
       "message": "Unsafe type assertion: type 'Id<\"channelThreads\">' is more narrow than the original type."
     },
     {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "b19a42049862128e94e1c9f9ddf0e143e2593b2fb22bebba7bcaea2715374d36",
-      "path": "convex/search.ts",
-      "line": 261,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "b19a42049862128e94e1c9f9ddf0e143e2593b2fb22bebba7bcaea2715374d36",
-      "path": "convex/search.ts",
-      "line": 261,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "bab52855d60d7bef4b22e4fc269b068f3f4d0973d4d8dbedc8e177841a69a269",
-      "path": "convex/search.ts",
-      "line": 262,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "97f3a060eb892912c3d696f5d25681aa0f3992bf284bfd52f093b9dafc5aa8d7",
-      "path": "convex/search.ts",
-      "line": 276,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "ee5de822ec43ea3a55fe8dcd699231264061f048120a5929e313a3c3b0999529",
-      "path": "convex/search.ts",
-      "line": 283,
-      "message": "Unsafe type assertion: type 'Id<\"taskBoards\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "11eb47ac494c5bdf45e1590a2cb8e5accfa0998cecead7566f1f06051a85f373",
-      "path": "convex/search.ts",
-      "line": 284,
-      "message": "Unsafe type assertion: type 'Id<\"taskWorkflowStates\">' is more narrow than the original type."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "90ebf294db1b74e6fdc5de1cdc05d2c64eccd1af216a85870059cdd6d534f94c",
-      "path": "convex/search.ts",
-      "line": 286,
-      "message": "Unsafe type assertion: type 'Id<\"projectMembers\">' is more narrow than the original type."
-    },
-    {
       "code": "typescript(no-unnecessary-type-conversion)",
       "fingerprint": "7feacd52fddb6b428eebb85c617bef054e7639d6b08c7f4c7f6c480d25f7a390",
       "path": "convex/search.ts",
@@ -9494,41 +7100,6 @@
       "path": "convex/taskBoards.ts",
       "line": 91,
       "message": "Unnecessary conditional, value is always truthy."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "eeaed8164bc13d99d8bc08e2280527dffd6865671415e324a887a05d0f6eaf5f",
-      "path": "convex/taskBoards.ts",
-      "line": 119,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "22b0df364f9d9f6305182667057bce1fcd6969f94f9b1a5f841d1d8127976841",
-      "path": "convex/taskBoards.ts",
-      "line": 122,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "39e27725575bf16f2cad0d31db71f609368784fb524a01af329e40cfa8d86e96",
-      "path": "convex/taskBoards.ts",
-      "line": 125,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "e0daf83ba376ff7e7c7ca98706982506aecd5a86c28d22bf9bd21ee80ea541b1",
-      "path": "convex/taskBoards.ts",
-      "line": 126,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(prefer-nullish-coalescing)",
-      "fingerprint": "a5adcdc4bcbda50ed4ba6375033486e7ba48105eb305456be4095743a2994b8f",
-      "path": "convex/taskBoards.ts",
-      "line": 127,
-      "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
     },
     {
       "code": "unicorn(no-array-sort)",
@@ -9924,20 +7495,6 @@
     },
     {
       "code": "typescript(no-non-null-assertion)",
-      "fingerprint": "b49df87768cf9b79fd6770cb6ee2fd1f0146fef23be4c5efb5f1fd806d7a4065",
-      "path": "convex/taskLabels.ts",
-      "line": 22,
-      "message": "Forbidden non-null assertion."
-    },
-    {
-      "code": "typescript(no-unsafe-type-assertion)",
-      "fingerprint": "10afca5a2328f530007a9473e8c56d6e255868ee9d57f30ce6be74d687d37852",
-      "path": "convex/taskLabels.ts",
-      "line": 25,
-      "message": "Unsafe assertion from `any` detected: consider using type guards or a safer assertion."
-    },
-    {
-      "code": "typescript(no-non-null-assertion)",
       "fingerprint": "8dd987f555b7dea62c07c12ede403925a04417be68e9c034309c420905225526",
       "path": "convex/taskManagement.test.ts",
       "line": 361,
@@ -10084,13 +7641,6 @@
       "message": "'entitlementId' is already declared in the upper scope."
     },
     {
-      "code": "unicorn(no-useless-undefined)",
-      "fingerprint": "feba3abf9a9e7beedb9fb9fa5b769d40fcf0748aeded6d48e624f945af3d64a5",
-      "path": "convex/taskMemoryExtraction.ts",
-      "line": 74,
-      "message": "Do not use useless `undefined`."
-    },
-    {
       "code": "typescript(no-non-null-assertion)",
       "fingerprint": "c479e4cc5cf825c9d1c2d939e78132fd44a06fb253a8860c7746df40a6404819",
       "path": "convex/taskNotifications.ts",
@@ -10173,13 +7723,6 @@
       "path": "convex/tasks.ts",
       "line": 97,
       "message": "This assertion is unnecessary since it does not change the type of the expression."
-    },
-    {
-      "code": "typescript(prefer-nullish-coalescing)",
-      "fingerprint": "89051f1ede0557931db5e50689f5dfbbceddda8dbe7a6d462e84bd0621a6fd0c",
-      "path": "convex/tasks.ts",
-      "line": 211,
-      "message": "Prefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator."
     },
     {
       "code": "typescript(no-non-null-assertion)",

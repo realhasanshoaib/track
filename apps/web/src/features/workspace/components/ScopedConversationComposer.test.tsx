@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ScopedConversationComposerProps } from '#/features/workspace/components/ScopedConversationComposer'
 
 const convexMocks = vi.hoisted(() => ({
-  askTrack: vi.fn<(_input: unknown) => Promise<void>>(),
   attachFile: vi.fn<(_input: unknown) => Promise<void>>(),
   claimUploadIntent: vi.fn<(_input: unknown) => Promise<void>>(),
   generateUploadUrl: vi.fn<(_input: unknown) => Promise<string>>(),
@@ -16,7 +15,6 @@ vi.mock('convex/react', async () => {
   const { getFunctionName } = await import('convex/server')
 
   return {
-    useAction: () => convexMocks.askTrack,
     useMutation: (reference: Parameters<typeof getFunctionName>[0]) => {
       switch (getFunctionName(reference)) {
         case 'messages:attachFile':
@@ -35,9 +33,6 @@ vi.mock('convex/react', async () => {
   }
 })
 
-vi.mock('#/features/workspace/components/ProjectMemoryImportDialog', () => ({
-  ProjectMemoryImportDialog: () => null,
-}))
 
 import { ScopedConversationComposer } from '#/features/workspace/components/ScopedConversationComposer'
 
@@ -80,14 +75,12 @@ function createProps(
 }
 
 describe('ScopedConversationComposer lifecycle', () => {
-  it('clears a successful assistant send and returns to idle under Strict Mode', async () => {
+  it('clears a successful send and returns to idle under Strict Mode', async () => {
     const messageSend = createDeferred<string>()
-    const assistantReply = createDeferred<void>()
     const onBusyChange = vi.fn()
     const onReplyChange = vi.fn()
     const onSent = vi.fn()
     convexMocks.sendMessage.mockReturnValue(messageSend.promise)
-    convexMocks.askTrack.mockReturnValue(assistantReply.promise)
 
     render(
       <StrictMode>
@@ -99,12 +92,12 @@ describe('ScopedConversationComposer lifecycle', () => {
 
     const textbox = screen.getByRole('textbox', { name: 'Message General' })
     const sendButton = screen.getByRole('button', { name: /Send/ })
-    fireEvent.change(textbox, { target: { value: '@track summarize this' } })
+    fireEvent.change(textbox, { target: { value: 'Hello everyone' } })
     expect(sendButton).toHaveProperty('disabled', false)
 
     fireEvent.click(sendButton)
     expect(convexMocks.sendMessage).toHaveBeenCalledTimes(1)
-    expect(textbox).toHaveProperty('value', '@track summarize this')
+    expect(textbox).toHaveProperty('value', 'Hello everyone')
     expect(textbox).toHaveProperty('disabled', true)
     expect(sendButton).toHaveProperty('disabled', true)
     expect(onBusyChange).toHaveBeenCalledWith('send-message')
@@ -112,15 +105,6 @@ describe('ScopedConversationComposer lifecycle', () => {
     await act(async () => {
       messageSend.resolve('message-1')
       await messageSend.promise
-    })
-    await waitFor(() => expect(convexMocks.askTrack).toHaveBeenCalledTimes(1))
-    expect(textbox).toHaveProperty('value', '@track summarize this')
-    expect(textbox).toHaveProperty('disabled', true)
-    expect(onSent).not.toHaveBeenCalled()
-
-    await act(async () => {
-      assistantReply.resolve()
-      await assistantReply.promise
     })
     await waitFor(() => expect(textbox).toHaveProperty('value', ''))
     expect(textbox).toHaveProperty('disabled', false)

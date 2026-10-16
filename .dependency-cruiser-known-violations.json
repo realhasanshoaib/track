@@ -1,36 +1,6 @@
 [
   {
     "type": "cycle",
-    "from": "apps/web/src/features/workspace/components/AssistantAnswer.tsx",
-    "to": "apps/web/src/features/workspace/thread-item-components.tsx",
-    "unresolvedTo": "../thread-item-components",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "no-circular"
-    },
-    "cycle": [
-      {
-        "name": "apps/web/src/features/workspace/thread-item-components.tsx",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
-      },
-      {
-        "name": "apps/web/src/features/workspace/components/AssistantAnswer.tsx",
-        "dependencyTypes": [
-          "local",
-          "export"
-        ]
-      }
-    ]
-  },
-  {
-    "type": "cycle",
     "from": "apps/web/src/features/workspace/components/MessageActions.tsx",
     "to": "apps/web/src/features/workspace/thread-item-components.tsx",
     "unresolvedTo": "../thread-item-components",
@@ -65,15 +35,6 @@
     "type": "module",
     "from": "apps/mobile/app.config.ts",
     "to": "apps/mobile/app.config.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
-    "from": "apps/mobile/expo-env.d.ts",
-    "to": "apps/mobile/expo-env.d.ts",
     "rule": {
       "severity": "warn",
       "name": "no-orphans"

@@ -16,8 +16,6 @@ export type TaskPriority = (typeof taskPriorities)[number]
 export const taskReferenceTypes = [
   'message',
   'attachment',
-  'assistant_answer',
-  'memory_excerpt',
 ] as const
 export type TaskReferenceType = (typeof taskReferenceTypes)[number]
 

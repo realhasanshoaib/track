@@ -1,4 +1,4 @@
-import { AtSign, Bot, CornerUpLeft, Import, MessagesSquare, Paperclip, Smile, X } from 'lucide-react'
+import { AtSign, CornerUpLeft, MessagesSquare, Paperclip, Smile, X } from 'lucide-react'
 import { useRef } from 'react'
 import type { ClipboardEvent, ComponentProps, RefObject } from 'react'
 
@@ -38,7 +38,6 @@ export type ConversationComposerProps = {
   className?: string
   composer: string
   composerRef: RefObject<HTMLTextAreaElement | null>
-  contentLocked?: boolean
   emojiGroups: ReadonlyArray<{
     label: string
     emojis: ReadonlyArray<string>
@@ -59,7 +58,6 @@ export type ConversationComposerProps = {
   onInsertComposerText: (text: string) => void
   onMentionIndexChange: (updater: (index: number) => number) => void
   onMentionSelect: (option: WorkspaceMentionOption) => void
-  onOpenMemoryImport: () => void
   onRecordingChange: (recording: boolean) => void
   onReplyChange: (reply: ConversationComposerReply | null) => void
   onSendMessage: () => void
@@ -73,7 +71,6 @@ export type ConversationComposerProps = {
   placeholder: string
   removePendingAttachment: (id: string) => void
   replyTo: ConversationComposerReply | null
-  sendLabel?: string
   setComposerCursorFromRef: () => void
   showMentionMenu: boolean
   voiceRecordingActive: boolean
@@ -87,7 +84,6 @@ export function ConversationComposer({
   className,
   composer,
   composerRef,
-  contentLocked = false,
   emojiGroups,
   emojiPickerOpen,
   filteredMentionOptions,
@@ -105,7 +101,6 @@ export function ConversationComposer({
   onInsertComposerText,
   onMentionIndexChange,
   onMentionSelect,
-  onOpenMemoryImport,
   onRecordingChange,
   onReplyChange,
   onSendMessage,
@@ -115,7 +110,6 @@ export function ConversationComposer({
   placeholder,
   removePendingAttachment,
   replyTo,
-  sendLabel = 'Send',
   setComposerCursorFromRef,
   showMentionMenu,
   voiceRecordingActive,
@@ -209,7 +203,7 @@ export function ConversationComposer({
           <Textarea
             aria-label={ariaLabel}
             autoFocus
-            disabled={!available || contentLocked || busyAction === 'send-message'}
+            disabled={!available || busyAction === 'send-message'}
             onBlur={onComposerBlur}
             onChange={(event) => {
               onComposerChange(event.currentTarget.value, event.currentTarget.selectionStart)
@@ -291,16 +285,10 @@ export function ConversationComposer({
                       type="button"
                     >
                       <Avatar
-                        className={
-                          option.tone === 'bot'
-                            ? 'track-mention-avatar bot'
-                            : `track-mention-avatar ${option.tone}`
-                        }
+                        className={`track-mention-avatar ${option.tone}`}
                       >
                         <AvatarFallback>
-                          {option.kind === 'assistant' ? (
-                            <Bot aria-hidden="true" size={13} />
-                          ) : option.kind === 'group' ? (
+                          {option.kind === 'group' ? (
                             <MessagesSquare aria-hidden="true" size={13} />
                           ) : (
                             getInitials(option.label)
@@ -352,21 +340,9 @@ export function ConversationComposer({
         <div className="track-composer-bar">
           {!voiceRecordingActive ? (
             <Button
-              aria-label="Import project memory"
-              className="icon-button"
-              disabled={!available || contentLocked || busyAction === 'memory-import'}
-              onClick={onOpenMemoryImport}
-              title="Import project memory"
-              type="button"
-            >
-              <Import aria-hidden="true" size={15} />
-            </Button>
-          ) : null}
-          {!voiceRecordingActive ? (
-            <Button
               aria-label="Add attachment"
               className="icon-button"
-              disabled={!available || contentLocked || busyAction === 'send-message'}
+              disabled={!available || busyAction === 'send-message'}
               onClick={onAddAttachment}
               title="Add attachment"
               type="button"
@@ -375,7 +351,7 @@ export function ConversationComposer({
             </Button>
           ) : null}
           <VoiceRecorder
-            disabled={!available || contentLocked || busyAction === 'send-message'}
+            disabled={!available || busyAction === 'send-message'}
             onRecordingChange={onRecordingChange}
             onRecorded={onVoiceNoteRecorded}
           />
@@ -384,7 +360,7 @@ export function ConversationComposer({
               <Button
                 aria-label="Mention"
                 className="icon-button"
-                disabled={!available || contentLocked || busyAction === 'send-message'}
+                disabled={!available || busyAction === 'send-message'}
                 onClick={() => {
                   onEmojiPickerOpenChange(false)
                   const cursor = composerRef.current?.selectionStart ?? composer.length
@@ -405,7 +381,7 @@ export function ConversationComposer({
               <Button
                 aria-label="Emoji"
                 className="icon-button"
-                disabled={!available || contentLocked}
+                disabled={!available}
                 onClick={() => {
                   setComposerCursorFromRef()
                   onEmojiPickerOpenChange(!emojiPickerOpen)
@@ -426,7 +402,7 @@ export function ConversationComposer({
                 onClick={onSendMessage}
                 type="button"
               >
-                {sendLabel}
+                Send
                 <span className="track-send-key">↵</span>
               </Button>
             </>

@@ -1,6 +1,5 @@
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import type { PendingWorkspaceAttachment } from '#/features/workspace/hooks/usePendingAttachments'
-import type { WorkspaceMentionOption } from '#/features/workspace/lib/mentions'
 
 export type UploadedPendingAttachment = {
   contentType: string
@@ -52,11 +51,14 @@ export function isUploadResponse(value: unknown): value is { storageId: Id<'_sto
   )
 }
 
-export function resolveMentionedUserIds(
+export function resolveMentionedUserIds<UserId>(
   mentionHandles: Array<string>,
-  mentionOptions: Array<WorkspaceMentionOption>,
+  mentionOptions: ReadonlyArray<
+    | { kind: 'member'; handle: string; id: UserId }
+    | { kind: 'group'; handle: string }
+  >,
 ) {
-  const mentionedUserIds: Array<Id<'users'>> = []
+  const mentionedUserIds: Array<UserId> = []
   for (const handle of mentionHandles) {
     const option = mentionOptions.find((item) => item.kind === 'member' && item.handle === handle)
     if (option?.kind === 'member') mentionedUserIds.push(option.id)

@@ -50,7 +50,7 @@ type TaskCaptureCursor = {
 type TaskStageMetadata = Pick<
   Doc<'taskExitSnapshotStaging'>,
   'taskId' | 'taskPublicKey' | 'taskSearchText' | 'groupId' |
-  'messageId' | 'attachmentId' | 'assistantStreamId'
+  'messageId' | 'attachmentId'
 >
 
 type TaskArchivePayload =
@@ -569,7 +569,6 @@ function stageMetadata(item: SnapshotRow, related: RelatedTaskRows): TaskStageMe
         groupId: item.row.groupId ?? related.taskGroups.get(item.row.taskId),
         messageId: item.row.messageId,
         attachmentId: item.row.attachmentId,
-        assistantStreamId: item.row.assistantStreamId,
       }
     case 'taskComments':
       return { taskId: item.row.taskId, groupId: item.row.originalGroupId ?? related.taskGroups.get(item.row.taskId) }
@@ -793,7 +792,6 @@ export async function materializeTaskArchiveSnapshotsBatch(
       groupId: row.groupId,
       messageId: row.messageId,
       attachmentId: row.attachmentId,
-      assistantStreamId: row.assistantStreamId,
       payload: decodeTaskArchivePayload(row.sourceTable, row.payload),
       createdAt: Date.now(),
     })
@@ -849,7 +847,6 @@ export async function materializeTaskArchiveSnapshots(
       groupId: row.groupId,
       messageId: row.messageId,
       attachmentId: row.attachmentId,
-      assistantStreamId: row.assistantStreamId,
       payload: decodeTaskArchivePayload(row.sourceTable, row.payload),
       createdAt: Date.now(),
     })

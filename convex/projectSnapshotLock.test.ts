@@ -4,7 +4,7 @@ import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, internal } from './_generated/api'
+import { api } from './_generated/api'
 import schema from './schema'
 
 const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
@@ -124,31 +124,6 @@ describe('Project snapshot preparation lock', () => {
     })).rejects.toThrow('channel_unavailable')
   })
 
-  it('blocks new memory writes and preserves context length when a source-file reservation completes', async () => {
-    const { backend, operationId, scope, userId } = await snapshotFixture()
-    const memoryBoxId = await backend.run(async (ctx) => {
-      const now = Date.now()
-      return await ctx.db.insert('projectMemoryBoxes', {
-        projectId: scope.projectId, boxId: 'snapshot-memory-fixture',
-        runtime: 'node', status: 'ready', schemaVersion: 1,
-        createdBy: userId, createdAt: now, updatedAt: now, contextLength: 123,
-      })
-    })
-    const write = { projectId: scope.projectId, boxId: 'snapshot-memory-fixture' }
-    await expect(backend.mutation(internal.memory.beginMemoryBoxContextWrite, write))
-      .rejects.toThrow('project_snapshot_in_progress')
-    await backend.run(async (ctx) => {
-      await ctx.db.patch(operationId, { status: 'cancelled' })
-    })
-    const revision = await backend.mutation(internal.memory.beginMemoryBoxContextWrite, write)
-    await expect(backend.mutation(internal.memory.beginMemoryBoxContextWrite, write))
-      .rejects.toThrow('memory_context_write_in_progress')
-    await backend.mutation(internal.memory.completeMemoryBoxContextWrite, { ...write, revision })
-    const box = await backend.run(async (ctx) => await ctx.db.get(memoryBoxId))
-    expect(box?.contextLength).toBe(123)
-    expect(box?.contextWritePendingRevision).toBeUndefined()
-    expect(box?.lastContextUpdatedAt).toBe(revision)
-  })
 
   it('keeps reads available and prevents a Channel write until immutable capture completes', async () => {
     const { backend, actor, operationId, scope } = await snapshotFixture()

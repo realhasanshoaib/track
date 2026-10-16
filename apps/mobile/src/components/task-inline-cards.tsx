@@ -18,7 +18,6 @@ import { useTaskLinkBatch } from '@/lib/task-link-context';
 const GUTTER = 40;
 
 type Props = {
-  assistantStreamId?: Id<'assistantStreams'>;
   identity: MobileTaskIdentity | null;
   isOwnMessage?: boolean;
   messageId?: Id<'messages'>;
@@ -32,7 +31,6 @@ type Props = {
 };
 
 export function TaskInlineCards({
-  assistantStreamId,
   identity,
   isOwnMessage,
   messageId,
@@ -50,15 +48,9 @@ export function TaskInlineCards({
     api.tasks.listForMessage,
     messageId && !batch ? { messageId, ...queryIdentity } : 'skip',
   );
-  const assistantTasks = useQuery(
-    api.tasks.listForAssistant,
-    assistantStreamId && !batch ? { assistantStreamId, ...queryIdentity } : 'skip',
-  );
-  const tasks = messageId
-    ? batch?.messageTasks.get(String(messageId)) ?? messageTasks
-    : batch?.assistantTasks.get(String(assistantStreamId)) ?? assistantTasks;
+  const tasks = messageId ? batch?.messageTasks.get(String(messageId)) ?? messageTasks : undefined;
   const hasCards = Boolean(tasks?.length);
-  const rowId = messageId ?? assistantStreamId;
+  const rowId = messageId;
 
   useEffect(() => {
     if (rowId) onCardsChange?.(rowId, hasCards);

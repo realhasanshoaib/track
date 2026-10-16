@@ -13,24 +13,6 @@ sizing: >-
   before sizing. Working entries have no remaining work to size. Waiting does not increase
   size. Revisit estimates when the work is inspected.
 outcomes:
-  - id: platform.remove_assistant
-    title: Remove the assistant and memory
-    area: platform
-    state: planned
-    priority: P0
-    size: M
-    size_reason: The assistant touches messages, attachments and both clients, but has no data other features need.
-    summary: >-
-      The @track assistant, imported memory and their AI helpers are still in the backend and both
-      apps. Version 1 has no agent.
-    remaining:
-      - Delete the assistant, memory and AI helper code and tables, and their screens in both apps.
-      - Remove assistant fields from messages and the chat UI without changing human messages.
-    theory: theory.md#later
-    code:
-      - convex/assistant.ts
-      - convex/memory.ts
-
   - id: platform.remove_tasks
     title: Remove tasks and boards
     area: platform

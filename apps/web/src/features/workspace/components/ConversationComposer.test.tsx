@@ -6,65 +6,6 @@ import { ConversationComposer } from '#/features/workspace/components/Conversati
 
 afterEach(cleanup)
 
-describe('ConversationComposer assistant retry state', () => {
-  it('locks sent content and leaves only the assistant retry send action enabled', () => {
-    render(
-      <ConversationComposer
-        ariaLabel="Message General"
-        available
-        busyAction={null}
-        composer="@track summarize this"
-        composerRef={createRef<HTMLTextAreaElement>()}
-        contentLocked
-        emojiGroups={[]}
-        emojiPickerOpen={false}
-        filteredMentionOptions={[]}
-        mentionIndex={0}
-        mentionOptionRefs={{ current: [] }}
-        mentionSections={[]}
-        onAddAttachment={vi.fn()}
-        onComposerBlur={vi.fn()}
-        onComposerChange={vi.fn()}
-        onComposerFocus={vi.fn()}
-        onComposerKeyUp={vi.fn()}
-        onComposerPaste={vi.fn()}
-        onComposerSelect={vi.fn()}
-        onEmojiPickerOpenChange={vi.fn()}
-        onInsertComposerText={vi.fn()}
-        onMentionIndexChange={vi.fn()}
-        onMentionSelect={vi.fn()}
-        onOpenMemoryImport={vi.fn()}
-        onRecordingChange={vi.fn()}
-        onReplyChange={vi.fn()}
-        onSendMessage={vi.fn()}
-        onShowMentionMenuClose={vi.fn()}
-        onVoiceNoteRecorded={vi.fn()}
-        pendingAttachments={[]}
-        placeholder="Message #General"
-        removePendingAttachment={vi.fn()}
-        replyTo={null}
-        sendLabel="Retry Assistant"
-        setComposerCursorFromRef={vi.fn()}
-        showMentionMenu={false}
-        voiceRecordingActive={false}
-      />,
-    )
-
-    expect(screen.getByRole('textbox', { name: 'Message General' })).toHaveProperty(
-      'disabled',
-      true,
-    )
-    expect(screen.getByRole('button', { name: 'Add attachment' })).toHaveProperty(
-      'disabled',
-      true,
-    )
-    expect(screen.getByRole('button', { name: /Retry Assistant/ })).toHaveProperty(
-      'disabled',
-      false,
-    )
-  })
-})
-
 describe('ConversationComposer keyboard behavior', () => {
   it('does not send while an IME candidate is composing', () => {
     const onSendMessage = vi.fn()
@@ -92,7 +33,6 @@ describe('ConversationComposer keyboard behavior', () => {
         onInsertComposerText={vi.fn()}
         onMentionIndexChange={vi.fn()}
         onMentionSelect={vi.fn()}
-        onOpenMemoryImport={vi.fn()}
         onRecordingChange={vi.fn()}
         onReplyChange={vi.fn()}
         onSendMessage={onSendMessage}
@@ -143,7 +83,6 @@ describe('ConversationComposer keyboard behavior', () => {
         onInsertComposerText={onInsertComposerText}
         onMentionIndexChange={vi.fn()}
         onMentionSelect={vi.fn()}
-        onOpenMemoryImport={vi.fn()}
         onRecordingChange={vi.fn()}
         onReplyChange={vi.fn()}
         onSendMessage={vi.fn()}

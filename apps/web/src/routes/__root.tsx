@@ -7,9 +7,9 @@ import { captureNavigation, installUnhandledCapture } from '../lib/browser-diagn
 import appCss from '../styles.css?url'
 
 const SITE_URL = 'https://track.q9labs.ai'
-const SITE_TITLE = 'Track - Conversation and Task Memory for Your Team'
+const SITE_TITLE = 'Track - Conversation for Your Team'
 const SITE_DESCRIPTION =
-  'Track keeps project conversations, tasks, evidence, shared memory, and permission-aware AI assistance in one workspace.'
+  'Track keeps project conversations and attachments in one workspace.'
 
 const THEME_COLOR_LIGHT = '#faf9f7'
 const THEME_COLOR_DARK = '#151412'
@@ -96,7 +96,7 @@ export const Route = createRootRoute({
       },
       {
         property: 'og:image:alt',
-        content: 'Track project memory workspace logo',
+        content: 'Track team chat logo',
       },
       {
         name: 'twitter:card',
@@ -116,7 +116,7 @@ export const Route = createRootRoute({
       },
       {
         name: 'twitter:image:alt',
-        content: 'Track project memory workspace logo',
+        content: 'Track team chat logo',
       },
     ],
     links: [

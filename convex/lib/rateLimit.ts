@@ -4,5 +4,4 @@ import { components } from '../_generated/api'
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   sendMessage: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 10 },
-  askTrack: { kind: 'token bucket', rate: 20, period: MINUTE, capacity: 5 },
 })

@@ -28,7 +28,6 @@ describe('runMessageSendAttempt', () => {
     expect(attach).not.toHaveBeenCalled()
 
     await expect(runMessageSendAttempt(input)).resolves.toMatchObject({
-      assistantError: null,
       messageId: 'message-id',
     })
     expect(upload).toHaveBeenCalledTimes(3)
@@ -45,9 +44,7 @@ describe('runMessageSendAttempt', () => {
       .mockResolvedValueOnce()
       .mockRejectedValueOnce(new Error('attach_failed'))
       .mockResolvedValueOnce()
-    const askAssistant = vi.fn(async () => undefined)
     const input = {
-      askAssistant,
       attach,
       attempt,
       pendingAttachments: [{ id: 'first' }, { id: 'second' }],
@@ -57,7 +54,6 @@ describe('runMessageSendAttempt', () => {
 
     await expect(runMessageSendAttempt(input)).rejects.toThrow('attach_failed')
     await expect(runMessageSendAttempt(input)).resolves.toMatchObject({
-      assistantError: null,
       messageId: 'message-id',
     })
 
@@ -66,34 +62,6 @@ describe('runMessageSendAttempt', () => {
     expect(attach).toHaveBeenNthCalledWith(1, 'message-id', 'uploaded-first')
     expect(attach).toHaveBeenNthCalledWith(2, 'message-id', 'uploaded-second')
     expect(attach).toHaveBeenNthCalledWith(3, 'message-id', 'uploaded-second')
-    expect(askAssistant).toHaveBeenCalledTimes(1)
   })
 
-  it('retries an assistant failure without resending the message or attachment', async () => {
-    const attempt = createMessageSendAttempt<string, string>('same-send', 'idempotency-key')
-    const upload = vi.fn(async ({ id }: { id: string }) => `uploaded-${id}`)
-    const send = vi.fn(async () => 'message-id')
-    const attach = vi.fn(async () => undefined)
-    const askAssistant = vi
-      .fn<(_messageId: string) => Promise<void>>()
-      .mockRejectedValueOnce(new Error('assistant_failed'))
-      .mockResolvedValueOnce()
-    const input = {
-      askAssistant,
-      attach,
-      attempt,
-      pendingAttachments: [{ id: 'only' }],
-      send,
-      upload,
-    }
-
-    const first = await runMessageSendAttempt(input)
-    expect(first.assistantError).toEqual(new Error('assistant_failed'))
-    await expect(runMessageSendAttempt(input)).resolves.toMatchObject({ assistantError: null })
-
-    expect(upload).toHaveBeenCalledTimes(1)
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(attach).toHaveBeenCalledTimes(1)
-    expect(askAssistant).toHaveBeenCalledTimes(2)
-  })
 })

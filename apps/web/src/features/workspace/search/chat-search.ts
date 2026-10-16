@@ -10,14 +10,6 @@ export type ChatThreadItem =
     }
   | {
       at: number
-      stream: {
-        answer: string
-      }
-      kind: 'assistant'
-      key: string
-    }
-  | {
-      at: number
       draft: {
         title: string
         description: string
@@ -28,7 +20,7 @@ export type ChatThreadItem =
 
 export type ChatSearchMatch = {
   key: string
-  kind: 'assistant' | 'draft' | 'message'
+  kind: 'draft' | 'message'
   messageId?: Id<'messages'>
 }
 
@@ -50,12 +42,6 @@ export function buildChatSearchMatches(
           kind: threadItem.kind,
           messageId: threadItem.item.message._id,
         })
-      }
-      continue
-    }
-    if (threadItem.kind === 'assistant') {
-      if (threadItem.stream.answer.toLowerCase().includes(query)) {
-        matches.push({ key: threadItem.key, kind: threadItem.kind })
       }
       continue
     }

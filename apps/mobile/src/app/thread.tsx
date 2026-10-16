@@ -1,11 +1,11 @@
-import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
 
 import { api } from '../../../../convex/_generated/api';
-import type { Doc, Id } from '../../../../convex/_generated/dataModel';
+import type { Id } from '../../../../convex/_generated/dataModel';
 import { Composer } from '@/components/composer';
 import { EmptyState } from '@/components/empty-state';
 import { MessageActions } from '@/components/message-actions';
@@ -68,12 +68,6 @@ export default function ThreadScreen() {
     queryArgs ? { ...queryArgs, targetMessageId } : 'skip',
     { initialNumItems: 50 },
   );
-  const assistantPage = usePaginatedQuery(
-    api.assistant.listForThreadPage,
-    queryArgs ? { ...queryArgs, targetMessageId } : 'skip',
-    { initialNumItems: 50 },
-  );
-  const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results;
   const projectMembersPage = usePaginatedQuery(
     api.mobile.listProjectMembersPage,
     trackUserId && pid && navigation?.available
@@ -88,7 +82,6 @@ export default function ThreadScreen() {
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent);
   const attachFile = useMutation(api.messages.attachFile);
-  const askTrack = useAction(api.assistant.ask);
   const markRead = useMutation(api.channelThreads.markRead);
   const setFollowing = useMutation(api.channelThreads.setFollowing);
   const setStatus = useMutation(api.channelThreads.setStatus);
@@ -105,7 +98,7 @@ export default function ThreadScreen() {
   const [renameValue, setRenameValue] = useState('');
   const [actionTarget, setActionTarget] = useState<GroupedThreadItem | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const hasMoreThreadItems = messagePageStatus === 'CanLoadMore' || assistantPage.status === 'CanLoadMore';
+  const hasMoreThreadItems = messagePageStatus === 'CanLoadMore' || messagePageStatus === 'LoadingMore';
   const composerDraftScope = useMemo(() => trackUserId && pid && gid && tid ? {
     actorId: trackUserId,
     actingCompanyId: cid,
@@ -190,18 +183,11 @@ export default function ThreadScreen() {
       item,
       isFirstInGroup: true,
     }));
-    const assistantItems = ((assistantStreams ?? []) as Doc<'assistantStreams'>[]).map((stream) => ({
-      kind: 'assistant' as const,
-      key: stream._id,
-      at: stream.createdAt,
-      stream,
-      isFirstInGroup: true,
-    }));
-    const sortedItems = [...messageItems, ...assistantItems];
     // eslint-disable-next-line unicorn/no-array-sort -- reason: Copy first to preserve immutability while supporting the web ES2022 target.
+    const sortedItems = [...messageItems];
     sortedItems.sort((a, b) => a.at - b.at);
     return sortedItems;
-  }, [assistantStreams, messages]);
+  }, [messages]);
   const draftReply = useMemo(() => {
     const pendingReplyId = composerDraft.draft.replyToMessageId;
     if (!pendingReplyId) return null;
@@ -295,14 +281,6 @@ export default function ThreadScreen() {
         },
       });
 
-      const { parseMentions } = await import('@track/shared');
-      if (result.messageId && parseMentions(body).includes('track')) {
-        await askTrack({
-          projectId: pid, groupId: gid, channelThreadId: tid, requesterId: trackUserId,
-          actingCompanyId: cid, projectMemberId: pmid,
-          promptMessageId: result.messageId, question: body,
-        });
-      }
       // Only retire the idempotency key once every attachment landed; a retry reuses the same message.
       if (result.failedIds.length === 0) {
         sendKey.current = null;
@@ -320,16 +298,14 @@ export default function ThreadScreen() {
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
-      ...(!readOnly && actionTarget.kind === 'message' ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
+      ...(!readOnly ? [{ label: 'Reply', icon: 'arrow-up' as const, onPress: () => setReplyTo(actionTarget.item) }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
         label: 'Create task',
         icon: 'plus' as const,
         onPress: () => {
           if (!pid || !gid) return;
-          const source = actionTarget.kind === 'message' ? actionTarget.item.message.body : actionTarget.stream.answer;
-          const reference = actionTarget.kind === 'message'
-            ? { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true }
-            : { type: 'assistant_answer' as const, assistantStreamId: actionTarget.stream._id, isPrimary: true };
+          const source = actionTarget.item.message.body;
+          const reference = { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true };
           void createTask({
             projectId: pid,
             groupId: gid,
@@ -343,7 +319,6 @@ export default function ThreadScreen() {
         },
       }] : []),
       ...(!readOnly &&
-        actionTarget.kind === 'message' &&
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
@@ -386,9 +361,8 @@ export default function ThreadScreen() {
           reporterId: trackUserId,
           actingCompanyId: cid,
           projectMemberId: pmid,
-          targetType: actionTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
-          targetMessageId: actionTarget.kind === 'message' ? actionTarget.item.message._id : undefined,
-          targetAssistantStreamId: actionTarget.kind === 'assistant' ? actionTarget.stream._id : undefined,
+          targetType: 'message',
+          targetMessageId: actionTarget.item.message._id,
           reason: 'other',
         });
       } },
@@ -400,15 +374,14 @@ export default function ThreadScreen() {
     return <>
       <ThreadRow
         isFirstInGroup={item.isFirstInGroup}
-        isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
+        isOwnMessage={item.item.author?._id === trackUserId}
         item={item}
         onLongPress={() => { hapticLight(); setActionTarget(item); setActionsOpen(true); }}
-        onSwipeReply={readOnly || item.kind !== 'message' ? undefined : () => setReplyTo(item.item)}
+        onSwipeReply={readOnly ? undefined : () => setReplyTo(item.item)}
       />
       {releaseConfig.tasks && pid ? <TaskInlineCards
-        assistantStreamId={item.kind === 'assistant' ? item.stream._id : undefined}
         identity={taskIdentity}
-        messageId={item.kind === 'message' ? item.item.message._id : undefined}
+        messageId={item.item.message._id}
         projectId={pid}
       /> : null}
     </>;
@@ -470,7 +443,6 @@ export default function ThreadScreen() {
   }
   const source = thread.source
   const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
-  const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
 
   return (
     <ThemedView style={styles.screen}>
@@ -493,7 +465,6 @@ export default function ThreadScreen() {
       {error ? <ThemedText accessibilityLiveRegion="assertive" style={[styles.error, { color: theme.danger }]} type="small">{error}. Your unsent reply is still here.</ThemedText> : null}
       {readOnly ? <View style={[styles.archive, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Archived thread</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">This conversation is read-only.</ThemedText></View> : null}
       <TaskLinkBatchProvider
-        assistantStreamIds={taskLinkAssistantStreamIds}
         enabled={releaseConfig.tasks}
         identity={taskIdentity}
         messageIds={taskLinkMessageIds}
@@ -505,15 +476,14 @@ export default function ThreadScreen() {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.key}
-          ListEmptyComponent={messagePageStatus === 'LoadingFirstPage' || assistantPage.status === 'LoadingFirstPage'
+          ListEmptyComponent={messagePageStatus === 'LoadingFirstPage'
             ? <ThemedText style={{ color: theme.textSecondary, padding: Spacing.three }}>Loading replies…</ThemedText>
             : <EmptyState body="Start the focused conversation." icon="forum-outline" title="No replies yet" />}
           ListHeaderComponent={hasMoreThreadItems ? <Pressable
             accessibilityRole="button"
-            disabled={messagePageStatus === 'LoadingMore' || assistantPage.status === 'LoadingMore'}
+            disabled={messagePageStatus === 'LoadingMore'}
             onPress={() => {
               if (messagePageStatus === 'CanLoadMore') loadMoreMessages(50);
-              if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(50);
             }}
             style={styles.loadMore}>
             <ThemedText type="smallBold">Load older replies</ThemedText>

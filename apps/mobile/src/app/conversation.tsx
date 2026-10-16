@@ -1,4 +1,4 @@
-import { useAction, useMutation, usePaginatedQuery, useQuery } from 'convex/react';
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
 import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -67,7 +67,6 @@ export default function ConversationScreen() {
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent);
   const attachFile = useMutation(api.messages.attachFile);
-  const askTrack = useAction(api.assistant.ask);
   const markRead = useMutation(api.mobile.markGroupRead);
   const setLastActive = useMutation(api.mobile.setLastActiveContext);
   const setGlobalNotif = useMutation(api.notifications.setGlobalMode);
@@ -115,21 +114,7 @@ export default function ConversationScreen() {
       : 'skip',
     { initialNumItems: 120 },
   );
-  const assistantPage = usePaginatedQuery(
-    api.assistant.listForGroupPage,
-    trackUserId && gid && navigation?.available
-      ? {
-          userId: trackUserId,
-          groupId: gid,
-          actingCompanyId: cid,
-          projectMemberId: pmid,
-          targetMessageId,
-        }
-      : 'skip',
-    { initialNumItems: 120 },
-  );
   const messages = messagePage.status === 'LoadingFirstPage' ? undefined : messagePage.results;
-  const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results;
   const notifSettings = useQuery(api.notifications.getSettings, trackUserId ? { userId: trackUserId, projectMemberId: pmid } : 'skip');
   const projectMembersPage = usePaginatedQuery(
     api.mobile.listProjectMembersPage,
@@ -201,11 +186,7 @@ export default function ConversationScreen() {
     const msgs = [...((messages ?? []) as DetailedMessage[]).reverse()].map((item) => ({
       kind: 'message' as const, key: item.message._id, at: item.message.createdAt, item, isFirstInGroup: true,
     }));
-    const streams = ((assistantStreams ?? []) as Doc<'assistantStreams'>[]).map((stream) => ({
-      kind: 'assistant' as const, key: stream._id, at: stream.createdAt, stream, isFirstInGroup: true,
-    }));
-    const sorted: Array<{ kind: 'message'; key: string; at: number; item: DetailedMessage; isFirstInGroup: boolean } | { kind: 'assistant'; key: string; at: number; stream: Doc<'assistantStreams'>; isFirstInGroup: boolean }> =
-      [...msgs, ...streams];
+    const sorted = [...msgs];
     // eslint-disable-next-line unicorn/no-array-sort -- reason: Copy first to preserve immutability while supporting the web ES2022 target.
     sorted.sort((a, b) => a.at - b.at);
 
@@ -224,7 +205,7 @@ export default function ConversationScreen() {
         interrupted = true;
       }
 
-      const authorKey = raw.kind === 'message' ? (raw.item.author?._id ?? 'anon') : '__assistant__';
+      const authorKey = raw.item.author?._id ?? 'anon';
       const tooLong = raw.at - lastAt > FIVE_MINUTES;
       const isFirstInGroup = interrupted || authorKey !== lastAuthorKey || tooLong;
 
@@ -235,7 +216,7 @@ export default function ConversationScreen() {
     }
 
     return result;
-  }, [assistantStreams, cardRowIds, messages]);
+  }, [cardRowIds, messages]);
   const draftReply = useMemo(() => {
     const pendingReplyId = composerDraft.draft.replyToMessageId;
     if (!pendingReplyId) return null;
@@ -288,18 +269,17 @@ export default function ConversationScreen() {
     requestAnimationFrame(() => listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 }));
   }, [targetMessageId, threadItems]);
 
-  const hasMoreMessages = messagePage.status === 'CanLoadMore' || assistantPage.status === 'CanLoadMore';
-  const loadingOlderMessages = messagePage.status === 'LoadingMore' || assistantPage.status === 'LoadingMore';
+  const hasMoreMessages = messagePage.status === 'CanLoadMore' || messagePage.status === 'LoadingMore';
+  const loadingOlderMessages = messagePage.status === 'LoadingMore';
   const loadOlderMessages = useCallback(() => {
     if (!hasMoreMessages || loadingOlderMessages) return;
-    if (messagePage.status === 'CanLoadMore') messagePage.loadMore(120);
-    if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(120);
-  }, [assistantPage, hasMoreMessages, loadingOlderMessages, messagePage]);
+    messagePage.loadMore(120);
+  }, [hasMoreMessages, loadingOlderMessages, messagePage]);
 
   const messageActions = useMemo(() => {
     if (!actionTarget || actionTarget.kind === 'date-sep') return [];
     return [
-      ...(releaseConfig.threads && actionTarget.kind === 'message' && pid && gid ? [{
+      ...(releaseConfig.threads && pid && gid ? [{
         label: actionTarget.item.channelThread ? 'Open thread' : 'Start thread',
         icon: 'forum-outline' as const,
         onPress: () => {
@@ -314,17 +294,15 @@ export default function ConversationScreen() {
         label: 'Reply',
         icon: 'arrow-up' as const,
         onPress: () => {
-          if (actionTarget.kind === 'message') setReplyTo(actionTarget.item);
+          setReplyTo(actionTarget.item);
         },
       }] : []),
       ...(!readOnly && releaseConfig.tasks ? [{
         label: 'Create task',
         icon: 'plus' as const,
         onPress: () => {
-          const source = actionTarget.kind === 'message' ? actionTarget.item.message.body : actionTarget.stream.answer;
-          const reference = actionTarget.kind === 'message'
-            ? { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true }
-            : { type: 'assistant_answer' as const, assistantStreamId: actionTarget.stream._id, isPrimary: true };
+          const source = actionTarget.item.message.body;
+          const reference = { type: 'message' as const, messageId: actionTarget.item.message._id, isPrimary: true };
           if (!pid || !gid) return;
           void createTask({
             projectId: pid,
@@ -339,7 +317,6 @@ export default function ConversationScreen() {
         },
       }] : []),
       ...(!readOnly &&
-        actionTarget.kind === 'message' &&
         actionTarget.item.message.authorId === trackUserId &&
         (!pmid || !actionTarget.item.message.authorProjectMemberId ||
           actionTarget.item.message.authorProjectMemberId === pmid) ? [{
@@ -512,14 +489,6 @@ export default function ConversationScreen() {
         },
       });
 
-      const { parseMentions } = await import('@track/shared');
-      if (result.messageId && parseMentions(body).includes('track')) {
-        await askTrack({
-          projectId: pid, groupId: gid, requesterId: trackUserId,
-          actingCompanyId: cid, projectMemberId: pmid,
-          promptMessageId: result.messageId, question: body,
-        });
-      }
       if (result.failedIds.length === 0) {
         sendKey.current = null;
         sendSignatureRef.current = null;
@@ -541,9 +510,8 @@ export default function ConversationScreen() {
       await createReport({
         projectId: pid, reporterId: trackUserId, groupId: gid,
         actingCompanyId: cid, projectMemberId: pmid,
-        targetType: reportTarget.kind === 'assistant' ? 'assistant_answer' : 'message',
-        targetMessageId: reportTarget.kind === 'message' ? reportTarget.item.message._id : undefined,
-        targetAssistantStreamId: reportTarget.kind === 'assistant' ? reportTarget.stream._id : undefined,
+        targetType: 'message',
+        targetMessageId: reportTarget.item.message._id,
         reason: reportReason, note: '',
       });
       setReportTarget(null);
@@ -552,7 +520,7 @@ export default function ConversationScreen() {
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
-    const isOwnMessage = item.kind === 'message' && item.item.author?._id === trackUserId;
+    const isOwnMessage = item.item.author?._id === trackUserId;
     return (
       <View>
         <ThreadRow
@@ -566,22 +534,21 @@ export default function ConversationScreen() {
           }}
           onSwipeReply={readOnly ? undefined : () => {
             hapticLight();
-            if (item.kind === 'message') setReplyTo(item.item);
+            setReplyTo(item.item);
           }}
-          onOpenThread={releaseConfig.threads && pid && gid && item.kind === 'message' && item.item.channelThread ? () => {
+          onOpenThread={releaseConfig.threads && pid && gid && item.item.channelThread ? () => {
             router.push(threadConversationHref(pid, gid, item.item.channelThread!.threadId, cid && pmid ? { companyId: cid, membershipId: pmid, archived: readOnly } : null) as never);
           } : undefined}
-          onPressReply={item.kind === 'message' && item.item.replyTo ? () => {
+          onPressReply={item.item.replyTo ? () => {
             const quotedId = item.item.replyTo?.messageId;
             const index = threadItemsRef.current.findIndex((entry) => entry.kind === 'message' && entry.item.message._id === quotedId);
             if (index >= 0) listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
           } : undefined}
         />
         {releaseConfig.tasks && pid ? <TaskInlineCards
-          assistantStreamId={item.kind === 'assistant' ? item.stream._id : undefined}
           identity={taskIdentity}
           isOwnMessage={isOwnMessage}
-          messageId={item.kind === 'message' ? item.item.message._id : undefined}
+          messageId={item.item.message._id}
           onCardsChange={trackCardRow}
           projectId={pid}
         /> : null}
@@ -594,7 +561,6 @@ export default function ConversationScreen() {
   if (navigation === undefined || (navigation.available && messages === undefined)) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Conversation' }} /><View style={styles.empty}><ThemedText style={{ color: theme.textSecondary }} type="small">Opening authorized conversation…</ThemedText></View></ThemedView>;
 
   const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
-  const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
 
   return (
     <ThemedView style={styles.screen}>
@@ -626,7 +592,6 @@ export default function ConversationScreen() {
 
       <View style={styles.flex}>
       <TaskLinkBatchProvider
-        assistantStreamIds={taskLinkAssistantStreamIds}
         enabled={releaseConfig.tasks}
         identity={taskIdentity}
         messageIds={taskLinkMessageIds}
@@ -708,7 +673,7 @@ export default function ConversationScreen() {
       ) : null}
       </View>
 
-      {readOnly ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Read-only Company exit archive</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">Messages and frozen memory stop at the Company exit cutoff.</ThemedText></View> : <Composer
+      {readOnly ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText type="smallBold">Read-only Company exit archive</ThemedText><ThemedText style={{ color: theme.textSecondary }} type="small">Messages stop at the Company exit cutoff.</ThemedText></View> : <Composer
         activeGroupName={activeGroup?.name ?? null}
         busy={busy === 'send'}
         mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}

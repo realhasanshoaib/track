@@ -11,7 +11,6 @@ export const taskPriority = v.union(
 )
 export const taskReferenceType = v.union(
   v.literal('message'), v.literal('attachment'),
-  v.literal('assistant_answer'), v.literal('memory_excerpt'),
 )
 export const taskReferenceAvailability = v.union(
   v.literal('available'), v.literal('unavailable'), v.literal('redacted'),

@@ -80,7 +80,6 @@ export type CompanyProjectAdministrationProps = {
   }) => Promise<unknown>;
   onRequestProjectArchive: (operation: "archive" | "restore") => Promise<Id<"projectArchiveRequests">>;
   onRetryExit: () => Promise<unknown>;
-  onRetryExitCleanup: () => Promise<unknown>;
   onUpdateProjectMember: (
     targetProjectMemberId: Id<"projectMembers">,
     status: "active" | "suspended",
@@ -119,7 +118,6 @@ export function CompanyProjectAdministration({
   onRequestChannelParticipation,
   onRequestProjectArchive,
   onRetryExit,
-  onRetryExitCleanup,
   onUpdateProjectMember,
 }: CompanyProjectAdministrationProps) {
   const eligibleCompanyMembers = useMemo(
@@ -378,18 +376,6 @@ export function CompanyProjectAdministration({
             <Button onClick={() => void run(onPrepareExit)} variant="destructive">
               Start Company exit
             </Button>
-          ) : null}
-          {canManageExit && exitStatus?.status === "active" && snapshotError ? (
-            <div className="company-admin-card">
-              <strong>Exit snapshot cleanup needs attention</strong>
-              <p>{snapshotError}</p>
-              <Button
-                onClick={() => void run(onRetryExitCleanup)}
-                variant="outline"
-              >
-                Retry cleanup
-              </Button>
-            </div>
           ) : null}
           {exitStatus?.status === "exit_pending" ? (
             <div className="company-admin-card">

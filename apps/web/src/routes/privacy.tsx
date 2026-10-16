@@ -12,7 +12,7 @@ const sections = [
       'Email/password account data used for sign-in. Passwords are handled by the authentication system and are not stored by Track in plain text.',
       'Optional two-factor authentication data, including authenticator app setup state and encrypted backup codes.',
       'Profile details you add to Track, such as display name, avatar, designation, bio, timezone, project membership, and notification settings.',
-      'Project content created in Track, including messages, mentions, attachments, audit events, imported memory, and Track Assistant interactions.',
+      'Project content created in Track, including messages, mentions, attachments, audit events.',
       'Operational data needed to keep Track reliable, including device, browser, app version, push notification tokens, request metadata, and diagnostic logs.',
     ],
   },
@@ -20,7 +20,7 @@ const sections = [
     title: 'How We Use Information',
     body: [
       'To authenticate users with Google or email/password, protect sensitive actions with two-factor step-up, and control access to projects and channels.',
-      'To provide channel conversation, evidence-aware AI assistance, project memory, search, audit history, and notifications.',
+      'To provide channel conversation, search, audit history, and notifications.',
       'To improve reliability, investigate abuse or errors, and maintain security.',
       'To comply with legal, contractual, and audit obligations connected to the projects managed in Track.',
     ],
@@ -30,7 +30,7 @@ const sections = [
     body: [
       'We do not sell personal information.',
       'Project content is visible to users who have access to the relevant project or channel.',
-      'We use service providers for hosting, authentication, AI processing, storage, notifications, observability, and app distribution. They process information only as needed to provide those services.',
+      'We use service providers for hosting, authentication, storage, notifications, observability, and app distribution. They process information only as needed to provide those services.',
       'We may disclose information if required by law, to protect rights and security, or to enforce project agreements.',
     ],
   },
@@ -64,8 +64,7 @@ function Privacy() {
         <div className="track-surface mt-6 rounded-md p-4">
           <p className="m-0 text-sm leading-6 text-[var(--ink-2)]">
             Track is a project communication and audit tool operated by Q9 Labs. It
-            helps project teams keep conversation, evidence, shared memory,
-            and permission-aware AI assistance together.
+            helps project teams keep messages and attachments together.
           </p>
         </div>
 

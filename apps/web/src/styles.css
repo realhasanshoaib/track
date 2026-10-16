@@ -335,10 +335,6 @@
   padding: 12px;
 }
 
-.track-thread-message.assistant {
-  background: var(--muted);
-}
-
 .track-thread-message > header,
 .track-thread-message > footer {
   align-items: center;
@@ -4365,8 +4361,7 @@ button {
   backdrop-filter: blur(10px);
 }
 
-.track-message-row,
-.track-assistant-row {
+.track-message-row {
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -4396,20 +4391,8 @@ button {
   }
 }
 
-.track-message-avatar.bot {
-  border: 1px solid var(--hairline-strong);
-  background:
-    linear-gradient(135deg, rgba(240, 177, 0, 0.18), transparent 54%),
-    var(--paper-2);
-  color: var(--accent-strong);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-}
 
-.track-message-body,
-.track-assistant-body {
+.track-message-body {
   position: relative;
   min-width: 0;
   flex: 1;
@@ -4419,10 +4402,6 @@ button {
   color: var(--ink) !important;
   box-shadow: none !important;
   padding: 0;
-}
-
-.track-assistant-row {
-  margin-top: -2px;
 }
 
 .track-message-meta {
@@ -4444,12 +4423,7 @@ button {
   font-size: 10px;
 }
 
-.track-assistant-body .track-message-meta {
-  padding-right: 0;
-}
-
-.track-message-body p,
-.track-assistant-body p {
+.track-message-body p {
   margin: 0;
   color: var(--ink-2);
   font-size: 14px;
@@ -5117,25 +5091,6 @@ button {
   color: var(--success);
 }
 
-.track-assistant-body {
-  border: 1px solid var(--hairline-strong) !important;
-  border-radius: 6px;
-  background: var(--accent-tint) !important;
-  padding: 10px 12px;
-}
-
-.track-evidence-note {
-  margin: 0 0 14px;
-  border: 0;
-  border-top: 1px dashed var(--hairline-strong);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-3);
-  font-size: 12.5px;
-  line-height: 1.45;
-  padding: 12px 0 0;
-}
-
 .track-type-pill {
   display: inline-flex;
   align-items: center;
@@ -5157,45 +5112,6 @@ button {
   background: #c2410c;
 }
 
-.track-evidence-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 9px;
-  color: var(--ink-3);
-  font-family: var(--font-meta);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.track-evidence-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.track-evidence-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px;
-  align-items: start;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--paper-2);
-  color: var(--ink-2);
-  padding: 7px 10px;
-}
-
-.track-evidence-item strong {
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.track-evidence-item span {
-  min-width: 0;
-}
-
 .track-mini-avatar {
   display: inline-flex;
   width: 21px;
@@ -5207,150 +5123,6 @@ button {
   color: var(--paper);
   font-size: 9px;
   font-weight: 650;
-}
-
-.track-citation-chip {
-  display: inline-flex;
-  max-width: min(360px, 100%);
-  align-items: center;
-  gap: 6px;
-  min-height: 22px;
-  margin: 0 3px;
-  border: 1px solid rgba(240, 177, 0, 0.5);
-  border-radius: 6px;
-  background: rgba(240, 177, 0, 0.1);
-  color: #7a5800;
-  font-family: var(--font-meta);
-  letter-spacing: 0.01em;
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1;
-  padding: 0 6px;
-  vertical-align: middle;
-}
-
-.track-citation-source,
-.track-citation-preview {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track-citation-source {
-  flex: 0 0 auto;
-}
-
-.track-citation-preview {
-  color: var(--ink-3);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-button.track-citation-chip {
-  cursor: pointer;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
-}
-
-button.track-citation-chip:hover {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  box-shadow: 0 1px 0 rgba(122, 88, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.track-assistant-sources {
-  display: flex;
-  max-width: min(540px, 100%);
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.track-assistant-sources-label {
-  color: var(--ink-4);
-  font-family: var(--font-meta);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: 0.01em;
-}
-
-.track-assistant-source-list {
-  display: grid;
-  gap: 6px;
-}
-
-.track-assistant-source-card {
-  display: grid;
-  width: 100%;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--paper-2) 76%, transparent);
-  color: inherit;
-  cursor: pointer;
-  padding: 7px 9px;
-  text-align: left;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
-}
-
-.track-assistant-source-card:hover {
-  border-color: rgba(240, 177, 0, 0.55);
-  background: var(--accent-tint);
-  box-shadow: 0 1px 0 rgba(122, 88, 0, 0.08);
-  transform: translateY(-1px);
-}
-
-.track-assistant-source-icon {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  background: var(--paper);
-  color: var(--ink-3);
-}
-
-.track-assistant-source-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.track-assistant-source-main strong,
-.track-assistant-source-main small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track-assistant-source-main strong {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.track-assistant-source-main small {
-  color: var(--ink-3);
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .track-mention-inline {
@@ -5375,11 +5147,6 @@ button.track-mention-inline {
     box-shadow 140ms ease,
     filter 140ms ease,
     transform 140ms ease;
-}
-
-.track-mention-inline.track {
-  background: var(--accent-tint);
-  color: #7a5800;
 }
 
 .track-mention-inline.group.sun,
@@ -6083,10 +5850,6 @@ button.track-mention-inline.group:focus-visible {
   background: var(--avatar-tone-4);
 }
 
-.track-mention-avatar.bot {
-  background: var(--accent);
-  color: var(--ink);
-}
 
 .track-mention-avatar.sun,
 .track-mention-avatar.amber,
@@ -7195,7 +6958,6 @@ button:disabled:hover {
 
   .track-jump-latest,
   .track-message-row,
-  .track-assistant-row,
   .track-message-row.flashing .track-message-body,
   .track-chat-search-popover,
   .track-project-search,
@@ -7549,8 +7311,7 @@ body {
   backdrop-filter: none;
 }
 
-.track-message-row,
-.track-assistant-row {
+.track-message-row {
   position: relative;
   border-radius: 8px;
   padding: 4px 8px;
@@ -9111,12 +8872,6 @@ body {
   border-radius: 8px;
   background: transparent;
   padding: 4px 8px;
-}
-
-.track-thread-message.assistant {
-  border: 1px solid var(--hairline-strong);
-  background: var(--accent-tint);
-  padding: 12px 14px;
 }
 
 .track-thread-message > header strong {

@@ -1,7 +1,7 @@
 {
   "name": "track",
   "private": true,
-  "description": "Chat-first project collaboration with evidence-grounded AI assistance.",
+  "description": "Team conversation and attachments.",
   "homepage": "https://github.com/hhushhas/track#readme",
   "bugs": {
     "url": "https://github.com/hhushhas/track/issues"
@@ -40,10 +40,8 @@
     "@convex-dev/rate-limiter": "^0.3.2",
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "@track/shared": "workspace:*",
-    "@upstash/box": "0.4.4",
     "ai": "^6.0.223",
     "better-auth": "1.6.25",
-    "fflate": "0.8.3",
     "firebase-admin": "14.2.0",
     "hono": "4.13.7",
     "jose": "6.2.5",

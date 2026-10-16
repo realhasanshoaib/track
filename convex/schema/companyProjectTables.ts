@@ -44,20 +44,11 @@ export const companyProjectTables = {
     exitSnapshotStatus: v.optional(exitSnapshotStatus),
     exitSnapshotPhase: v.optional(exitSnapshotPhase),
     exitSnapshotError: v.optional(v.string()),
-    exitContextRevision: v.optional(v.number()),
-    exitMemoryBoxId: v.optional(v.string()),
     exitOwningCompanyId: v.optional(v.id('companies')),
     exitOwningCompanyDisplayName: v.optional(v.string()),
     exitProjectSnapshot: v.optional(v.any()),
     exitChannelSnapshots: v.optional(v.array(v.any())),
     exitMemberSnapshots: v.optional(v.array(v.any())),
-    memorySnapshotStatus: v.optional(
-      v.union(v.literal('pending'), v.literal('verified'), v.literal('failed')),
-    ),
-    memorySnapshotManifestHash: v.optional(v.string()),
-    memorySnapshotManifest: v.optional(v.any()),
-    memorySnapshotPath: v.optional(v.string()),
-    memorySnapshotError: v.optional(v.string()),
     exitedBy: v.optional(v.id('users')),
     exitedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -151,21 +142,6 @@ export const companyProjectTables = {
     .index('by_member', ['projectMemberId'])
     .index('by_member_operation', ['projectMemberId', 'snapshotOperationId'])
     .index('by_retention_status', ['retentionStatus']),
-
-  projectArchiveSnapshots: defineTable({
-    entitlementId: v.id('projectArchiveEntitlements'),
-    scope: v.union(v.literal('project'), v.literal('channel')),
-    groupId: v.optional(v.id('groups')),
-    sourceKind: v.string(),
-    sourceIdentifier: v.string(),
-    sourceRevision: v.optional(v.number()),
-    contentHash: v.string(),
-    contentLength: v.number(),
-    snapshotIdentifier: v.string(),
-    createdAt: v.number(),
-  })
-    .index('by_entitlement', ['entitlementId'])
-    .index('by_entitlement_scope', ['entitlementId', 'scope', 'groupId']),
 
   channelParticipationRequests: defineTable({
     projectId: v.id('projects'),

@@ -399,8 +399,6 @@ describe('Channel threads', () => {
       .toBeNull()
     expect(await asUser(t, outsider).query(api.channelThreads.listMessages, { threadId, userId: outsider }))
       .toEqual([])
-    expect(await asUser(t, outsider).query(api.assistant.listForThread, { threadId, userId: outsider }))
-      .toEqual([])
     await t.run(async (ctx) => await ctx.db.delete(sourceMessageId))
     const retained = await actor.query(api.channelThreads.get, { threadId, userId: owner })
     expect(retained?.thread._id).toBe(threadId)
@@ -654,20 +652,6 @@ describe('Channel threads', () => {
       references: [{ type: 'message', messageId, isPrimary: true }],
       idempotencyKey: 'deletable-message-task',
     })
-    const assistantStreamId = await t.run(async (ctx) =>
-      await ctx.db.insert('assistantStreams', {
-        projectId,
-        groupId,
-        requesterId: owner,
-        promptMessageId: messageId,
-        status: 'completed',
-        answer: 'Grounded answer',
-        evidence: [{ messageId, quote: 'Delete this source after creating the task.' }],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }),
-    )
-
     await expect(asUser(t, member).mutation(api.messages.remove, {
       actorId: member,
       messageId,
@@ -688,9 +672,6 @@ describe('Channel threads', () => {
       references: [{ availability: 'unavailable' }],
     })
     expect(taskDetail?.references[0]).not.toHaveProperty('quote')
-    const assistantStream = await t.run(async (ctx) => await ctx.db.get(assistantStreamId))
-    expect(assistantStream).toMatchObject({ evidence: [] })
-    expect(assistantStream).not.toHaveProperty('promptMessageId')
     const deletionAudit = await t.run(async (ctx) =>
       await ctx.db
         .query('auditEvents')
@@ -771,7 +752,6 @@ describe('Channel threads', () => {
           size: 17,
           kind: 'file' as const,
           uploadedBy: owner,
-          extractionStatus: 'preserved' as const,
           createdAt,
         }
         const firstAttachmentId = await ctx.db.insert('attachments', { ...attachment, messageId: firstMessageId })

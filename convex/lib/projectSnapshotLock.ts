@@ -84,12 +84,5 @@ export async function cancelProjectSnapshotForSourceRemoval(
       operationId: operation.operationId,
       cursor: undefined,
     })
-    if (participation.memorySnapshotPath) {
-      await ctx.scheduler.runAfter(0, internal.projectExitActions.cleanupSnapshot, {
-        projectCompanyId: participation._id,
-        snapshotPath: participation.memorySnapshotPath,
-        boxId: participation.exitMemoryBoxId,
-      })
-    }
   }
 }

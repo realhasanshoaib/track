@@ -32,7 +32,6 @@ import {
   isTaskArchiveStatePayload,
   rankBetween,
   rankForIndex,
-  taskArchiveAssistantRowsPage,
   taskArchiveGroupIsVisible,
   taskArchiveHasEvidence,
   taskArchiveHasLabel,
@@ -69,13 +68,9 @@ const identityArgs = {
 const referenceInput = v.object({
   type: v.union(
     v.literal('message'), v.literal('attachment'),
-    v.literal('assistant_answer'), v.literal('memory_excerpt'),
   ),
   messageId: v.optional(v.id('messages')),
   attachmentId: v.optional(v.id('attachments')),
-  assistantStreamId: v.optional(v.id('assistantStreams')),
-  memoryImportId: v.optional(v.id('memoryImports')),
-  sourceIdentifier: v.optional(v.string()),
   isPrimary: v.optional(v.boolean()),
 })
 
@@ -83,9 +78,6 @@ type ReferenceInput = {
   type: Doc<'taskReferences'>['type']
   messageId?: Id<'messages'>
   attachmentId?: Id<'attachments'>
-  assistantStreamId?: Id<'assistantStreams'>
-  memoryImportId?: Id<'memoryImports'>
-  sourceIdentifier?: string
   isPrimary?: boolean
 }
 
@@ -136,11 +128,7 @@ async function validateReference(
     ? await ctx.db.get(reference.messageId)
     : reference.attachmentId
       ? await ctx.db.get(reference.attachmentId)
-      : reference.assistantStreamId
-        ? await ctx.db.get(reference.assistantStreamId)
-        : reference.memoryImportId
-          ? await ctx.db.get(reference.memoryImportId)
-          : null
+      : null
   if (!source || source.projectId !== projectId || ('groupId' in source && source.groupId !== groupId)) {
     throw new Error('task_reference_invalid')
   }
@@ -223,9 +211,6 @@ async function insertReference(
     channelThreadId,
     messageId: reference.messageId,
     attachmentId: reference.attachmentId,
-    assistantStreamId: reference.assistantStreamId,
-    memoryImportId: reference.memoryImportId,
-    sourceIdentifier: reference.sourceIdentifier,
     quote,
     availability: 'available',
     isPrimary: reference.isPrimary === true || index === 0,
@@ -972,98 +957,6 @@ export const listForMessage = query({
   },
 })
 
-async function taskLinksForAssistant(
-  ctx: QueryCtx,
-  actor: Awaited<ReturnType<typeof requireAuthenticatedActor>>,
-  assistantStreamId: Id<'assistantStreams'>,
-  identity: TaskRequestIdentity,
-) {
-  const stream = await ctx.db.get(assistantStreamId)
-  if (!stream || stream.status !== 'completed' || (stream.channelThreadId && !threadsEnabled())) return null
-  const access = await resolveTaskRequestContext(ctx, actor, stream.projectId, identity, stream.groupId)
-  const canRead = stream.groupId
-    ? access.capabilities.canReadChannel
-    : access.capabilities.canReadProject
-  if (!canRead) return null
-  const entitlement = access.entitlement
-  if (entitlement) {
-    const archiveSource = taskArchiveSourceForEntitlement(entitlement)
-    const referencePage = await taskArchiveAssistantRowsPage(
-      ctx,
-      archiveSource,
-      stream._id,
-      { cursor: null, numItems: taskPageLimit },
-    )
-    const referenceRows = referencePage.page
-    const taskIds = Array.from(new Set((await Promise.all(referenceRows.map(async (row) =>
-      row.sourceTable === 'taskReferences' && row.taskId &&
-      (!row.groupId || await taskArchiveGroupIsVisible(ctx, entitlement, access.projectMember._id, row.groupId))
-        ? row.taskId : null,
-    ))).filter((taskId): taskId is Id<'tasks'> => taskId !== null)))
-    const summaries: Array<TaskLinkSummary> = []
-    for (const taskId of taskIds) {
-      const taskPage = await taskArchiveTaskRowsPage(
-        ctx,
-        archiveSource,
-        taskId,
-        'tasks',
-        { cursor: null, numItems: 1 },
-      )
-      const task = taskPage.page[0] ? taskFromArchiveRow(taskPage.page[0]) : null
-      if (!task || task.archivedAt || task.groupId !== stream.groupId ||
-        (task.groupId && !await taskArchiveGroupIsVisible(
-          ctx,
-          entitlement,
-          access.projectMember._id,
-          task.groupId,
-        ))) continue
-      const [boardRow, stateRow] = await Promise.all([
-        taskArchiveSourceRow(ctx, archiveSource, 'taskBoards', String(task.boardId)),
-        taskArchiveSourceRow(ctx, archiveSource, 'taskWorkflowStates', String(task.workflowStateId)),
-      ])
-      const board = boardRow && isTaskArchiveBoardPayload(boardRow.payload) ? boardRow.payload : null
-      const state = stateRow && isTaskArchiveStatePayload(stateRow.payload) ? stateRow.payload : null
-      if (board && state) summaries.push(taskArchiveSummary(task, board, state, true))
-    }
-    return summaries
-  }
-  const references = await ctx.db.query('taskReferences')
-    .withIndex('by_assistant_stream', (q) => q.eq('assistantStreamId', stream._id)).take(taskPageLimit)
-  const taskIds = Array.from(new Set(references.flatMap((reference) =>
-    reference.availability === 'available' ? [reference.taskId] : [])))
-  const tasks = (await Promise.all(taskIds.map((taskId) => ctx.db.get(taskId))))
-    .filter((task): task is Doc<'tasks'> => Boolean(task && !task.archivedAt && task.groupId === stream.groupId))
-  return await taskSummaryPage(ctx, tasks)
-}
-
-export const listForAssistant = query({
-  args: { assistantStreamId: v.id('assistantStreams'), ...identityArgs },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    return await taskLinksForAssistant(ctx, actor, args.assistantStreamId, args) ?? []
-  },
-})
-
-export const listForAssistantStreams = query({
-  args: {
-    assistantStreamIds: v.array(v.id('assistantStreams')),
-    ...identityArgs,
-  },
-  handler: async (ctx, args) => {
-    if (args.assistantStreamIds.length > taskPageLimit) throw new Error('task_batch_limit')
-    const actor = await requireAuthenticatedActor(ctx)
-    const results: Array<{ assistantStreamId: Id<'assistantStreams'>; tasks: Array<TaskLinkSummary> }> = []
-    const uniqueIds = Array.from(new Set(args.assistantStreamIds.map(String)))
-    for (const streamKey of uniqueIds) {
-      const streamId = args.assistantStreamIds.find((candidate) => String(candidate) === streamKey)
-      if (!streamId) continue
-      const tasks = await taskLinksForAssistant(ctx, actor, streamId, args)
-      if (tasks) results.push({ assistantStreamId: streamId, tasks })
-    }
-    return results
-  },
-})
-
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -1731,7 +1624,6 @@ export const invalidateReferences = internalMutation({
   args: {
     messageId: v.optional(v.id('messages')),
     attachmentId: v.optional(v.id('attachments')),
-    assistantStreamId: v.optional(v.id('assistantStreams')),
     redacted: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

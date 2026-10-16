@@ -53,7 +53,7 @@ test('sign-in bootstrap and conversation write stay on the seeded project', asyn
   await expect(sourceTaskLink).toContainText('Linked to this Channel message')
 
   const body = `browser journey message ${Date.now()}`
-  const composer = page.getByPlaceholder('Message browser-journeys or ask @track...')
+  const composer = page.getByPlaceholder('Message browser-journeys...')
   await composer.fill(body)
   await page.getByRole('button', { name: /Send/ }).click()
   await expect(page.getByText(body, { exact: true })).toBeVisible({ timeout: 30_000 })

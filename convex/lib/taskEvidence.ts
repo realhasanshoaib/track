@@ -6,7 +6,6 @@ export async function invalidateTaskEvidence(
   source: {
     messageId?: Id<'messages'>
     attachmentId?: Id<'attachments'>
-    assistantStreamId?: Id<'assistantStreams'>
     redacted?: boolean
   },
 ) {
@@ -22,14 +21,7 @@ export async function invalidateTaskEvidence(
             q.eq('attachmentId', source.attachmentId),
           )
           .collect()
-      : source.assistantStreamId
-        ? await ctx.db
-            .query('taskReferences')
-            .withIndex('by_assistant_stream', (q) =>
-              q.eq('assistantStreamId', source.assistantStreamId),
-            )
-            .collect()
-        : []
+      : []
   const suggestionReferences = source.messageId
     ? await ctx.db
         .query('taskSuggestionReferences')
@@ -66,14 +58,7 @@ export async function invalidateTaskEvidence(
             q.eq('attachmentId', source.attachmentId),
           )
           .collect()
-      : source.assistantStreamId
-        ? await ctx.db
-            .query('taskArchiveSnapshots')
-            .withIndex('by_assistant_stream', (q) =>
-              q.eq('assistantStreamId', source.assistantStreamId),
-            )
-            .collect()
-        : []
+      : []
   for (const snapshot of snapshots) {
     const payload = snapshot.payload as Record<string, unknown>
     await ctx.db.patch(snapshot._id, {

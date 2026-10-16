@@ -11,7 +11,6 @@ const targetType = v.union(
   v.literal('message'),
   v.literal('attachment'),
   v.literal('voice_note'),
-  v.literal('assistant_answer'),
   v.literal('task'),
   v.literal('task_comment'),
   v.literal('task_suggestion'),
@@ -36,7 +35,6 @@ export const create = mutation({
     groupId: v.optional(v.id('groups')),
     targetMessageId: v.optional(v.id('messages')),
     targetAttachmentId: v.optional(v.id('attachments')),
-    targetAssistantStreamId: v.optional(v.id('assistantStreams')),
     targetTaskId: v.optional(v.id('tasks')),
     targetTaskCommentId: v.optional(v.id('taskComments')),
     targetTaskSuggestionId: v.optional(v.id('taskSuggestions')),
@@ -69,13 +67,6 @@ export const create = mutation({
       scopedGroupId = attachment.groupId
       channelThreadId = message?.channelThreadId
       await authorizeScopedRequest(ctx, { projectId: args.projectId, groupId: attachment.groupId, claimedUserId: args.reporterId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'readChannel')
-    }
-    if (args.targetAssistantStreamId) {
-      const stream = await ctx.db.get(args.targetAssistantStreamId)
-      if (!stream || stream.projectId !== args.projectId) throw new Error('assistant_answer_not_found')
-      scopedGroupId = stream.groupId
-      channelThreadId = stream.channelThreadId
-      await authorizeScopedRequest(ctx, { projectId: args.projectId, groupId: stream.groupId, claimedUserId: args.reporterId, actingCompanyId: args.actingCompanyId, projectMemberId: args.projectMemberId }, 'readChannel')
     }
     if (args.targetTaskId) {
       const access = await requireTaskAccess(ctx, actor, args.targetTaskId, args)
@@ -121,7 +112,6 @@ export const create = mutation({
       targetType: args.targetType,
       targetMessageId: args.targetMessageId,
       targetAttachmentId: args.targetAttachmentId,
-      targetAssistantStreamId: args.targetAssistantStreamId,
       targetTaskId: args.targetTaskId,
       targetTaskCommentId: args.targetTaskCommentId,
       targetTaskSuggestionId: args.targetTaskSuggestionId,

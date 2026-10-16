@@ -543,7 +543,7 @@ export async function captureExitBatch(
         cursor: cursor.cursor,
       })
       return {
-        phase: result.done ? 'memory' as const : 'tasks' as const,
+        phase: result.done ? 'complete' as const : 'tasks' as const,
         cursor: result.done
           ? null
           : encodeCursor({ phase: 'tasks', cursor: result.cursor }),

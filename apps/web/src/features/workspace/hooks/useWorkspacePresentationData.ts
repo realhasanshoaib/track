@@ -5,7 +5,7 @@ import { api } from '../../../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import { buildComposerPlaceholder } from '#/features/workspace/lib/mentions'
 import { buildChatSearchMatches } from '#/features/workspace/search/chat-search'
-import { buildMessageCitations, buildWorkspaceThreadItems } from '#/features/workspace/search/chat-thread-data'
+import { buildWorkspaceThreadItems } from '#/features/workspace/search/chat-thread-data'
 import { buildProjectSearchSections, getProjectSearchTotal } from '#/features/workspace/search/project-search-sections'
 import type { useWorkspaceData } from '#/features/workspace/hooks/useWorkspaceData'
 
@@ -15,7 +15,6 @@ type PresentationDataOptions = Pick<
   WorkspaceData,
   | 'activeChannelMembers'
   | 'activeGroup'
-  | 'groupAssistantStreams'
   | 'groupMessages'
   | 'projectSearchResults'
 > & {
@@ -30,14 +29,13 @@ export function useWorkspacePresentationData({
   activeGroup,
   chatSearchQuery,
   currentUserId,
-  groupAssistantStreams,
   groupMessages,
   projectSearchResults,
 }: PresentationDataOptions) {
   const visibleMessages = useMemo(() => [...groupMessages].reverse(), [groupMessages])
   const threadItems = useMemo(
-    () => buildWorkspaceThreadItems({ assistantStreams: groupAssistantStreams, messages: visibleMessages }),
-    [groupAssistantStreams, visibleMessages],
+    () => buildWorkspaceThreadItems({ messages: visibleMessages }),
+    [visibleMessages],
   )
   const chatSearchTerm = chatSearchQuery.trim()
   const chatSearchMatches = useMemo(
@@ -102,7 +100,6 @@ export function useWorkspacePresentationData({
     hiddenHeaderMembers,
     latestThreadItemKey: threadItems.at(-1)?.key ?? null,
     messageAuthorAvatarUrlById,
-    messageCitations: buildMessageCitations(visibleMessages),
     projectSearchSections,
     projectSearchTotal: getProjectSearchTotal(projectSearchSections),
     threadItems,

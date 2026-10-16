@@ -1,5 +1,4 @@
 export type MessageSendAttempt<TMessageId, TUploadedAttachment> = {
-  assistantCompleted: boolean
   attachedPendingIds: Set<string>
   idempotencyKey: string
   messageId: TMessageId | null
@@ -12,7 +11,6 @@ export function createMessageSendAttempt<TMessageId, TUploadedAttachment>(
   idempotencyKey: string,
 ): MessageSendAttempt<TMessageId, TUploadedAttachment> {
   return {
-    assistantCompleted: false,
     attachedPendingIds: new Set(),
     idempotencyKey,
     messageId: null,
@@ -22,14 +20,12 @@ export function createMessageSendAttempt<TMessageId, TUploadedAttachment>(
 }
 
 export async function runMessageSendAttempt<TPendingAttachment extends { id: string }, TMessageId, TUploadedAttachment>({
-  askAssistant,
   attach,
   attempt,
   pendingAttachments,
   send,
   upload,
 }: {
-  askAssistant?: (messageId: TMessageId) => Promise<void>
   attach: (messageId: TMessageId, uploaded: TUploadedAttachment) => Promise<void>
   attempt: MessageSendAttempt<TMessageId, TUploadedAttachment>
   pendingAttachments: Array<TPendingAttachment>
@@ -55,15 +51,5 @@ export async function runMessageSendAttempt<TPendingAttachment extends { id: str
     attempt.attachedPendingIds.add(uploaded.id)
   }
 
-  let assistantError: unknown | null = null
-  if (askAssistant && !attempt.assistantCompleted) {
-    try {
-      await askAssistant(attempt.messageId)
-      attempt.assistantCompleted = true
-    } catch (error) {
-      assistantError = error
-    }
-  }
-
-  return { assistantError, messageId: attempt.messageId }
+  return { messageId: attempt.messageId }
 }

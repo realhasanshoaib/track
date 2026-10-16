@@ -68,19 +68,6 @@ export type GroupMessageItem = {
   } | null
 }
 
-export type MessageCitationPreview = {
-  author: string
-  body: string
-  createdAt: number
-  attachments: Array<{
-    id: string
-    filename: string
-    contentType: string
-    size: number
-    kind?: Doc<'attachments'>['kind']
-  }>
-}
-
 export function getForwardedSourceLabel(forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>) {
   return forwarded.sourceGroupName ? `Forwarded from ${forwarded.sourceGroupName}` : 'Forwarded message'
 }
@@ -345,7 +332,6 @@ function ForwardedMessageBlock({
   )
 }
 
-export { AssistantAnswer } from './components/AssistantAnswer'
 export function MentionInline({
   handle,
   index,
@@ -375,7 +361,7 @@ export function MentionInline({
 
   return (
     <span
-      className={handle === 'track' ? 'track-mention-inline track' : 'track-mention-inline'}
+      className={'track-mention-inline'}
       key={`${handle}-${index}`}
     >
       @{handle}

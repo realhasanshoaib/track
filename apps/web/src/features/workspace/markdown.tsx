@@ -3,13 +3,11 @@ import type { ReactNode } from 'react'
 export function MarkdownText({
   className,
   highlightQuery,
-  renderCitation,
   renderMention,
   text,
 }: {
   className?: string
   highlightQuery?: string
-  renderCitation?: (citationId: string, index: number) => ReactNode
   renderMention?: (handle: string, index: number) => ReactNode
   text: string
 }) {
@@ -57,7 +55,7 @@ export function MarkdownText({
           <ul key={`list-${blockIndex}`}>
             {block.items.map((item, itemIndex) => (
               <li key={`${item}-${itemIndex}`}>
-                {renderMarkdownInline(item, renderCitation, renderMention, highlightQuery)}
+                {renderMarkdownInline(item, renderMention, highlightQuery)}
               </li>
             ))}
           </ul>
@@ -66,7 +64,7 @@ export function MarkdownText({
             {block.text.split('\n').map((line, lineIndex) => (
               <span key={`${line}-${lineIndex}`}>
                 {lineIndex > 0 ? <br /> : null}
-                {renderMarkdownInline(line, renderCitation, renderMention, highlightQuery)}
+                {renderMarkdownInline(line, renderMention, highlightQuery)}
               </span>
             ))}
           </p>
@@ -78,24 +76,21 @@ export function MarkdownText({
 
 function renderMarkdownInline(
   text: string,
-  renderCitation?: (citationId: string, index: number) => ReactNode,
   renderMention?: (handle: string, index: number) => ReactNode,
   highlightQuery?: string,
 ): ReactNode[] {
   const tokenPattern =
-    /(\[[a-z0-9]+\]|\[[^\]]+\]\([^)]+\)|@[a-z0-9._-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/gi
+    /(\[[^\]]+\]\([^)]+\)|@[a-z0-9._-]+|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/gi
   const parts = text.split(tokenPattern).filter(Boolean)
 
   return parts.map((part, index) => {
-    const citationMatch = /^\[([a-z0-9]+)\]$/i.exec(part)
-    if (citationMatch && renderCitation) return renderCitation(citationMatch[1], index)
 
     if (/^@[a-z0-9._-]+$/i.test(part)) {
       if (renderMention) return renderMention(part.slice(1).toLowerCase(), index)
 
       return (
         <span
-          className={part.toLowerCase() === '@track' ? 'track-mention-inline track' : 'track-mention-inline'}
+          className={'track-mention-inline'}
           key={`${part}-${index}`}
         >
           {part}
@@ -119,7 +114,7 @@ function renderMarkdownInline(
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
         <strong key={`${part}-${index}`}>
-          {renderMarkdownInline(part.slice(2, -2), renderCitation, renderMention, highlightQuery)}
+          {renderMarkdownInline(part.slice(2, -2), renderMention, highlightQuery)}
         </strong>
       )
     }
@@ -127,7 +122,7 @@ function renderMarkdownInline(
     if (part.startsWith('*') && part.endsWith('*')) {
       return (
         <em key={`${part}-${index}`}>
-          {renderMarkdownInline(part.slice(1, -1), renderCitation, renderMention, highlightQuery)}
+          {renderMarkdownInline(part.slice(1, -1), renderMention, highlightQuery)}
         </em>
       )
     }

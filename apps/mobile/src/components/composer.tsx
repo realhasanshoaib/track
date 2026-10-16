@@ -52,7 +52,7 @@ export type ComposerProps = {
   /** Screen-level busy flag; disables sending while another write is in flight. */
   busy: boolean;
   /**
-   * Everyone who can be mentioned here, assistant included. Omitting it turns
+   * Everyone who can be mentioned here. Omitting it turns
    * the autocomplete off; mentions still send, they just are not suggested.
    */
   mentionCandidatesHasMore?: boolean;
@@ -356,7 +356,7 @@ export function Composer({
               }}
               onFocus={onFocus}
               onSelectionChange={handleSelectionChange}
-              placeholder="Message or ask @track"
+              placeholder="Message"
               placeholderTextColor={theme.textTertiary}
               ref={inputRef}
               selection={selection ?? undefined}

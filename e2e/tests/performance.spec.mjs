@@ -103,7 +103,7 @@ test('real app operation timings and resource bytes stay inside budgets', async 
   }
 
   const sendAcknowledgementMs = []
-  const composer = page.getByPlaceholder('Message browser-journeys or ask @track...')
+  const composer = page.getByPlaceholder('Message browser-journeys...')
   for (let index = 0; index < 3; index += 1) {
     const body = `performance browser message ${Date.now()}-${index}`
     sendAcknowledgementMs.push(await measure(async () => {

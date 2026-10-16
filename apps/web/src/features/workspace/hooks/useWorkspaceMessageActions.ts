@@ -1,5 +1,5 @@
-import { useAction, useMutation } from 'convex/react'
-import { useRef, useState } from 'react'
+import { useMutation } from 'convex/react'
+import { useRef } from 'react'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
@@ -54,9 +54,7 @@ export function useWorkspaceMessageActions({
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl)
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent)
   const attachFileMutation = useMutation(api.messages.attachFile)
-  const askTrackAction = useAction(api.assistant.ask)
   const sendAttemptRef = useRef<MessageSendAttempt<Id<'messages'>, UploadedPendingAttachment> | null>(null)
-  const [assistantRetryPending, setAssistantRetryPending] = useState(false)
 
   async function withMessageBusy(label: string, action: () => Promise<void>) {
     onBusyChange(label)
@@ -93,18 +91,7 @@ export function useWorkspaceMessageActions({
         )
         sendAttemptRef.current = attempt
       }
-      const result = await runMessageSendAttempt({
-        askAssistant: mentionHandles.includes('track')
-          ? async (messageId) => {
-              await askTrackAction({
-                projectId: activeProjectId,
-                groupId: activeGroupId,
-                requesterId: trackUserId,
-                promptMessageId: messageId,
-                question: body,
-              })
-            }
-          : undefined,
+      await runMessageSendAttempt({
         attach: async (messageId, attachment) => {
           await attachFileMutation({
             projectId: activeProjectId,
@@ -152,15 +139,7 @@ export function useWorkspaceMessageActions({
             trackUserId,
           }),
       })
-      if (result.assistantError) {
-        setAssistantRetryPending(true)
-        onError(new Error('Message sent, but Track Assistant failed. Retry the assistant response.', {
-          cause: result.assistantError,
-        }))
-        return
-      }
       sendAttemptRef.current = null
-      setAssistantRetryPending(false)
       onAfterSend()
     })
   }
@@ -177,7 +156,7 @@ export function useWorkspaceMessageActions({
       const body = input.body.trim()
       const mentionHandles = parseMentions(body)
       const mentionedUserIds = resolveMentionedUserIds(mentionHandles, forwardMentionOptions)
-      const messageId = await forwardMessageMutation({
+      await forwardMessageMutation({
         projectId: activeProjectId,
         sourceMessageId: input.sourceMessageId,
         targetGroupId: input.targetGroupId,
@@ -185,15 +164,6 @@ export function useWorkspaceMessageActions({
         body,
         mentions: mentionedUserIds,
       })
-      if (mentionHandles.includes('track')) {
-        await askTrackAction({
-          projectId: activeProjectId,
-          groupId: input.targetGroupId,
-          requesterId: trackUserId,
-          promptMessageId: messageId,
-          question: body,
-        })
-      }
       return true
     } catch (error) {
       onError(error)
@@ -220,7 +190,6 @@ export function useWorkspaceMessageActions({
   }
 
   return {
-    assistantRetryPending,
     handleDeleteMessage,
     handleForwardMessage,
     handleSendMessage,

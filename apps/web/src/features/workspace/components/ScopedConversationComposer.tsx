@@ -1,5 +1,5 @@
 import { parseMentions } from '@track/shared'
-import { useAction, useMutation, useQuery } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../../../../../../convex/_generated/api'
@@ -24,7 +24,6 @@ import {
   ConversationComposer,
   type ConversationComposerReply,
 } from '#/features/workspace/components/ConversationComposer'
-import { ProjectMemoryImportDialog } from '#/features/workspace/components/ProjectMemoryImportDialog'
 import { usePendingAttachments } from '#/features/workspace/hooks/usePendingAttachments'
 import type { GroupReference } from '#/features/workspace/group-types'
 import { getActiveMention } from '#/features/workspace/identity'
@@ -84,7 +83,6 @@ function ScopedConversationComposerSession({
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl)
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent)
   const attachFile = useMutation(api.messages.attachFile)
-  const askTrack = useAction(api.assistant.ask)
   const channelMembers = useQuery(api.groups.listMembers, {
     actingCompanyId: context?.actingCompanyId,
     groupId: group._id,
@@ -103,9 +101,7 @@ function ScopedConversationComposerSession({
   const [composerCursor, setComposerCursor] = useState(0)
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [mentionIndex, setMentionIndex] = useState(0)
-  const [memoryImportOpen, setMemoryImportOpen] = useState(false)
   const [voiceRecordingActive, setVoiceRecordingActive] = useState(false)
-  const [assistantRetryPending, setAssistantRetryPending] = useState(false)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
@@ -245,20 +241,7 @@ function ScopedConversationComposerSession({
         )
         sendAttemptRef.current = attempt
       }
-      const result = await runMessageSendAttempt({
-        askAssistant: mentionHandles.includes('track')
-          ? async (messageId) => {
-              await askTrack({
-                ...context,
-                channelThreadId,
-                groupId: group._id,
-                projectId,
-                promptMessageId: messageId,
-                question: body,
-                requesterId: actorId,
-              })
-            }
-          : undefined,
+      await runMessageSendAttempt({
         attach: async (messageId, attachment) => {
           await attachFile({
             ...context,
@@ -316,18 +299,7 @@ function ScopedConversationComposerSession({
           }),
       })
       if (!mountedRef.current) return
-      if (result.assistantError) {
-        setAssistantRetryPending(true)
-        reportError(
-          new Error(
-            'Message sent, but Track Assistant failed. Press Retry Assistant to retry the response.',
-            { cause: result.assistantError },
-          ),
-        )
-        return
-      }
       sendAttemptRef.current = null
-      setAssistantRetryPending(false)
       setComposer('')
       setComposerCursor(0)
       attachments.clearPendingAttachments()
@@ -363,7 +335,6 @@ function ScopedConversationComposerSession({
         className={className}
         composer={composer}
         composerRef={composerRef}
-        contentLocked={assistantRetryPending}
         emojiGroups={emojiGroups}
         emojiPickerOpen={emojiPickerOpen}
         filteredMentionOptions={filteredMentionOptions}
@@ -384,35 +355,18 @@ function ScopedConversationComposerSession({
         onInsertComposerText={insertComposerText}
         onMentionIndexChange={setMentionIndex}
         onMentionSelect={handleMentionSelect}
-        onOpenMemoryImport={() => setMemoryImportOpen(true)}
         onRecordingChange={setVoiceRecordingActive}
         onReplyChange={onReplyChange}
         onSendMessage={() => void handleSendMessage()}
         onShowMentionMenuClose={() => setComposerCursor(0)}
         onVoiceNoteRecorded={attachments.handleVoiceNoteRecorded}
-        pendingAttachments={assistantRetryPending ? [] : attachments.pendingAttachments}
+        pendingAttachments={attachments.pendingAttachments}
         placeholder={placeholder ?? (channelThreadId ? 'Reply in thread' : `Message #${group.name}`)}
         removePendingAttachment={attachments.removePendingAttachment}
-        replyTo={assistantRetryPending ? null : replyTo}
-        sendLabel={assistantRetryPending ? 'Retry Assistant' : 'Send'}
-        setComposerCursorFromRef={handleComposerSelection}
+        replyTo={replyTo}
+                setComposerCursorFromRef={handleComposerSelection}
         showMentionMenu={showMentionMenu}
         voiceRecordingActive={voiceRecordingActive}
-      />
-      <ProjectMemoryImportDialog
-        actingCompanyId={context?.actingCompanyId}
-        actorId={actorId}
-        groupId={group._id}
-        groupName={group.name}
-        onBusyChange={(busy) => {
-          changeBusyAction(busy ? 'memory-import' : null)
-          if (busy) setLocalError(null)
-        }}
-        onError={reportError}
-        onOpenChange={setMemoryImportOpen}
-        open={memoryImportOpen}
-        projectId={projectId}
-        projectMemberId={context?.projectMemberId}
       />
     </>
   )

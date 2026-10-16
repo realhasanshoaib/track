@@ -147,7 +147,6 @@ export const remove = mutation({
       messages,
       attachments,
       typingIndicators,
-      assistantStreams,
       groupNotificationSettings,
       invitations,
       channelThreads,
@@ -157,7 +156,6 @@ export const remove = mutation({
       ctx.db.query('messages').withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('attachments').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('typingIndicators').withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('assistantStreams').withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('groupNotificationSettings').collect(),
       Promise.all(
         (['pending', 'accepted', 'revoked', 'expired'] as const).map((status) =>
@@ -194,7 +192,6 @@ export const remove = mutation({
     await Promise.all(attachments.map((attachment) => ctx.storage.delete(attachment.storageId).catch(() => undefined)))
     for (const message of messages) await invalidateTaskEvidence(ctx, { messageId: message._id })
     for (const attachment of attachments) await invalidateTaskEvidence(ctx, { attachmentId: attachment._id })
-    for (const stream of assistantStreams) await invalidateTaskEvidence(ctx, { assistantStreamId: stream._id })
 
     for (const row of groupNotificationSettings) {
       if (row.groupId === args.groupId) await ctx.db.delete(row._id)
@@ -202,7 +199,6 @@ export const remove = mutation({
     for (const row of invitations) {
       if (row.groupId === args.groupId) await ctx.db.delete(row._id)
     }
-    for (const row of assistantStreams) await ctx.db.delete(row._id)
     for (const row of threadReadStates) {
       if (channelThreadIds.has(String(row.channelThreadId))) await ctx.db.delete(row._id)
     }

@@ -5,8 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import type { api } from '../../../../convex/_generated/api';
-import type { Doc, Id } from '../../../../convex/_generated/dataModel';
-import { AssistantMessage } from '@/components/chat/assistant-message';
+import type { Id } from '../../../../convex/_generated/dataModel';
 import { MessageBubble } from '@/components/chat/message-bubble';
 import type { DetailedMessage } from '@/components/chat/types';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -17,12 +16,10 @@ import { useTheme } from '@/hooks/use-theme';
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 
 export type ThreadItem =
-  | { kind: 'message'; key: string; at: number; item: DetailedMessage }
-  | { kind: 'assistant'; key: string; at: number; stream: Doc<'assistantStreams'> };
+  { kind: 'message'; key: string; at: number; item: DetailedMessage };
 
 export type GroupedThreadItem =
   | { kind: 'message'; key: string; at: number; item: DetailedMessage; isFirstInGroup: boolean }
-  | { kind: 'assistant'; key: string; at: number; stream: Doc<'assistantStreams'>; isFirstInGroup: boolean }
   | { kind: 'date-sep'; key: string; at: number; label: string };
 
 export type ProjectMemberRow = FunctionReturnType<typeof api.mobile.listProjectMembersPage>['page'][number];
@@ -86,14 +83,6 @@ export function ThreadRow({
           </View>
         </Animated.View>
         <Animated.View style={[isFirstInGroup ? styles.groupStart : styles.grouped, animatedStyle]}>
-          {item.kind === 'assistant' ? (
-            <AssistantMessage
-              isFirstInGroup={isFirstInGroup}
-              onLongPress={onLongPress}
-              stream={item.stream}
-              timeLabel={fmtTime(item.stream.createdAt)}
-            />
-          ) : (
             <MessageBubble
               isFirstInGroup={isFirstInGroup}
               isOwnMessage={Boolean(isOwnMessage)}
@@ -103,7 +92,6 @@ export function ThreadRow({
               onPressReply={onPressReply}
               timeLabel={fmtTime(item.item.message.createdAt)}
             />
-          )}
         </Animated.View>
       </View>
     </GestureDetector>
@@ -136,7 +124,7 @@ export function resolveMentionProjectMemberIds(body: string, members: ProjectMem
 }
 
 function resolveMentionMembers(body: string, members: ProjectMemberRow[]) {
-  const tokens = parseMentions(body).filter((t) => t !== 'track');
+  const tokens = parseMentions(body);
   if (!tokens.length) return [];
   const tokenSet = new Set(tokens.map(norm));
   const matches = new Map<string, Array<{ projectMemberId: Id<'projectMembers'>; userId: Id<'users'> }>>();

@@ -8,8 +8,6 @@
  * @module
  */
 
-import type * as assistant from "../assistant.js";
-import type * as assistantNode from "../assistantNode.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as channelThreads from "../channelThreads.js";
@@ -26,13 +24,9 @@ import type * as groups from "../groups.js";
 import type * as http from "../http.js";
 import type * as invitations from "../invitations.js";
 import type * as lib_actorContext from "../lib/actorContext.js";
-import type * as lib_ai from "../lib/ai.js";
 import type * as lib_apns from "../lib/apns.js";
 import type * as lib_archivedProjectSearch from "../lib/archivedProjectSearch.js";
-import type * as lib_assistantAttachments from "../lib/assistantAttachments.js";
-import type * as lib_attachmentTextExtraction from "../lib/attachmentTextExtraction.js";
 import type * as lib_audit from "../lib/audit.js";
-import type * as lib_box from "../lib/box.js";
 import type * as lib_channelMembership from "../lib/channelMembership.js";
 import type * as lib_channelThreadPolicy from "../lib/channelThreadPolicy.js";
 import type * as lib_companyInvitations from "../lib/companyInvitations.js";
@@ -42,7 +36,6 @@ import type * as lib_devAuth from "../lib/devAuth.js";
 import type * as lib_fcm from "../lib/fcm.js";
 import type * as lib_legacyArchiveSnapshot from "../lib/legacyArchiveSnapshot.js";
 import type * as lib_mediaPreview from "../lib/mediaPreview.js";
-import type * as lib_memoryPolicy from "../lib/memoryPolicy.js";
 import type * as lib_messageUpload from "../lib/messageUpload.js";
 import type * as lib_nativePush from "../lib/nativePush.js";
 import type * as lib_observability from "../lib/observability.js";
@@ -64,14 +57,11 @@ import type * as lib_taskModel from "../lib/taskModel.js";
 import type * as lib_taskNotifications from "../lib/taskNotifications.js";
 import type * as lib_taskPolicy from "../lib/taskPolicy.js";
 import type * as mediaPreview from "../mediaPreview.js";
-import type * as memory from "../memory.js";
-import type * as memoryActions from "../memoryActions.js";
 import type * as messages from "../messages.js";
 import type * as mobile from "../mobile.js";
 import type * as notifications from "../notifications.js";
 import type * as projectArchives from "../projectArchives.js";
 import type * as projectExit from "../projectExit.js";
-import type * as projectExitActions from "../projectExitActions.js";
 import type * as projectOwnership from "../projectOwnership.js";
 import type * as projects from "../projects.js";
 import type * as pushDelivery from "../pushDelivery.js";
@@ -95,8 +85,6 @@ import type * as taskComments from "../taskComments.js";
 import type * as taskDetection from "../taskDetection.js";
 import type * as taskDetectionNode from "../taskDetectionNode.js";
 import type * as taskLabels from "../taskLabels.js";
-import type * as taskMemoryExtraction from "../taskMemoryExtraction.js";
-import type * as taskMemoryExtractionNode from "../taskMemoryExtractionNode.js";
 import type * as taskNotifications from "../taskNotifications.js";
 import type * as taskReminders from "../taskReminders.js";
 import type * as taskSearch from "../taskSearch.js";
@@ -111,8 +99,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  assistant: typeof assistant;
-  assistantNode: typeof assistantNode;
   audit: typeof audit;
   auth: typeof auth;
   channelThreads: typeof channelThreads;
@@ -129,13 +115,9 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   invitations: typeof invitations;
   "lib/actorContext": typeof lib_actorContext;
-  "lib/ai": typeof lib_ai;
   "lib/apns": typeof lib_apns;
   "lib/archivedProjectSearch": typeof lib_archivedProjectSearch;
-  "lib/assistantAttachments": typeof lib_assistantAttachments;
-  "lib/attachmentTextExtraction": typeof lib_attachmentTextExtraction;
   "lib/audit": typeof lib_audit;
-  "lib/box": typeof lib_box;
   "lib/channelMembership": typeof lib_channelMembership;
   "lib/channelThreadPolicy": typeof lib_channelThreadPolicy;
   "lib/companyInvitations": typeof lib_companyInvitations;
@@ -145,7 +127,6 @@ declare const fullApi: ApiFromModules<{
   "lib/fcm": typeof lib_fcm;
   "lib/legacyArchiveSnapshot": typeof lib_legacyArchiveSnapshot;
   "lib/mediaPreview": typeof lib_mediaPreview;
-  "lib/memoryPolicy": typeof lib_memoryPolicy;
   "lib/messageUpload": typeof lib_messageUpload;
   "lib/nativePush": typeof lib_nativePush;
   "lib/observability": typeof lib_observability;
@@ -167,14 +148,11 @@ declare const fullApi: ApiFromModules<{
   "lib/taskNotifications": typeof lib_taskNotifications;
   "lib/taskPolicy": typeof lib_taskPolicy;
   mediaPreview: typeof mediaPreview;
-  memory: typeof memory;
-  memoryActions: typeof memoryActions;
   messages: typeof messages;
   mobile: typeof mobile;
   notifications: typeof notifications;
   projectArchives: typeof projectArchives;
   projectExit: typeof projectExit;
-  projectExitActions: typeof projectExitActions;
   projectOwnership: typeof projectOwnership;
   projects: typeof projects;
   pushDelivery: typeof pushDelivery;
@@ -198,8 +176,6 @@ declare const fullApi: ApiFromModules<{
   taskDetection: typeof taskDetection;
   taskDetectionNode: typeof taskDetectionNode;
   taskLabels: typeof taskLabels;
-  taskMemoryExtraction: typeof taskMemoryExtraction;
-  taskMemoryExtractionNode: typeof taskMemoryExtractionNode;
   taskNotifications: typeof taskNotifications;
   taskReminders: typeof taskReminders;
   taskSearch: typeof taskSearch;

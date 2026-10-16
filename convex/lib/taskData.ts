@@ -40,8 +40,7 @@ function isTaskStateCategoryValue(value: unknown): value is Doc<'taskWorkflowSta
 }
 
 function isTaskReferenceTypeValue(value: unknown): value is Doc<'taskReferences'>['type'] {
-  return value === 'message' || value === 'attachment' ||
-    value === 'assistant_answer' || value === 'memory_excerpt'
+  return value === 'message' || value === 'attachment'
 }
 
 function isTaskReferenceAvailabilityValue(
@@ -162,9 +161,6 @@ export function isTaskArchiveReferencePayload(value: unknown): value is Doc<'tas
     isOptionalArchiveField(archiveField(value, 'channelThreadId'), (candidate) => isArchiveId(candidate)) &&
     isOptionalArchiveField(archiveField(value, 'messageId'), (candidate) => isArchiveId(candidate)) &&
     isOptionalArchiveField(archiveField(value, 'attachmentId'), (candidate) => isArchiveId(candidate)) &&
-    isOptionalArchiveField(archiveField(value, 'assistantStreamId'), (candidate) => isArchiveId(candidate)) &&
-    isOptionalArchiveField(archiveField(value, 'memoryImportId'), (candidate) => isArchiveId(candidate)) &&
-    isOptionalArchiveField(archiveField(value, 'sourceIdentifier'), (candidate) => typeof candidate === 'string') &&
     isOptionalArchiveField(archiveField(value, 'quote'), (candidate) => typeof candidate === 'string') &&
     typeof archiveField(value, 'availability') === 'string' &&
     typeof archiveField(value, 'isPrimary') === 'boolean' &&
@@ -218,8 +214,6 @@ export function isTaskArchiveSuggestionReferencePayload(
     isOptionalArchiveField(archiveField(value, 'channelThreadId'), (candidate) => isArchiveId(candidate)) &&
     isOptionalArchiveField(archiveField(value, 'messageId'), (candidate) => isArchiveId(candidate)) &&
     isOptionalArchiveField(archiveField(value, 'attachmentId'), (candidate) => isArchiveId(candidate)) &&
-    isOptionalArchiveField(archiveField(value, 'memoryImportId'), (candidate) => isArchiveId(candidate)) &&
-    isOptionalArchiveField(archiveField(value, 'sourceIdentifier'), (candidate) => typeof candidate === 'string') &&
     isOptionalArchiveField(archiveField(value, 'quote'), (candidate) => typeof candidate === 'string') &&
     isTaskReferenceAvailabilityValue(archiveField(value, 'availability')) &&
     typeof archiveField(value, 'isPrimary') === 'boolean' &&
@@ -486,17 +480,13 @@ export async function taskView(
   )) {
     const source = reference.messageId ? await ctx.db.get(reference.messageId)
       : reference.attachmentId ? await ctx.db.get(reference.attachmentId)
-        : reference.assistantStreamId ? await ctx.db.get(reference.assistantStreamId)
-          : reference.memoryImportId ? await ctx.db.get(reference.memoryImportId) : null
-    const sourceScopeMatches = source && reference.memoryImportId && 'scope' in source
-      ? source.scope === 'project' ? reference.groupId === undefined : source.groupId === reference.groupId
-      : Boolean(source && (!('groupId' in source) || source.groupId === reference.groupId))
+        : null
+    const sourceScopeMatches = Boolean(source && source.groupId === reference.groupId)
     const sourceThreadId = reference.channelThreadId ?? (source && 'channelThreadId' in source
       ? source.channelThreadId
       : undefined)
     const sourceAvailable = Boolean(source && (!sourceThreadId || threadsEnabled()) &&
-      source.projectId === task.projectId && sourceScopeMatches &&
-      (!('status' in source) || reference.assistantStreamId === undefined || source.status === 'completed'))
+      source.projectId === task.projectId && sourceScopeMatches)
     visibleReferences.push({
       ...reference,
       availability: sourceAvailable ? reference.availability : 'unavailable' as const,
@@ -816,31 +806,6 @@ export async function taskArchiveMessageRowsPage(
         .eq('projectCompanyId', source.projectCompanyId)
         .eq('operationId', source.operationId)
         .eq('messageId', messageId),
-    )
-    .paginate(paginationOpts)
-}
-
-export async function taskArchiveAssistantRowsPage(
-  ctx: TaskDataCtx,
-  source: TaskArchiveSnapshotSource,
-  assistantStreamId: Id<'assistantStreams'>,
-  paginationOpts: PaginationOptions,
-) {
-  if (source.kind === 'materialized') {
-    return await ctx.db
-      .query('taskArchiveSnapshots')
-      .withIndex('by_entitlement_assistant', (q) =>
-        q.eq('entitlementId', source.entitlementId).eq('assistantStreamId', assistantStreamId),
-      )
-      .paginate(paginationOpts)
-  }
-  return await ctx.db
-    .query('taskExitSnapshotStaging')
-    .withIndex('by_project_company_operation_assistant', (q) =>
-      q
-        .eq('projectCompanyId', source.projectCompanyId)
-        .eq('operationId', source.operationId)
-        .eq('assistantStreamId', assistantStreamId),
     )
     .paginate(paginationOpts)
 }

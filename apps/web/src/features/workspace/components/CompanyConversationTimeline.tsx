@@ -1,12 +1,11 @@
 import { Hash } from 'lucide-react'
 import { Fragment, useMemo } from 'react'
-import { usePaginatedQuery, useQuery } from 'convex/react'
+import { useQuery } from 'convex/react'
 
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import { useReleaseConfig } from '#/lib/release-config'
 import {
-  AssistantAnswer,
   MessageRow,
   type GroupMessageItem,
 } from '#/features/workspace/thread-items'
@@ -17,7 +16,6 @@ import { formatThreadDayLabel, getThreadDayKey } from '#/features/workspace/lib/
 import { buildMentionGroups } from '#/features/workspace/lib/mentions'
 import { TaskLinkBatchProvider } from '#/features/tasks/task-link-context'
 import {
-  buildMessageCitations,
   buildWorkspaceThreadItems,
 } from '#/features/workspace/search/chat-thread-data'
 
@@ -61,30 +59,11 @@ export function CompanyConversationTimeline({
   onLoadMoreMessages,
   onRetryHistory,
   readOnly,
-  targetMessageId,
   visibleGroups,
 }: CompanyConversationTimelineProps) {
   const release = useReleaseConfig()
-  const assistantPage = usePaginatedQuery(
-    api.assistant.listForGroupPage,
-    {
-      ...context,
-      groupId: group._id,
-      targetMessageId,
-      userId: actorId,
-    },
-    { initialNumItems: 80 },
-  )
-  const assistantStreams = assistantPage.status === 'LoadingFirstPage' ? undefined : assistantPage.results
   const messageStatus = messagePageStatus ?? 'Exhausted'
-  const combinedPageStatus =
-    messageStatus === 'LoadingFirstPage' || assistantPage.status === 'LoadingFirstPage'
-      ? 'LoadingFirstPage'
-      : messageStatus === 'LoadingMore' || assistantPage.status === 'LoadingMore'
-        ? 'LoadingMore'
-        : messageStatus === 'CanLoadMore' || assistantPage.status === 'CanLoadMore'
-          ? 'CanLoadMore'
-          : 'Exhausted'
+  const combinedPageStatus = messageStatus
   const channelMembers = useQuery(
     api.groups.listMembers,
     readOnly
@@ -106,28 +85,17 @@ export function CompanyConversationTimeline({
     () => buildMentionGroups(activeChannelMembers, visibleGroups),
     [activeChannelMembers, visibleGroups],
   )
-  const messageCitations = useMemo(
-    () => buildMessageCitations(messages ?? []),
-    [messages],
-  )
   const threadItems = useMemo(
     () =>
       buildWorkspaceThreadItems({
-        assistantStreams: assistantStreams ?? [],
         messages: messages ?? [],
       }),
-    [assistantStreams, messages],
+    [messages],
   )
   const forwardGroups = useMemo(
     () => visibleGroups.filter((candidate) => !candidate.status || candidate.status === 'active'),
     [visibleGroups],
   )
-
-  function focusMessage(messageId: Id<'messages'> | string) {
-    const target = document.getElementById(`message-${messageId}`)
-    target?.scrollIntoView({ block: 'center' })
-    target?.focus({ preventScroll: true })
-  }
 
   if (historyState === 'unavailable') {
     return (
@@ -150,7 +118,7 @@ export function CompanyConversationTimeline({
       </div>
     )
   }
-  if (historyState === 'loading' || messages === undefined || assistantStreams === undefined) {
+  if (historyState === 'loading' || messages === undefined) {
     return <div className="company-message-state">Loading messages…</div>
   }
   if (threadItems.length === 0) {
@@ -163,8 +131,7 @@ export function CompanyConversationTimeline({
     )
   }
 
-  const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : [])
-  const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : [])
+  const taskLinkMessageIds = threadItems.map((entry) => entry.item.message._id)
   const content = (
     <div className="track-thread">
       {combinedPageStatus === 'CanLoadMore' || combinedPageStatus === 'LoadingMore' ? (
@@ -173,7 +140,6 @@ export function CompanyConversationTimeline({
             disabled={combinedPageStatus === 'LoadingMore'}
             onClick={() => {
               if (messageStatus === 'CanLoadMore') onLoadMoreMessages?.(50)
-              if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(50)
             }}
             type="button"
           >
@@ -191,7 +157,7 @@ export function CompanyConversationTimeline({
             {showDay ? (
               <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at)} />
             ) : null}
-            {threadItem.kind === 'message' ? (
+            {(
               <MessageRow
                 activeGroupId={group._id}
                 busyAction={busyAction}
@@ -216,16 +182,6 @@ export function CompanyConversationTimeline({
                 onReplyMessage={onReplyMessage}
                 threadContext={context}
               />
-            ) : (
-              <AssistantAnswer
-                identity={context}
-                mentionGroups={mentionGroups}
-                messageCitations={messageCitations}
-                onOpenGroup={onOpenGroup}
-                onOpenMessageCitation={focusMessage}
-                stream={threadItem.stream}
-                threadItemKey={threadItem.key}
-              />
             )}
           </Fragment>
         )
@@ -234,7 +190,6 @@ export function CompanyConversationTimeline({
   )
   return release.tasks ? (
     <TaskLinkBatchProvider
-      assistantStreamIds={taskLinkAssistantStreamIds}
       identity={context}
       messageIds={taskLinkMessageIds}
     >

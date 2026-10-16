@@ -17,7 +17,7 @@ Details, code references and evidence stay in tracker.yaml.
 
 ## First (P0)
 
-6 items — S: 0 · M: 4 · L: 2 · Unknown: 0
+5 items — S: 0 · M: 3 · L: 2 · Unknown: 0
 
 ### Groups
 
@@ -47,14 +47,6 @@ Details, code references and evidence stay in tracker.yaml.
               outside the loaded page.
 
 ### Platform
-
-- [Not started] Remove the assistant and memory
-    **Size**: M — The assistant touches messages, attachments and both clients, but has
-              no data other features need.
-    **Left**: Delete the assistant, memory and AI helper code and tables, and their
-              screens in both apps.
-    **Left**: Remove assistant fields from messages and the chat UI without changing
-              human messages.
 
 - [Not started] Remove tasks and boards
     **Size**: M — Tasks are self-contained apart from message links and notifications.

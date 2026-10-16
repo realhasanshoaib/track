@@ -28,17 +28,6 @@ export function CreateTaskFromMessage({ message, identity = {} }: { message: Doc
   />
 }
 
-export function CreateTaskFromAssistant({ stream, identity = {} }: { stream: Doc<'assistantStreams'>; identity?: TaskIdentity }) {
-  if (stream.status !== 'completed') return null
-  return <TaskSourceCreate
-    defaultTitle={stream.answer.slice(0, 180) || 'Follow up on Track Assistant answer'}
-    groupId={stream.groupId}
-    projectId={stream.projectId}
-    reference={{ type: 'assistant_answer', assistantStreamId: stream._id }}
-    identity={identity}
-  />
-}
-
 function TaskSourceCreate({
   defaultTitle,
   groupId,
@@ -49,7 +38,7 @@ function TaskSourceCreate({
   defaultTitle: string
   groupId: Id<'groups'>
   projectId: Id<'projects'>
-  reference: { type: 'message'; messageId: Id<'messages'> } | { type: 'assistant_answer'; assistantStreamId: Id<'assistantStreams'> }
+  reference: { type: 'message'; messageId: Id<'messages'> }
   identity: TaskIdentity
 }) {
   const release = useReleaseConfig()
@@ -125,17 +114,6 @@ export function MessageInlineTasks({ message, identity = {} }: { message: Doc<'m
   )
   const cards = batch?.messageTasks.get(String(message._id)) ?? individualCards
   return <InlineCards cards={cards} groupId={message.groupId} identity={identity} projectId={message.projectId} sourceLabel="this Channel message" />
-}
-
-export function AssistantInlineTasks({ stream, identity = {} }: { stream: Doc<'assistantStreams'>; identity?: TaskIdentity }) {
-  const release = useReleaseConfig()
-  const batch = useTaskLinkBatch()
-  const individualCards = useQuery(
-    api.tasks.listForAssistant,
-    release.tasks && !batch ? { assistantStreamId: stream._id, ...identity } : 'skip',
-  )
-  const cards = batch?.assistantTasks.get(String(stream._id)) ?? individualCards
-  return <InlineCards cards={cards} groupId={stream.groupId} identity={identity} projectId={stream.projectId} sourceLabel="this Assistant answer" />
 }
 
 function taskRouteContextQuery(identity: TaskIdentity, groupId: Id<'groups'>) {

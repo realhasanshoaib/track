@@ -5,7 +5,6 @@ import { Navigate } from '@tanstack/react-router'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import { GroupChatPage } from '#/features/workspace/components/GroupChatPage'
 import { WorkspaceHeader } from '#/features/workspace/components/WorkspaceHeader'
-import { ProjectMemoryImportDialog } from '#/features/workspace/components/ProjectMemoryImportDialog'
 import { WorkspaceRail } from '#/features/workspace/components/WorkspaceRail'
 import { WorkspaceSidebar } from '#/features/workspace/components/WorkspaceSidebar'
 import { TrackLoading, WorkspaceRouteLoader } from '#/features/workspace/components/loaders'
@@ -81,7 +80,6 @@ type WorkspacePageSurfaceModel = {
     flashingMessageId: string | null
     loadingOlderMessages: boolean
     logoutConfirmOpen: boolean
-    memoryImportOpen: boolean
     mentionIndex: number
     mentionOptionRefs: RefObject<Array<HTMLButtonElement | null>>
     mobileNavOpen: boolean
@@ -101,7 +99,6 @@ type WorkspacePageSurfaceModel = {
   update: {
     onActionError: (error: unknown) => void
     onComposerChange: (value: string, cursor: number) => void
-    onMemoryImportBusyChange: (busy: boolean) => void
     onOpenProjectSearch: () => void
     loadOlderMessages: () => void
     onSearchClose: () => void
@@ -111,7 +108,6 @@ type WorkspacePageSurfaceModel = {
     setComposerCursor: Dispatch<SetStateAction<number>>
     setChatSearchQuery: Dispatch<SetStateAction<string>>
     setEmojiPickerOpen: Dispatch<SetStateAction<boolean>>
-    setMemoryImportOpen: Dispatch<SetStateAction<boolean>>
     setMentionIndex: Dispatch<SetStateAction<number>>
     setMobileNavOpen: Dispatch<SetStateAction<boolean>>
     setNavCollapsed: Dispatch<SetStateAction<boolean>>
@@ -237,16 +233,6 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             query={state.chatSearchQuery}
           />
         ) : null}
-        <ProjectMemoryImportDialog
-          actorId={auth.trackUserId}
-          groupId={state.activeGroupId}
-          groupName={activeGroup?.name}
-          onBusyChange={update.onMemoryImportBusyChange}
-          onError={update.onActionError}
-          onOpenChange={update.setMemoryImportOpen}
-          open={state.memoryImportOpen}
-          projectId={state.activeProjectId}
-        />
 
         {route.isProjectLoading || route.isGroupLoading ? (
           <WorkspaceRouteLoader label={route.view === 'group' ? 'Opening channel conversation' : route.view === 'settings' ? 'Loading project settings' : 'Loading project channels'} />
@@ -256,7 +242,6 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             activeGroupId={state.activeGroupId}
             activeProjectId={state.activeProjectId}
             activeTypingIndicators={conversation.activeTypingIndicators}
-            assistantRetryPending={messageActions.assistantRetryPending}
             busyAction={state.busyAction}
             chatSearchMatchKeys={presentation.chatSearchMatchKeys}
             chatSearchMatches={presentation.chatSearchMatches}
@@ -276,7 +261,6 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             mentionOptionRefs={state.mentionOptionRefs}
             mentionSections={conversation.mentionSections}
             messageAuthorAvatarUrlById={presentation.messageAuthorAvatarUrlById}
-            messageCitations={presentation.messageCitations}
             messagesLoaded={messages !== undefined}
             currentUserId={auth.trackUserId}
             onDeleteMessage={messageActions.handleDeleteMessage}
@@ -291,9 +275,7 @@ export function WorkspacePageSurface({ model }: { model: WorkspacePageSurfaceMod
             onInsertComposerText={threadInteractions.insertComposerText}
             onMentionIndexChange={update.setMentionIndex}
             onMentionSelect={threadInteractions.handleMentionSelect}
-            onOpenMemoryImport={() => update.setMemoryImportOpen(true)}
             onOpenGroup={navigation.navigateToGroup}
-            onOpenMessageCitation={threadInteractions.requestMessageFocus}
             onOpenMessageSource={threadInteractions.handleOpenMessageSource}
             onLoadOlderMessages={update.loadOlderMessages}
             onRecordingChange={update.setVoiceRecordingActive}

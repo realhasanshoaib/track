@@ -11,7 +11,6 @@ type TaskCard = MessageTaskBatch[number]['tasks'][number]
 
 type TaskLinkBatchValue = {
   messageTasks: ReadonlyMap<string, Array<TaskCard>>
-  assistantTasks: ReadonlyMap<string, Array<TaskCard>>
 }
 
 const TaskLinkBatchContext = createContext<TaskLinkBatchValue | null>(null)
@@ -24,12 +23,10 @@ export function indexTaskLinks<Row extends { tasks: Array<Task> }, Task>(
 }
 
 export function TaskLinkBatchProvider({
-  assistantStreamIds,
   children,
   identity,
   messageIds,
 }: {
-  assistantStreamIds: Array<Id<'assistantStreams'>>
   children: ReactNode
   identity?: TaskIdentity
   messageIds: Array<Id<'messages'>>
@@ -38,14 +35,9 @@ export function TaskLinkBatchProvider({
     api.tasks.listForMessages,
     messageIds.length ? { messageIds, ...identity } : 'skip',
   )
-  const assistantBatch = useQuery(
-    api.tasks.listForAssistantStreams,
-    assistantStreamIds.length ? { assistantStreamIds, ...identity } : 'skip',
-  )
   const value = useMemo<TaskLinkBatchValue>(() => ({
-    assistantTasks: indexTaskLinks(assistantBatch ?? [], (item) => String(item.assistantStreamId)),
     messageTasks: indexTaskLinks(messageBatch ?? [], (item) => String(item.messageId)),
-  }), [assistantBatch, messageBatch])
+  }), [messageBatch])
   return <TaskLinkBatchContext.Provider value={value}>{children}</TaskLinkBatchContext.Provider>
 }
 

@@ -110,15 +110,11 @@ describe('central Project and Channel policy adapter', () => {
     )).rejects.toThrow('project_unavailable')
   })
 
-  it('keeps archive and memory entitlements read-only and actor-bound', async () => {
+  it('keeps archive entitlements read-only and actor-bound', async () => {
     const t = convexTest(schema, modules)
     const seeded = await seedCompanyProject(t)
-    await seedUser(t, 'other-memory-user')
+    await seedUser(t, 'other-archive-user')
 
-    await expect(t.withIdentity({ subject: 'other-memory-user' }).query(api.memory.getStatus, {
-      projectId: seeded.projectId,
-      userId: seeded.userId,
-    })).rejects.toThrow('actor_mismatch')
     await t.run(async (ctx) => {
       await ctx.db.patch(seeded.projectCompanyId, {
         status: 'exited',

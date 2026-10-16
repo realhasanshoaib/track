@@ -11,7 +11,7 @@ const supportItems = [
   },
   {
     title: 'Project Support',
-    body: 'For project membership, conversation, memory, notifications, or workspace questions, include your project name, affected channel, and a brief description of what happened.',
+    body: 'For project membership, conversation, notifications, or workspace questions, include your project name, affected channel, and a brief description of what happened.',
   },
   {
     title: 'Privacy and Deletion',
@@ -32,7 +32,7 @@ function Support() {
         <div className="track-surface mt-6 rounded-md p-4">
           <p className="m-0 text-sm leading-6 text-[var(--ink-2)]">
             Track support is available by email for mobile and web users who need
-            help with account access, project workspaces, conversation, memory, privacy
+            help with account access, project workspaces, conversation, privacy
             requests, or account deletion.
           </p>
         </div>

@@ -1,59 +1,22 @@
-import type { Doc } from '../../../../../../convex/_generated/dataModel'
-import type { GroupMessageItem, MessageCitationPreview } from '#/features/workspace/thread-items'
+import type { GroupMessageItem } from '#/features/workspace/thread-items'
 
-export type WorkspaceThreadItem =
-  | {
-      at: number
-      item: GroupMessageItem
-      kind: 'message'
-      key: string
-    }
-  | {
-      at: number
-      stream: Doc<'assistantStreams'>
-      kind: 'assistant'
-      key: string
-    }
-
-export function buildWorkspaceThreadItems({
-  assistantStreams,
-  messages,
-}: {
-  assistantStreams: Array<Doc<'assistantStreams'>>
-  messages: Array<GroupMessageItem>
-}): Array<WorkspaceThreadItem> {
-  return [
-    ...messages.map((item) => ({
-      at: item.message.createdAt,
-      item,
-      kind: 'message' as const,
-      key: item.message._id,
-    })),
-    ...assistantStreams.map((stream) => ({
-      at: stream.createdAt,
-      stream,
-      kind: 'assistant' as const,
-      key: stream._id,
-    })),
-  ].sort((a, b) => a.at - b.at)
+export type WorkspaceThreadItem = {
+  at: number
+  item: GroupMessageItem
+  kind: 'message'
+  key: string
 }
 
-export function buildMessageCitations(messages: Array<GroupMessageItem>): Map<string, MessageCitationPreview> {
-  return new Map(
-    messages.map((item) => [
-      String(item.message._id),
-      {
-        author: item.author?.displayName ?? 'Unknown Member',
-        body: item.message.body.slice(0, 90),
-        createdAt: item.message.createdAt,
-        attachments: item.attachments.map(({ attachment }) => ({
-          id: String(attachment._id),
-          contentType: attachment.contentType,
-          filename: attachment.filename,
-          kind: attachment.kind,
-          size: attachment.size,
-        })),
-      },
-    ]),
-  )
+export function buildWorkspaceThreadItems({ messages }: {
+  messages: Array<GroupMessageItem>
+}): Array<WorkspaceThreadItem> {
+  const items = messages.map((item) => ({
+    at: item.message.createdAt,
+    item,
+    kind: 'message' as const,
+    key: item.message._id,
+  }))
+  // eslint-disable-next-line unicorn/no-array-sort -- reason: Sort the fresh array while supporting the web ES2022 target.
+  items.sort((a, b) => a.at - b.at)
+  return items
 }

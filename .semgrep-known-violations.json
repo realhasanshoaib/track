@@ -1236,27 +1236,6 @@
     },
     {
       "checkId": "q9.typescript.no-type-assertions",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "fingerprint": "aeea010e262f2f646320d22031c3b8c272c51039efe477db75026d349a363683",
-      "line": 71,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "fingerprint": "22065f1deff26e0eb9478f88dade866cdcb3fe7e1074ba460176ab981c7cc078",
-      "line": 130,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "apps/web/src/features/workspace/components/ProjectMemoryImportDialog.tsx",
-      "fingerprint": "7f56c98374ad887c1b60b2e9f42eb75340ef67423bac36803232b840caa6f84a",
-      "line": 139,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
       "path": "apps/web/src/features/workspace/components/ScopedConversationComposer.test.tsx",
       "fingerprint": "386790347e1988a8d2ca63ed057aee5d0697ee57dc18248d42993dd88ad8a595",
       "line": 59,
@@ -1614,48 +1593,6 @@
     },
     {
       "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistant.ts",
-      "fingerprint": "d24f9203d94296d24eacf99fadb812ca38d7549f8f65332bb1e652c06d5a2390",
-      "line": 179,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistant.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 179,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistant.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 216,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistant.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 580,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistantNode.ts",
-      "fingerprint": "38b5dd67422d6fc7b00facd263c6fd5653f7bae2181f120bf04130fc2f240349",
-      "line": 317,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/assistantNode.ts",
-      "fingerprint": "aeea010e262f2f646320d22031c3b8c272c51039efe477db75026d349a363683",
-      "line": 323,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
       "path": "convex/auth.test.ts",
       "fingerprint": "ecb8fb551766c9ec9a27bd9ac41854bc9f490f10c599fb0062a68f521cb37bd9",
       "line": 7,
@@ -1737,48 +1674,6 @@
       "fingerprint": "ecb8fb551766c9ec9a27bd9ac41854bc9f490f10c599fb0062a68f521cb37bd9",
       "line": 7,
       "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "5649b088210582f65a740fb777c021c934542155eb2182955cd34e166d482fe0",
-      "line": 84,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "5649b088210582f65a740fb777c021c934542155eb2182955cd34e166d482fe0",
-      "line": 85,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "d2f559c3e4b8fe203f55c396015f99a0a80f6852227887e5364094aeb30d80ef",
-      "line": 86,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "0137fd6bac2139b17d6112afe3d06af0e467a44b5cea8cf774f1a0f01a9a9fcb",
-      "line": 90,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "dc3b37f9c9e3f95c9fed6a384716a217b9d644eddd5b212c92c059cd21f7ac8e",
-      "line": 90,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
-    },
-    {
-      "checkId": "q9.javascript.no-unvalidated-json-parse",
-      "path": "convex/lib/ai.ts",
-      "fingerprint": "ea63d08402f5e1191f36c6147714e9cb8e76ed1df2c074ace64121154a3792a1",
-      "line": 94,
-      "message": "Validate JSON.parse output before reading properties. Pass it through a parse, decode, validate, or Schema boundary first."
     },
     {
       "checkId": "q9.javascript.no-unvalidated-json-parse",
@@ -2223,76 +2118,6 @@
     },
     {
       "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "ecb8fb551766c9ec9a27bd9ac41854bc9f490f10c599fb0062a68f521cb37bd9",
-      "line": 9,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 26,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "536c2d500a4c31cb07aa24444670aefc2509717d4dfaea638f77d4087c38ad66",
-      "line": 31,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 31,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 41,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 49,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memory.test.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 112,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memoryActions.ts",
-      "fingerprint": "d8577baede735fe4d1c76121ee71fb6f809c27fa10b7a71acf112f9cde72b411",
-      "line": 331,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memoryActions.ts",
-      "fingerprint": "2665fbb5c9ad6f6f68baf6aa2695bcdcf7510f1aff6f61cbd71aa5ad4550773a",
-      "line": 610,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/memoryActions.ts",
-      "fingerprint": "bdfcdff19bd3b7435056e322e149fa3c58e04adbf6bd1494ba55fa7dd1be8815",
-      "line": 611,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
       "path": "convex/messages.ts",
       "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
       "line": 438,
@@ -2366,62 +2191,6 @@
       "path": "convex/projectExit.ts",
       "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
       "line": 766,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "7ad7763828f2100b0aa5802d7e2df670d271997d46a352a48656df9bc80d7640",
-      "line": 21,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 21,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bf15d79d836237d1b6e5fcd48f2511ca6f84d1540e0e2a1561023c9aa41cf25b",
-      "line": 54,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 54,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 138,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 147,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 172,
-      "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
-    },
-    {
-      "checkId": "q9.typescript.no-type-assertions",
-      "path": "convex/projectExitActions.ts",
-      "fingerprint": "bc8716765fb3eaa1e8c96d99dba69b8cc3ce19d908aac1d8225ef8c4cab60db6",
-      "line": 177,
       "message": "Type assertions are banned (\"as const\" is fine). Narrow with a real type guard, a discriminated union, or schema validation at the boundary."
     },
     {

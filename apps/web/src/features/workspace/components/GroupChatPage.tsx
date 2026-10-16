@@ -10,8 +10,8 @@ import {
   type ConversationComposerProps,
 } from '#/features/workspace/components/ConversationComposer'
 import { formatThreadDayLabel, getThreadDayKey } from '#/features/workspace/lib/thread-date'
-import { AssistantAnswer, MessageRow } from '#/features/workspace/thread-items'
-import type { GroupMessageItem, MessageCitationPreview } from '#/features/workspace/thread-items'
+import { MessageRow } from '#/features/workspace/thread-items'
+import type { GroupMessageItem } from '#/features/workspace/thread-items'
 import type { GroupReference } from '#/features/workspace/group-types'
 import { ThreadDaySeparator } from '#/features/workspace/components/ThreadDaySeparator'
 import type { ChatSearchMatch } from '#/features/workspace/search/chat-search'
@@ -31,7 +31,6 @@ type GroupChatPageProps = {
   activeGroupId: Id<'groups'> | null
   activeProjectId: Id<'projects'> | null
   activeTypingIndicators: Array<ActiveTypingIndicator>
-  assistantRetryPending?: boolean
   busyAction: string | null
   chatSearchMatchKeys: Set<string>
   chatSearchMatches: Array<ChatSearchMatch>
@@ -54,7 +53,6 @@ type GroupChatPageProps = {
   mentionOptionRefs: RefObject<Array<HTMLButtonElement | null>>
   mentionSections: Array<MentionSection>
   messageAuthorAvatarUrlById: Map<string, string>
-  messageCitations: Map<string, MessageCitationPreview>
   messagesLoaded: boolean
   currentUserId: Id<'users'>
   onDeleteMessage: (messageId: Id<'messages'>) => Promise<boolean>
@@ -73,9 +71,7 @@ type GroupChatPageProps = {
   onInsertComposerText: (text: string) => void
   onMentionIndexChange: (updater: (index: number) => number) => void
   onMentionSelect: (option: MentionOption) => void
-  onOpenMemoryImport: () => void
   onOpenGroup: (groupId: Id<'groups'>) => void
-  onOpenMessageCitation: (messageId: Id<'messages'> | string) => void
   onOpenMessageSource: (groupId: Id<'groups'>, messageId: Id<'messages'>) => void
   onLoadOlderMessages: () => void
   onRecordingChange: (recording: boolean) => void
@@ -105,7 +101,6 @@ export function GroupChatPage({
   activeGroupId,
   activeProjectId,
   activeTypingIndicators,
-  assistantRetryPending = false,
   busyAction,
   chatSearchMatchKeys,
   chatSearchMatches,
@@ -125,7 +120,6 @@ export function GroupChatPage({
   mentionOptionRefs,
   mentionSections,
   messageAuthorAvatarUrlById,
-  messageCitations,
   messagesLoaded,
   currentUserId,
   onDeleteMessage,
@@ -140,9 +134,7 @@ export function GroupChatPage({
   onInsertComposerText,
   onMentionIndexChange,
   onMentionSelect,
-  onOpenMemoryImport,
   onOpenGroup,
-  onOpenMessageCitation,
   onOpenMessageSource,
   onLoadOlderMessages,
   onRecordingChange,
@@ -168,8 +160,7 @@ export function GroupChatPage({
 }: GroupChatPageProps) {
   const releaseConfig = useReleaseConfig()
   const readOnly = activeGroup?.status === 'archived'
-  const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : [])
-  const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : [])
+  const taskLinkMessageIds = threadItems.map((entry) => entry.item.message._id)
   const content = (
     <>
       <div className="track-chat-mobile-context">
@@ -208,8 +199,7 @@ export function GroupChatPage({
               </span>
               <h2>{activeGroup.name} is ready</h2>
               <p>
-                Start this group with a decision, question, scope note, or mention @track to turn the first
-                useful detail into project memory.
+                Start the conversation with a message.
               </p>
             </div>
           ) : null}
@@ -227,7 +217,6 @@ export function GroupChatPage({
             const shouldShowDaySeparator =
               !previousThreadItem || getThreadDayKey(previousThreadItem.at) !== dayKey
             const searchQuery = chatSearchMatchKeys.has(threadItem.key) ? chatSearchTerm : undefined
-            if (threadItem.kind === 'message') {
               return (
                 <Fragment key={threadItem.key}>
                   {shouldShowDaySeparator ? (
@@ -260,26 +249,6 @@ export function GroupChatPage({
                   />
                 </Fragment>
               )
-            }
-            if (threadItem.kind === 'assistant') {
-              return (
-                <Fragment key={threadItem.key}>
-                  {shouldShowDaySeparator ? (
-                    <ThreadDaySeparator label={formatThreadDayLabel(threadItem.at)} />
-                  ) : null}
-                  <AssistantAnswer
-                    mentionGroups={mentionGroups}
-                    messageCitations={messageCitations}
-                    onOpenGroup={onOpenGroup}
-                    onOpenMessageCitation={onOpenMessageCitation}
-                    searchQuery={searchQuery}
-                    stream={threadItem.stream}
-                    threadItemKey={threadItem.key}
-                  />
-                </Fragment>
-              )
-            }
-            return null
           })}
         </div>
         {showJumpToLatest ? (
@@ -304,7 +273,6 @@ export function GroupChatPage({
           busyAction={busyAction}
           composer={composer}
           composerRef={composerRef}
-          contentLocked={assistantRetryPending}
           emojiGroups={emojiGroups}
           emojiPickerOpen={emojiPickerOpen}
           filteredMentionOptions={filteredMentionOptions}
@@ -322,7 +290,6 @@ export function GroupChatPage({
           onInsertComposerText={onInsertComposerText}
           onMentionIndexChange={onMentionIndexChange}
           onMentionSelect={onMentionSelect}
-          onOpenMemoryImport={onOpenMemoryImport}
           onRecordingChange={onRecordingChange}
           onReplyChange={(reply) => {
             if (!reply) onReplyToMessageChange(null)
@@ -330,17 +297,17 @@ export function GroupChatPage({
           onSendMessage={onSendMessage}
           onShowMentionMenuClose={onShowMentionMenuClose}
           onVoiceNoteRecorded={onVoiceNoteRecorded}
-          pendingAttachments={assistantRetryPending ? [] : pendingAttachments}
+          pendingAttachments={pendingAttachments}
           placeholder={composerPlaceholder}
           removePendingAttachment={removePendingAttachment}
-          replyTo={assistantRetryPending ? null : replyToMessage
+          replyTo={replyToMessage
               ? {
                   authorName: replyToMessage.author?.displayName ?? 'Unknown Member',
                   body: replyToMessage.message.body || 'Attachment message',
                   messageId: replyToMessage.message._id,
               }
               : null}
-          sendLabel={assistantRetryPending ? 'Retry Assistant' : 'Send'}
+
           setComposerCursorFromRef={setComposerCursorFromRef}
           showMentionMenu={showMentionMenu}
           voiceRecordingActive={voiceRecordingActive}
@@ -350,7 +317,6 @@ export function GroupChatPage({
   )
   return releaseConfig.tasks ? (
     <TaskLinkBatchProvider
-      assistantStreamIds={taskLinkAssistantStreamIds}
       messageIds={taskLinkMessageIds}
     >
       {content}

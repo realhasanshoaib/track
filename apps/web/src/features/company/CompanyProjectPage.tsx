@@ -215,7 +215,6 @@ export function CompanyProjectPage({
   const approveProjectArchive = useMutation(api.projectArchives.approve);
   const prepareExit = useMutation(api.projectExit.prepare);
   const retryExit = useMutation(api.projectExit.retrySnapshot);
-  const retryExitCleanup = useMutation(api.projectExit.retryCleanup);
   const finalizeExit = useMutation(api.projectExit.finalize);
   const cancelExit = useMutation(api.projectExit.cancel);
 
@@ -528,10 +527,6 @@ export function CompanyProjectPage({
     return await retryExit({ actingCompanyId, projectId });
   }
 
-  async function retryProjectExitCleanup() {
-    return await retryExitCleanup({ actingCompanyId, projectId });
-  }
-
   async function finalizeProjectExit() {
     return await finalizeExit({ actingCompanyId, projectId });
   }
@@ -720,7 +715,6 @@ export function CompanyProjectPage({
         onRequestChannelParticipation={requestProjectChannelParticipation}
         onRequestProjectArchive={requestProjectLifecycleArchive}
         onRetryExit={retryProjectExitSnapshot}
-        onRetryExitCleanup={retryProjectExitCleanup}
         onUpdateProjectMember={updateProjectMemberStatus}
       />
     </main>

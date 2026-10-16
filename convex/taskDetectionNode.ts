@@ -4,7 +4,8 @@ import { v } from 'convex/values'
 
 import { internal } from './_generated/api'
 import { internalAction } from './_generated/server'
-import { generateTrackText } from './lib/ai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
+import { generateText } from 'ai'
 import {
   parseTaskModelCandidates,
   taskDetectionPrompt,
@@ -15,9 +16,16 @@ import {
 export function createLiveTaskModelAdapter(): TaskModelAdapter {
   return {
     async detect(messages) {
-      const result = await generateTrackText(taskDetectionPrompt(messages))
+      const apiKey = process.env.OPENROUTER_API_KEY
+      if (!apiKey) throw new Error('task_model_not_configured')
+      const model = process.env.AI_MODEL ?? 'openai/gpt-5.6-luna'
+      const result = await generateText({
+        model: createOpenRouter({ apiKey })(model),
+        prompt: taskDetectionPrompt(messages),
+        abortSignal: AbortSignal.timeout(45_000),
+      })
       return {
-        model: result.model,
+        model,
         candidates: parseTaskModelCandidates(result.text, new Set(messages.map((message) => message.id))),
       }
     },

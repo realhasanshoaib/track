@@ -16,7 +16,7 @@ const channelMessages = [
   { author: 1, hoursAgo: 67, body: 'The release banner is ready for review. I kept the copy focused on the new project timeline.' },
   { author: 2, hoursAgo: 64, body: 'I will run the signup flow on mobile after the next preview build lands.' },
   { author: 3, hoursAgo: 61, body: 'Preview build is green. I am watching the invite dialog because it still clips on narrow screens.' },
-  { author: 0, hoursAgo: 58, body: '@track What are the biggest launch risks from this channel so far?' },
+  { author: 0, hoursAgo: 58, body: 'What are the biggest launch risks from this channel so far?' },
   { author: 2, hoursAgo: 54, body: 'I pulled the latest prototype into the QA checklist. The empty state copy is now final.' },
   { author: 1, hoursAgo: 50, body: 'The onboarding checklist needs one more pass for the permissions explanation.' },
   { author: 3, hoursAgo: 46, body: 'Found a regression: accepting an invite can leave the project switcher stale until refresh.' },
@@ -193,26 +193,8 @@ export const seedLaunchWeek = mutation({
       messageIds.push(messageId)
     }
 
-    const assistantPromptId = messageIds[4]
     const threadSourceMessageId = messageIds[12]
-    if (!assistantPromptId || !threadSourceMessageId) throw new Error('demo_seed_message_missing')
-    const assistantStreamId = await ctx.db.insert('assistantStreams', {
-      projectId: project._id,
-      groupId: channelId,
-      requesterId: seededMembers[0].user._id,
-      requesterProjectMemberId: seededMembers[0].member._id,
-      promptMessageId: assistantPromptId,
-      status: 'completed',
-      answer: 'Launch is on track. The active risks are publishing release notes, validating Android notifications, and shipping the invite-dialog fix. The release banner now has an approved direction.',
-      evidence: [
-        { messageId: messageIds[7], quote: channelMessages[7].body, reason: 'The invite regression needs a final cross-project check.' },
-        { messageId: messageIds[10], quote: channelMessages[10].body, reason: 'Release notes still need to be published.' },
-      ],
-      createdAt: now - 57 * hour,
-      updatedAt: now - 57 * hour,
-    })
-    await ctx.db.patch(assistantPromptId, { trackInvocationId: assistantStreamId })
-
+    if (!threadSourceMessageId) throw new Error('demo_seed_message_missing')
     const threadId = await ctx.db.insert('channelThreads', {
       projectId: project._id,
       groupId: channelId,

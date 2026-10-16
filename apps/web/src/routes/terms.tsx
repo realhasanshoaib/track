@@ -11,11 +11,7 @@ const sections = [
   },
   {
     title: 'Project Content',
-    body: 'Messages, attachments, voice notes, assistant interactions, reports, imported memory, and audit history may be visible to users with access to the relevant project or channel. Project owners are responsible for inviting the right collaborators and managing access.',
-  },
-  {
-    title: 'AI Features',
-    body: 'Track Assistant can help summarize and answer questions about accessible project content. AI output should be reviewed before it is relied on for legal, billing, operational, or contractual decisions.',
+    body: 'Messages, attachments, voice notes, reports, and audit history may be visible to users with access to the relevant project or channel. Project owners are responsible for inviting the right collaborators and managing access.',
   },
   {
     title: 'Accounts and Security',

@@ -1,7 +1,7 @@
 {
   "short_name": "Track",
   "name": "Track",
-  "description": "Project memory for client and vendor teams.",
+  "description": "Team conversation and attachments.",
   "id": "/workspace",
   "start_url": "/workspace",
   "scope": "/",
