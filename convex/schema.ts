@@ -1,57 +1,36 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
-
-import { companyCoreTables } from './schema/companyCoreTables'
-import { companyProjectTables } from './schema/companyProjectTables'
 import { messageUploadTables } from './schema/messageUploadTables'
-import { projectExitTables } from './schema/projectExitTables'
-import {
-  channelStatus,
-  companyProjectRole,
-  projectMemberStatus,
-  projectOrigin,
-  projectStatus,
-} from './schema/companyValidators'
-
 const projectRole = v.union(
   v.literal('owner'),
   v.literal('admin'),
   v.literal('staff'),
   v.literal('client'),
-  companyProjectRole,
 )
-
-const projectAccessProfile = v.union(v.literal('legacy'), v.literal('company'))
-
 const groupKind = v.union(
   v.literal('general'),
   v.literal('internal'),
   v.literal('commercials'),
   v.literal('custom'),
 )
-
 const notificationMode = v.union(v.literal('all'), v.literal('mentions'), v.literal('none'))
-
 const groupNotificationMode = v.union(
   v.literal('inherit'),
   v.literal('all'),
   v.literal('mentions'),
   v.literal('none'),
 )
-
 const pushPermissionState = v.union(
   v.literal('not_determined'),
   v.literal('denied'),
   v.literal('granted'),
   v.literal('provisional'),
 )
-
 const pushEnvironment = v.union(
   v.literal('development'),
   v.literal('preview'),
   v.literal('production'),
 )
-
 const pushDeliveryStatus = v.union(
   v.literal('queued'),
   v.literal('sending'),
@@ -62,20 +41,17 @@ const pushDeliveryStatus = v.union(
   v.literal('permanent_failure'),
   v.literal('expired'),
 )
-
 const pushAttemptStatus = v.union(
   v.literal('ticket_accepted'),
   v.literal('transient_failure'),
   v.literal('permanent_failure'),
   v.literal('delivered'),
 )
-
 const contentReportTargetType = v.union(
   v.literal('message'),
   v.literal('attachment'),
   v.literal('voice_note'),
 )
-
 const contentReportReason = v.union(
   v.literal('inaccurate'),
   v.literal('unsafe'),
@@ -84,7 +60,6 @@ const contentReportReason = v.union(
   v.literal('privacy'),
   v.literal('other'),
 )
-
 const attachmentKind = v.union(v.literal('file'), v.literal('voice_note'))
 const mediaPreviewStatus = v.union(v.literal('pending'), v.literal('ready'), v.literal('failed'))
 const mediaPreviewErrorCode = v.union(
@@ -93,7 +68,6 @@ const mediaPreviewErrorCode = v.union(
   v.literal('missing_source'),
   v.literal('processor_failed'),
 )
-
 const forwardedAttachmentSnapshot = v.object({
   filename: v.string(),
   contentType: v.string(),
@@ -101,7 +75,6 @@ const forwardedAttachmentSnapshot = v.object({
   kind: v.optional(attachmentKind),
   durationMs: v.optional(v.number()),
 })
-
 const forwardedMessageSnapshot = v.object({
   sourceProjectId: v.id('projects'),
   sourceGroupId: v.id('groups'),
@@ -113,7 +86,6 @@ const forwardedMessageSnapshot = v.object({
   attachmentSnapshots: v.array(forwardedAttachmentSnapshot),
   forwardedAt: v.number(),
 })
-
 export default defineSchema({
   diagnosticEvents: defineTable({
     event: v.object({
@@ -171,11 +143,7 @@ export default defineSchema({
   })
     .index('by_subject_received_at', ['subjectId', 'receivedAt'])
     .index('by_received_at', ['receivedAt']),
-  ...companyCoreTables,
-  ...companyProjectTables,
-  ...projectExitTables,
   ...messageUploadTables,
-
   users: defineTable({
     googleSubject: v.string(),
     authUserId: v.optional(v.string()),
@@ -195,58 +163,31 @@ export default defineSchema({
     .index('by_google_subject', ['googleSubject'])
     .index('by_auth_user_id', ['authUserId'])
     .index('by_normalized_email', ['normalizedEmail']),
-
   projects: defineTable({
     name: v.string(),
     clientLabel: v.optional(v.string()),
     description: v.optional(v.string()),
-    accessProfile: v.optional(projectAccessProfile),
-    owningCompanyId: v.optional(v.id('companies')),
-    relationshipId: v.optional(v.id('relationships')),
-    proposingCompanyId: v.optional(v.id('companies')),
-    origin: v.optional(projectOrigin),
-    status: v.optional(projectStatus),
-    participantRevision: v.optional(v.number()),
-    revision: v.optional(v.number()),
-    archiveReason: v.optional(v.string()),
     createdBy: v.id('users'),
     createdAt: v.number(),
     updatedAt: v.number(),
-  })
-    .index('by_created_by', ['createdBy'])
-    .index('by_owning_company_status', ['owningCompanyId', 'status'])
-    .index('by_relationship_status', ['relationshipId', 'status'])
-    .index('by_proposing_company_status', ['proposingCompanyId', 'status']),
-
+  }).index('by_created_by', ['createdBy']),
   projectMembers: defineTable({
     projectId: v.id('projects'),
     userId: v.id('users'),
     role: projectRole,
-    companyId: v.optional(v.id('companies')),
-    projectCompanyId: v.optional(v.id('projectCompanies')),
-    status: v.optional(projectMemberStatus),
-    term: v.optional(v.number()),
-    invitedBy: v.optional(v.id('users')),
-    userDisplayNameSnapshot: v.optional(v.string()),
-    companyDisplayNameSnapshot: v.optional(v.string()),
-    endedAt: v.optional(v.number()),
+    status: v.optional(v.union(v.literal('active'), v.literal('removed'))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index('by_project', ['projectId'])
     .index('by_project_status', ['projectId', 'status'])
     .index('by_user', ['userId'])
-    .index('by_project_user', ['projectId', 'userId'])
-    .index('by_user_company', ['userId', 'companyId'])
-    .index('by_project_company_status', ['projectId', 'companyId', 'status'])
-    .index('by_project_company_user_term', ['projectId', 'companyId', 'userId', 'term']),
-
+    .index('by_project_user', ['projectId', 'userId']),
   groups: defineTable({
     projectId: v.id('projects'),
     kind: groupKind,
     name: v.string(),
-    status: v.optional(channelStatus),
-    revision: v.optional(v.number()),
+    status: v.optional(v.union(v.literal('active'), v.literal('archived'))),
     archivedAt: v.optional(v.number()),
     nextChannelSequence: v.optional(v.number()),
     createdBy: v.id('users'),
@@ -258,7 +199,6 @@ export default defineSchema({
       searchField: 'name',
       filterFields: ['projectId'],
     }),
-
   groupMembers: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
@@ -267,12 +207,9 @@ export default defineSchema({
     status: v.optional(
       v.union(
         v.literal('active'),
-        v.literal('suspended'),
         v.literal('removed'),
-        v.literal('archived'),
       ),
     ),
-    isSteward: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -283,7 +220,6 @@ export default defineSchema({
     .index('by_group_user', ['groupId', 'userId'])
     .index('by_group_project_member', ['groupId', 'projectMemberId'])
     .index('by_project_member_status', ['projectMemberId', 'status']),
-
   invitations: defineTable({
     projectId: v.id('projects'),
     groupId: v.optional(v.id('groups')),
@@ -306,13 +242,11 @@ export default defineSchema({
     .index('by_project_status', ['projectId', 'status'])
     .index('by_email_status', ['email', 'status'])
     .index('by_token', ['token']),
-
   messages: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
     authorId: v.id('users'),
     authorProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
     channelSequence: v.optional(v.number()),
     idempotencyKey: v.optional(v.string()),
     body: v.string(),
@@ -332,7 +266,6 @@ export default defineSchema({
       searchField: 'body',
       filterFields: ['projectId'],
     }),
-
   groupReadStates: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
@@ -347,10 +280,8 @@ export default defineSchema({
     .index('by_project_member_group', ['projectMemberId', 'groupId'])
     .index('by_user_project', ['userId', 'projectId'])
     .index('by_group', ['groupId']),
-
   lastActiveContexts: defineTable({
     userId: v.id('users'),
-    actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
     projectId: v.optional(v.id('projects')),
     groupId: v.optional(v.id('groups')),
@@ -360,7 +291,6 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_user_device', ['userId', 'deviceId']),
-
   typingIndicators: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
@@ -376,7 +306,6 @@ export default defineSchema({
     .index('by_group_user', ['groupId', 'userId'])
     .index('by_group_project_member', ['groupId', 'projectMemberId'])
     .index('by_user', ['userId']),
-
   attachments: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
@@ -396,7 +325,6 @@ export default defineSchema({
     previewHeight: v.optional(v.number()),
     uploadedBy: v.id('users'),
     uploadedByProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
     createdAt: v.number(),
   })
     .index('by_message', ['messageId'])
@@ -406,7 +334,6 @@ export default defineSchema({
       searchField: 'filename',
       filterFields: ['projectId'],
     }),
-
   notificationSettings: defineTable({
     userId: v.id('users'),
     globalMode: notificationMode,
@@ -416,7 +343,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_user', ['userId']),
-
   groupNotificationSettings: defineTable({
     userId: v.id('users'),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -427,15 +353,11 @@ export default defineSchema({
   })
     .index('by_user_group', ['userId', 'groupId'])
     .index('by_project_member_group', ['projectMemberId', 'groupId']),
-
   auditEvents: defineTable({
-    companyId: v.optional(v.id('companies')),
-    relationshipId: v.optional(v.id('relationships')),
     projectId: v.optional(v.id('projects')),
     groupId: v.optional(v.id('groups')),
     actorId: v.optional(v.id('users')),
     actorProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
     entityType: v.string(),
     entityId: v.string(),
     action: v.string(),
@@ -445,11 +367,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index('by_project_created_at', ['projectId', 'createdAt'])
-    .index('by_company_created_at', ['companyId', 'createdAt'])
-    .index('by_relationship_created_at', ['relationshipId', 'createdAt'])
     .index('by_group_created_at', ['groupId', 'createdAt'])
     .index('by_entity', ['entityType', 'entityId']),
-
   notificationSubscriptions: defineTable({
     userId: v.id('users'),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -459,7 +378,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_user', ['userId']),
-
   pushInstallations: defineTable({
     installationId: v.string(),
     userId: v.optional(v.id('users')),
@@ -479,7 +397,6 @@ export default defineSchema({
     .index('by_user', ['userId'])
     .index('by_token', ['expoPushToken'])
     .index('by_native_token', ['nativePushToken']),
-
   pushDeliveryIntents: defineTable({
     sourceKind: v.union(v.literal('message'), v.literal('test')),
     sourceId: v.string(),
@@ -508,7 +425,6 @@ export default defineSchema({
     .index('by_status_next_attempt', ['status', 'nextAttemptAt'])
     .index('by_installation_status', ['installationId', 'status'])
     .index('by_created_at', ['createdAt']),
-
   pushNotificationEvents: defineTable({
     sourceKind: v.union(v.literal('message'), v.literal('test')),
     sourceId: v.string(),
@@ -518,7 +434,6 @@ export default defineSchema({
     webTargetCount: v.number(),
     createdAt: v.number(),
   }).index('by_source', ['sourceKind', 'sourceId']),
-
   pushDeliveryAttempts: defineTable({
     intentId: v.id('pushDeliveryIntents'),
     attemptNumber: v.number(),
@@ -532,13 +447,11 @@ export default defineSchema({
     .index('by_intent_attempt', ['intentId', 'attemptNumber'])
     .index('by_status_created_at', ['status', 'createdAt'])
     .index('by_ticket', ['providerTicketId']),
-
   contentReports: defineTable({
     projectId: v.id('projects'),
     groupId: v.optional(v.id('groups')),
     reporterId: v.id('users'),
     reporterProjectMemberId: v.optional(v.id('projectMembers')),
-    actingCompanyId: v.optional(v.id('companies')),
     targetType: contentReportTargetType,
     targetMessageId: v.optional(v.id('messages')),
     targetAttachmentId: v.optional(v.id('attachments')),
@@ -556,7 +469,6 @@ export default defineSchema({
   })
     .index('by_project_status', ['projectId', 'status'])
     .index('by_reporter_created_at', ['reporterId', 'createdAt']),
-
   accountDeletionRequests: defineTable({
     userId: v.id('users'),
     authUserId: v.optional(v.string()),
@@ -567,7 +479,6 @@ export default defineSchema({
   })
     .index('by_user', ['userId'])
     .index('by_status', ['status']),
-
   securityStepUps: defineTable({
     userId: v.id('users'),
     authUserId: v.string(),

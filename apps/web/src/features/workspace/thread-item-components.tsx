@@ -1,5 +1,4 @@
 import { CornerUpRight, ExternalLink, Paperclip, X } from 'lucide-react'
-
 import type { Doc, Id } from '../../../../../convex/_generated/dataModel'
 import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar'
 import { Card } from '#/components/ui/card'
@@ -10,14 +9,12 @@ import type { GroupReference } from './group-types'
 import { getAvatarTone, getInitials } from './identity'
 import { MarkdownText } from './markdown'
 import { VoiceNotePlayer, isAudioAttachment } from './voice-notes'
-
 export type ReplyToMessagePreview = {
   messageId: Id<'messages'>
   authorName: string
   body: string
   createdAt: number
 }
-
 export type ForwardedMessagePreview = {
   originalAuthorName: string
   originalBody: string
@@ -35,7 +32,6 @@ export type ForwardedMessagePreview = {
   sourceMessageId: Id<'messages'> | null
   sourceGroupName: string | null
 }
-
 type MessageAuthor = Pick<Doc<'users'>, '_id' | 'displayName'> &
   Partial<
     Pick<
@@ -43,29 +39,27 @@ type MessageAuthor = Pick<Doc<'users'>, '_id' | 'displayName'> &
       'email' | 'profileBannerStyle' | 'profileBio' | 'profileDesignation' | 'timezone'
     >
   >
-
 export type GroupMessageItem = {
   message: Doc<'messages'>
   author: MessageAuthor | null
   authorRole: Doc<'projectMembers'>['role'] | null
-  authorCompany?: {
-    companyId: Id<'companies'>
-    displayName: string
-  } | null
-  attachments: Array<{ attachment: Doc<'attachments'>; url: string | null }>
+  attachments: Array<{
+    attachment: Doc<'attachments'>
+    url: string | null
+  }>
   replyTo: ReplyToMessagePreview | null
   forwardedFrom: ForwardedMessagePreview | null
-
 }
-
-export function getForwardedSourceLabel(forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>) {
-  return forwarded.sourceGroupName ? `Forwarded from ${forwarded.sourceGroupName}` : 'Forwarded message'
+export function getForwardedSourceLabel(
+  forwarded: Pick<ForwardedMessagePreview, 'sourceGroupName'>,
+) {
+  return forwarded.sourceGroupName
+    ? `Forwarded from ${forwarded.sourceGroupName}`
+    : 'Forwarded message'
 }
-
 export function formatCopiedAttachmentCount(count: number) {
   return `${count} attachment${count === 1 ? '' : 's'} copied`
 }
-
 export function MessageRow({
   activeGroupId,
   busyAction,
@@ -84,7 +78,6 @@ export function MessageRow({
   onOpenMessageSource,
   onReplyMessage,
   searchQuery,
-
 }: {
   activeGroupId: Id<'groups'> | null
   busyAction: string | null
@@ -107,10 +100,10 @@ export function MessageRow({
   onOpenMessageSource: (groupId: Id<'groups'>, messageId: Id<'messages'>) => void
   onReplyMessage: (item: GroupMessageItem) => void
   searchQuery?: string
-
 }) {
   const authorName = item.author?.displayName ?? 'Unknown Member'
-  const canForward = canForwardMessages && groups.some((group) => group._id !== item.message.groupId)
+  const canForward =
+    canForwardMessages && groups.some((group) => group._id !== item.message.groupId)
   return (
     <article
       className={isFlashing ? 'track-message-row flashing' : 'track-message-row'}
@@ -123,13 +116,18 @@ export function MessageRow({
         avatarUrl={avatarUrl}
         bannerStyle={item.author?.profileBannerStyle}
         bio={item.author?.profileBio}
-        detail={item.author?.profileDesignation ?? (item.authorRole ? item.authorRole.replaceAll('_', ' ') : null)}
+        detail={
+          item.author?.profileDesignation ??
+          (item.authorRole ? item.authorRole.replaceAll('_', ' ') : null)
+        }
         name={authorName}
         side="right"
         toneSource={item.author?.email ?? authorName}
         timezone={item.author?.timezone}
       >
-        <Avatar className={`track-message-avatar ${getAvatarTone(item.author?.email ?? authorName)}`}>
+        <Avatar
+          className={`track-message-avatar ${getAvatarTone(item.author?.email ?? authorName)}`}
+        >
           <AvatarImage src={avatarUrl ?? undefined} />
           <AvatarFallback>{getInitials(authorName)}</AvatarFallback>
         </Avatar>
@@ -139,7 +137,6 @@ export function MessageRow({
           activeGroupId={activeGroupId}
           busyAction={busyAction}
           canForward={canForward}
-
           canReply={canReply}
           groups={groups}
           item={item}
@@ -150,15 +147,18 @@ export function MessageRow({
         />
         <div className="track-message-meta">
           <strong>{authorName}</strong>
-          {item.authorCompany ? (
-            <span className="track-author-company">{item.authorCompany.displayName}</span>
-          ) : null}
+          {null}
           {/*<Badge className="track-role-chip" variant="outline">
-            {visibleRole}
-          </Badge>*/}
+        {visibleRole}
+      </Badge>*/}
           <time>{new Date(item.message.createdAt).toLocaleTimeString()}</time>
         </div>
-        {item.replyTo ? <QuotedMessageBlock quote={item.replyTo} onOpen={(messageId) => onOpenMessageSource(item.message.groupId, messageId)} /> : null}
+        {item.replyTo ? (
+          <QuotedMessageBlock
+            quote={item.replyTo}
+            onOpen={(messageId) => onOpenMessageSource(item.message.groupId, messageId)}
+          />
+        ) : null}
         {item.forwardedFrom ? (
           <ForwardedMessageBlock
             forwarded={item.forwardedFrom}
@@ -230,7 +230,6 @@ export function MessageRow({
                   </span>
                 </>
               )
-
               return url ? (
                 <a
                   className={isImage ? 'track-attachment-card image' : 'track-attachment-card file'}
@@ -252,12 +251,10 @@ export function MessageRow({
             })}
           </div>
         ) : null}
-
       </Card>
     </article>
   )
 }
-
 export { MessageActions, QuotedMessageBlock } from './components/MessageActions'
 import { MessageActions, QuotedMessageBlock } from './components/MessageActions'
 function ForwardedMessageBlock({
@@ -267,6 +264,7 @@ function ForwardedMessageBlock({
   forwarded: ForwardedMessagePreview
   onOpenSource: (groupId: Id<'groups'>, messageId: Id<'messages'>) => void
 }) {
+  const { sourceGroupId, sourceMessageId } = forwarded
   const attachmentCount = forwarded.attachmentSnapshots.length
   const sourceLabel = getForwardedSourceLabel(forwarded)
   return (
@@ -276,7 +274,10 @@ function ForwardedMessageBlock({
         <span>{sourceLabel}</span>
       </div>
       <div className="track-forwarded-card">
-        <span>{forwarded.originalAuthorName} · {new Date(forwarded.originalCreatedAt).toLocaleTimeString()}</span>
+        <span>
+          {forwarded.originalAuthorName} ·{' '}
+          {new Date(forwarded.originalCreatedAt).toLocaleTimeString()}
+        </span>
         <p>{forwarded.originalBody || 'Attachment message'}</p>
         {attachmentCount > 0 ? (
           <small>
@@ -285,10 +286,15 @@ function ForwardedMessageBlock({
           </small>
         ) : null}
       </div>
-      {forwarded.canOpenSource && forwarded.sourceGroupId && forwarded.sourceMessageId ? (
+      {forwarded.canOpenSource && sourceGroupId && sourceMessageId ? (
         <button
           className="track-forwarded-source"
-          onClick={() => onOpenSource(forwarded.sourceGroupId as Id<'groups'>, forwarded.sourceMessageId as Id<'messages'>)}
+          onClick={() =>
+            onOpenSource(
+              sourceGroupId,
+              sourceMessageId,
+            )
+          }
           type="button"
         >
           <ExternalLink size={12} />
@@ -303,7 +309,6 @@ function ForwardedMessageBlock({
     </div>
   )
 }
-
 export function MentionInline({
   handle,
   index,
@@ -325,17 +330,12 @@ export function MentionInline({
         onClick={() => onOpenGroup(group._id)}
         type="button"
       >
-        <Icon size={12} />
-        @{handle}
+        <Icon size={12} />@{handle}
       </button>
     )
   }
-
   return (
-    <span
-      className={'track-mention-inline'}
-      key={`${handle}-${index}`}
-    >
+    <span className={'track-mention-inline'} key={`${handle}-${index}`}>
       @{handle}
     </span>
   )

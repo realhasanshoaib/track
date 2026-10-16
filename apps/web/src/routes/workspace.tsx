@@ -1,30 +1,24 @@
-import { Link, Navigate, Outlet, createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
-import { useConvexAuth, useMutation, useQuery } from 'convex/react'
-import { useEffect, useState } from 'react'
-
-import { api } from '../../../../convex/_generated/api'
+import { Link, Navigate, Outlet, createFileRoute } from '@tanstack/react-router'
+import { useConvexAuth } from 'convex/react'
 import TrackLoader from '#/components/TrackLoader'
 import { authClient } from '#/lib/auth-client'
-import { disableDevAuthBypass, useDevAuthBypass } from '#/lib/dev-auth-bypass'
+import { useDevAuthBypass } from '#/lib/dev-auth-bypass'
 import { useOAuthCallbackPending } from '#/lib/oauth-callback'
-import { useReleaseConfigState } from '#/lib/release-config'
-
 export const Route = createFileRoute('/workspace')({
   component: WorkspaceLayoutRoute,
 })
-
 function WorkspaceLayoutRoute() {
   const convexAuth = useConvexAuth()
   const session = authClient.useSession()
   const devAuthBypass = useDevAuthBypass()
   const hasSessionAccess = Boolean(session.data || devAuthBypass.enabled)
   const oauthCallbackPending = useOAuthCallbackPending(hasSessionAccess)
-
   if (devAuthBypass.allowed && !devAuthBypass.hydrated && !devAuthBypass.enabled) {
     return <TrackLoader label="Checking your session" />
   }
   if (oauthCallbackPending) return <TrackLoader label="Finishing Google sign-in" />
-  if (session.isPending && !devAuthBypass.enabled) return <TrackLoader label="Checking your session" />
+  if (session.isPending && !devAuthBypass.enabled)
+    return <TrackLoader label="Checking your session" />
   if (!hasSessionAccess) return <Navigate to="/sign-in" />
   if (convexAuth.isLoading) return <TrackLoader label="Connecting your workspace" />
   if (!convexAuth.isAuthenticated) {
@@ -35,67 +29,12 @@ function WorkspaceLayoutRoute() {
       </main>
     )
   }
-
   return <WorkspaceProfileBoundary devAuthEnabled={devAuthBypass.enabled} />
 }
-
-function WorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: boolean }) {
-  const releaseState = useReleaseConfigState()
-
-  if (releaseState.status === 'loading') return <TrackLoader label="Loading your workspace" />
-  if (!releaseState.config.companyModel) return <Outlet />
-
-  return <CompanyWorkspaceProfileBoundary devAuthEnabled={devAuthEnabled} />
-}
-
-function CompanyWorkspaceProfileBoundary({ devAuthEnabled }: { devAuthEnabled: boolean }) {
-  const sessionUserId = authClient.useSession().data?.user.id
-  const user = useQuery(api.auth.getCurrentUser)
-  const ensureCurrentUser = useMutation(api.auth.ensureCurrentUser)
-  const syncDevUser = useMutation(api.auth.syncDevUser)
-  const next = useLocation({ select: (location) => location.href })
-  const navigate = useNavigate()
-  const [failed, setFailed] = useState(false)
-  const linked = Boolean(sessionUserId && user && (
-    user.authUserId === sessionUserId || user.googleSubject === sessionUserId
-  ))
-  const needsProvisioning = user !== undefined && !linked
-
-  useEffect(() => {
-    let cancelled = false
-    if (sessionUserId && needsProvisioning && !failed) {
-      const provision = devAuthEnabled ? syncDevUser({}) : ensureCurrentUser({})
-      void provision.then((userId) => {
-        if (!cancelled && !userId) setFailed(true)
-      }).catch(() => {
-        if (!cancelled) setFailed(true)
-      })
-    }
-    return () => { cancelled = true }
-  }, [devAuthEnabled, ensureCurrentUser, failed, needsProvisioning, sessionUserId, syncDevUser])
-
-  if (failed && !linked) {
-    return (
-      <main className="track-loading">
-        <p role="alert">We couldn’t prepare your workspace.</p>
-        <button type="button" onClick={() => setFailed(false)}>Retry</button>
-        <Link to="/sign-in" onClick={(event) => {
-          event.preventDefault()
-          void authClient.signOut().then(({ error }) => {
-            if (error) return
-            disableDevAuthBypass()
-            void navigate({ to: '/sign-in', replace: true })
-          }).catch(() => setFailed(true))
-        }}>Sign in again</Link>
-      </main>
-    )
-  }
-  if (!user || !linked) return <TrackLoader label="Loading your workspace" />
-  if (!user.displayName.trim() || !user.profileDesignation?.trim() || !user.timezone?.trim()) {
-    // The old layout remains mounted briefly while the router opens onboarding.
-    if (!next.startsWith('/workspace')) return null
-    return <Navigate to="/onboarding/profile" search={{ next }} replace />
-  }
-
+function WorkspaceProfileBoundary({
+  devAuthEnabled: _devAuthEnabled,
+}: {
+  devAuthEnabled: boolean
+}) {
   return <Outlet />
 }

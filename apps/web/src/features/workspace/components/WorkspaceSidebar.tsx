@@ -1,5 +1,14 @@
-import { Link } from '@tanstack/react-router'
-import { Building2, ChevronDown, FolderKanban, LogOut, PanelLeftClose, PanelLeftOpen, Plus, Search, Settings2, UserRound } from 'lucide-react'
+import {
+  ChevronDown,
+  FolderKanban,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  Settings2,
+  UserRound,
+} from 'lucide-react'
 
 import type { Doc, Id } from '../../../../../../convex/_generated/dataModel'
 import ThemeToggle from '#/components/ThemeToggle'
@@ -17,7 +26,6 @@ import {
 import { AvatarNameTooltip } from '#/features/workspace/avatar-tooltip'
 import { getGroupAvatar } from '#/features/workspace/group-avatar'
 import { getAvatarTone, getInitials } from '#/features/workspace/identity'
-import { useReleaseConfig } from '#/lib/release-config'
 
 type ProjectItem = {
   project: Doc<'projects'>
@@ -85,8 +93,6 @@ export function WorkspaceSidebar({
   view,
   visibleGroups,
 }: WorkspaceSidebarProps) {
-  const releaseConfig = useReleaseConfig()
-
   return (
     <>
       {mobileNavOpen ? (
@@ -103,16 +109,12 @@ export function WorkspaceSidebar({
           'track-nav',
           mobileNavOpen ? 'mobile-open' : '',
           navCollapsed ? 'collapsed' : '',
-        ].filter(Boolean).join(' ')}
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         <div className="track-brand">
-          <img
-            alt=""
-            className="track-brand-mark"
-            height={24}
-            src="/track-mark.svg"
-            width={35}
-          />
+          <img alt="" className="track-brand-mark" height={24} src="/track-mark.svg" width={35} />
           <span className="track-brand-word">Track</span>
           <button
             aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
@@ -133,21 +135,34 @@ export function WorkspaceSidebar({
               aria-label={`Switch project: ${activeProject?.project.name ?? 'Select a project'}`}
               className="track-current-project-card"
               disabled={!projectItems.length}
-              title={navCollapsed ? activeProject?.project.name ?? 'Select a project' : undefined}
+              title={navCollapsed ? (activeProject?.project.name ?? 'Select a project') : undefined}
             >
               <FolderKanban className="track-nav-icon track-project-icon" size={14} />
               <span className="track-nav-copy">
-                <span className="track-nav-title">{activeProject?.project.name ?? 'Select a project'}</span>
-                <span className="track-nav-meta">{activeProject?.project.clientLabel ?? 'No label'}</span>
+                <span className="track-nav-title">
+                  {activeProject?.project.name ?? 'Select a project'}
+                </span>
+                <span className="track-nav-meta">
+                  {activeProject?.project.clientLabel ?? 'No label'}
+                </span>
               </span>
               <ChevronDown className="track-nav-icon track-project-chevron" size={14} />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="track-project-switcher-menu" side="right" sideOffset={8}>
+            <DropdownMenuContent
+              align="start"
+              className="track-project-switcher-menu"
+              side="right"
+              sideOffset={8}
+            >
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Switch project</DropdownMenuLabel>
                 {projectItems.map((item) => (
                   <DropdownMenuItem
-                    className={item.project._id === activeProjectId ? 'track-project-switcher-item active' : 'track-project-switcher-item'}
+                    className={
+                      item.project._id === activeProjectId
+                        ? 'track-project-switcher-item active'
+                        : 'track-project-switcher-item'
+                    }
                     key={item.project._id}
                     onFocus={() => onPreloadProjectRoute(item.project._id)}
                     onClick={() => onSelectProject(item.project._id)}
@@ -167,8 +182,6 @@ export function WorkspaceSidebar({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        {releaseConfig.companyModel ? <div className="track-nav-secondary company-nav-link"><Link className="track-nav-item" to="/workspace/company"><Building2 className="track-nav-icon" size={14} /><span className="track-nav-copy"><span className="track-nav-title">Companies</span><span className="track-nav-meta">Relationships and shared work</span></span></Link></div> : null}
 
         {activeProjectId ? (
           <div className="track-nav-secondary track-project-navigation">
@@ -191,7 +204,11 @@ export function WorkspaceSidebar({
                   const { Icon, tone } = getGroupAvatar(group)
                   return (
                     <Button
-                      className={group._id === activeGroupId ? 'track-nav-item compact active' : 'track-nav-item compact'}
+                      className={
+                        group._id === activeGroupId
+                          ? 'track-nav-item compact active'
+                          : 'track-nav-item compact'
+                      }
                       key={group._id}
                       onFocus={() => onPreloadGroupRoute(group._id)}
                       onClick={() => onSelectGroup(group._id)}
@@ -205,7 +222,6 @@ export function WorkspaceSidebar({
                       </span>
                       <span className="track-nav-copy">
                         <span className="track-nav-title">{group.name}</span>
-
                       </span>
                     </Button>
                   )
@@ -279,7 +295,9 @@ export function WorkspaceSidebar({
                     <Button
                       aria-label="Profile settings"
                       className="track-nav-footer-button"
-                      onClick={() => { window.location.href = '/profile' }}
+                      onClick={() => {
+                        window.location.href = '/profile'
+                      }}
                       title="Profile settings"
                       type="button"
                     >
@@ -323,7 +341,9 @@ export function WorkspaceSidebar({
               <Button
                 aria-label="Profile settings"
                 className="track-nav-footer-button"
-                onClick={() => { window.location.href = '/profile' }}
+                onClick={() => {
+                  window.location.href = '/profile'
+                }}
                 title="Profile settings"
                 type="button"
               >

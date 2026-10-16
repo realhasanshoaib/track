@@ -1,26 +1,21 @@
-import { assertProjectSnapshotWritable } from './lib/projectSnapshotLock'
 import { v } from 'convex/values'
 import { isActiveChannelMembership } from '@track/shared/channel-membership'
-
 import { mutation, query } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { listActiveChannelMemberships } from './lib/channelMembership'
-import { resolveCompanyProjectAccess } from './lib/companyPolicy'
 import {
   canRoleJoinDefaultGroup,
   requireGroupMember,
   requireProjectManager,
   requireProjectMember,
 } from './lib/permissions'
-
 const role = v.union(
   v.literal('owner'),
   v.literal('admin'),
   v.literal('staff'),
   v.literal('client'),
 )
-
 export const listVisible = query({
   args: {
     projectId: v.id('projects'),
@@ -36,18 +31,14 @@ export const listVisible = query({
       .collect()
     const visibleMemberships = memberships.filter(
       (membership) =>
-        membership.projectId === args.projectId &&
-        isActiveChannelMembership(membership, 'legacy'),
+        membership.projectId === args.projectId && isActiveChannelMembership(membership),
     )
-
     const groups = await Promise.all(
       visibleMemberships.map(async (membership) => await ctx.db.get(membership.groupId)),
     )
-
     return groups.filter((group) => group !== null)
   },
 })
-
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -58,14 +49,12 @@ export const create = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     await requireProjectManager(ctx, args.projectId, args.userId)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     const now = Date.now()
     const groupId = await ctx.db.insert('groups', {
       projectId: args.projectId,
       kind: 'custom',
       name: args.name,
       status: 'active',
-      revision: 1,
       createdBy: args.userId,
       createdAt: now,
       updatedAt: now,
@@ -90,7 +79,6 @@ export const create = mutation({
     return groupId
   },
 })
-
 export const update = mutation({
   args: {
     projectId: v.id('projects'),
@@ -102,17 +90,14 @@ export const update = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     await requireProjectManager(ctx, args.projectId, args.userId)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     const group = await ctx.db.get(args.groupId)
     if (!group || group.projectId !== args.projectId) throw new Error('group_not_found')
     const name = args.name.trim()
     if (!name) throw new Error('group_name_required')
-
     await ctx.db.patch(args.groupId, {
       name,
       updatedAt: Date.now(),
     })
-
     await appendAuditEvent(ctx, {
       projectId: args.projectId,
       groupId: args.groupId,
@@ -125,7 +110,6 @@ export const update = mutation({
     })
   },
 })
-
 export const remove = mutation({
   args: {
     projectId: v.id('projects'),
@@ -136,10 +120,8 @@ export const remove = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     await requireProjectManager(ctx, args.projectId, args.userId)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     const group = await ctx.db.get(args.groupId)
     if (!group || group.projectId !== args.projectId) throw new Error('group_not_found')
-
     const [
       groupMembers,
       groupReadStates,
@@ -149,15 +131,35 @@ export const remove = mutation({
       groupNotificationSettings,
       invitations,
     ] = await Promise.all([
-      ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('groupReadStates').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('messages').withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('attachments').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
-      ctx.db.query('typingIndicators').withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId)).collect(),
+      ctx.db
+        .query('groupMembers')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+      ctx.db
+        .query('groupReadStates')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+      ctx.db
+        .query('messages')
+        .withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+      ctx.db
+        .query('attachments')
+        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
+        .collect(),
+      ctx.db
+        .query('typingIndicators')
+        .withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId))
+        .collect(),
       ctx.db.query('groupNotificationSettings').collect(),
       Promise.all(
         (['pending', 'accepted', 'revoked', 'expired'] as const).map((status) =>
-          ctx.db.query('invitations').withIndex('by_project_status', (q) => q.eq('projectId', args.projectId).eq('status', status)).collect(),
+          ctx.db
+            .query('invitations')
+            .withIndex('by_project_status', (q) =>
+              q.eq('projectId', args.projectId).eq('status', status),
+            )
+            .collect(),
         ),
       ).then((rows) => rows.flat()),
     ])
@@ -170,9 +172,11 @@ export const remove = mutation({
       action: 'group.deleted',
       before: { name: group.name, kind: group.kind },
     })
-
-    await Promise.all(attachments.map((attachment) => ctx.storage.delete(attachment.storageId).catch(() => undefined)))
-
+    await Promise.all(
+      attachments.map((attachment) =>
+        ctx.storage.delete(attachment.storageId).catch(() => {}),
+      ),
+    )
     for (const row of groupNotificationSettings) {
       if (row.groupId === args.groupId) await ctx.db.delete(row._id)
     }
@@ -187,7 +191,6 @@ export const remove = mutation({
     await ctx.db.delete(args.groupId)
   },
 })
-
 export const addProjectMember = mutation({
   args: {
     projectId: v.id('projects'),
@@ -199,7 +202,6 @@ export const addProjectMember = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.actorId)
     await requireProjectManager(ctx, args.projectId, args.actorId)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     const now = Date.now()
     const existing = await ctx.db
       .query('projectMembers')
@@ -207,7 +209,6 @@ export const addProjectMember = mutation({
         q.eq('projectId', args.projectId).eq('userId', args.userId),
       )
       .unique()
-
     if (existing) {
       await ctx.db.patch(existing._id, {
         role: args.role,
@@ -219,24 +220,19 @@ export const addProjectMember = mutation({
         userId: args.userId,
         role: args.role,
         status: 'active',
-        term: 1,
         createdAt: now,
         updatedAt: now,
       })
     }
-
     const groups = await ctx.db
       .query('groups')
       .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
       .collect()
-
     for (const group of groups) {
       if (!canRoleJoinDefaultGroup(args.role, group.kind)) continue
       const existingGroupMember = await ctx.db
         .query('groupMembers')
-        .withIndex('by_group_user', (q) =>
-          q.eq('groupId', group._id).eq('userId', args.userId),
-        )
+        .withIndex('by_group_user', (q) => q.eq('groupId', group._id).eq('userId', args.userId))
         .unique()
       if (!existingGroupMember) {
         await ctx.db.insert('groupMembers', {
@@ -249,7 +245,6 @@ export const addProjectMember = mutation({
         })
       }
     }
-
     await appendAuditEvent(ctx, {
       projectId: args.projectId,
       actorId: args.actorId,
@@ -263,7 +258,6 @@ export const addProjectMember = mutation({
     })
   },
 })
-
 export const addGroupMember = mutation({
   args: {
     projectId: v.id('projects'),
@@ -275,14 +269,11 @@ export const addGroupMember = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.actorId)
     await requireProjectManager(ctx, args.projectId, args.actorId)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     await requireProjectMember(ctx, args.projectId, args.userId)
     const now = Date.now()
     const existing = await ctx.db
       .query('groupMembers')
-      .withIndex('by_group_user', (q) =>
-        q.eq('groupId', args.groupId).eq('userId', args.userId),
-      )
+      .withIndex('by_group_user', (q) => q.eq('groupId', args.groupId).eq('userId', args.userId))
       .unique()
     if (!existing) {
       await ctx.db.insert('groupMembers', {
@@ -305,36 +296,17 @@ export const addGroupMember = mutation({
     })
   },
 })
-
 export const listMembers = query({
   args: {
     groupId: v.id('groups'),
     userId: v.id('users'),
-    actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
   },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
-    const hasActingCompany = args.actingCompanyId !== undefined
-    const hasProjectMember = args.projectMemberId !== undefined
-    if (hasActingCompany !== hasProjectMember) throw new Error('represented_context_required')
-    let memberships: Awaited<ReturnType<typeof listActiveChannelMemberships>>
-    if (args.actingCompanyId && args.projectMemberId) {
-      const group = await ctx.db.get(args.groupId)
-      if (!group) throw new Error('channel_unavailable')
-      const access = await resolveCompanyProjectAccess(ctx, actor, {
-        projectId: group.projectId,
-        actingCompanyId: args.actingCompanyId,
-        projectMemberId: args.projectMemberId,
-        groupId: group._id,
-      })
-      if (!access.capabilities.canWriteChannel) throw new Error('channel_write_required')
-      memberships = await listActiveChannelMemberships(ctx, args.groupId, 'company')
-    } else {
-      await requireGroupMember(ctx, args.groupId, args.userId)
-      memberships = await listActiveChannelMemberships(ctx, args.groupId, 'legacy')
-    }
+    await requireGroupMember(ctx, args.groupId, args.userId)
+    const memberships = await listActiveChannelMemberships(ctx, args.groupId)
     const members = await Promise.all(
       memberships.map(async (membership) => {
         const user = await ctx.db.get(membership.userId)

@@ -2295,9 +2295,6 @@ button {
   padding-bottom: 0;
 }
 
-.track-nav.collapsed > .company-nav-link {
-  grid-row: 3;
-}
 
 .track-nav.collapsed > .track-project-navigation {
   grid-row: 4;
@@ -6688,7 +6685,7 @@ button:disabled:hover {
   }
 }
 
-/* Authoritative UI direction adoption — conversation, work, and Company surfaces. */
+/* Authoritative UI direction adoption — conversation, work, and settings surfaces. */
 body {
   font-size: 14px;
   line-height: 1.5;
@@ -7178,7 +7175,6 @@ body {
   flex: none;
 }
 
-/* Company-owned surfaces live in features/company/company-surfaces.css. */
 
 @media (max-width: 1180px) {
   .track-header-topic {
@@ -7186,20 +7182,6 @@ body {
   }
 }
 
-.track-author-company {
-  max-width: 180px;
-  overflow: hidden;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  background: var(--paper-2);
-  color: var(--ink-3);
-  font-family: var(--font-meta);
-  font-size: 9.5px;
-  line-height: 17px;
-  padding: 0 7px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 @media (max-width: 1080px) {
   .track-app-shell-with-rail,

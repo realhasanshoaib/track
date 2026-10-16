@@ -1,36 +1,32 @@
 import { v } from 'convex/values'
-
 import type { Doc, Id } from './_generated/dataModel'
 import type { MutationCtx } from './_generated/server'
 import { mutation } from './_generated/server'
 import { devAuthBypassUser } from './lib/devAuth'
-
 const fixtureNamePrefix = 'E2E '
 const fixtureTokenArgument = v.string()
 const performanceHistoryMessageCount = 24
-
 type FixtureProject = {
   projectId: Id<'projects'>
   projectMemberId: Id<'projectMembers'>
   activeGroupId: Id<'groups'>
   archivedGroupId?: Id<'groups'>
 }
-
 function validNamespace(namespace: string) {
   if (!/^[a-z0-9-]{1,48}$/.test(namespace)) throw new Error('e2e_fixture_namespace_invalid')
   return namespace
 }
-
 function isLocalSiteUrl(value: string | undefined) {
   if (!value) return false
   try {
     const url = new URL(value)
-    return url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+    return (
+      url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+    )
   } catch {
     return false
   }
 }
-
 function assertFixtureAccess(token: string) {
   if (
     process.env.TRACK_E2E_FIXTURE !== '1' ||
@@ -41,7 +37,6 @@ function assertFixtureAccess(token: string) {
     throw new Error('e2e_fixture_disabled')
   }
 }
-
 async function fixtureUser(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity()
   if (
@@ -51,10 +46,11 @@ async function fixtureUser(ctx: MutationCtx) {
   ) {
     throw new Error('e2e_fixture_identity_required')
   }
-
   const existing = await ctx.db
     .query('users')
-    .withIndex('by_google_subject', (query) => query.eq('googleSubject', devAuthBypassUser.googleSubject))
+    .withIndex('by_google_subject', (query) =>
+      query.eq('googleSubject', devAuthBypassUser.googleSubject),
+    )
     .unique()
   const now = Date.now()
   if (existing) {
@@ -74,7 +70,6 @@ async function fixtureUser(ctx: MutationCtx) {
     })
     return await ctx.db.get(existing._id)
   }
-
   const userId = await ctx.db.insert('users', {
     googleSubject: devAuthBypassUser.googleSubject,
     authUserId: identity.subject,
@@ -91,25 +86,68 @@ async function fixtureUser(ctx: MutationCtx) {
   })
   return await ctx.db.get(userId)
 }
-
 async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
   const [groups, members, messages] = await Promise.all([
-    ctx.db.query('groups').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('projectMembers').withIndex('by_project', (query) => query.eq('projectId', projectId)).collect(),
-    ctx.db.query('messages').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
+    ctx.db
+      .query('groups')
+      .withIndex('by_project', (query) => query.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('projectMembers')
+      .withIndex('by_project', (query) => query.eq('projectId', projectId))
+      .collect(),
+    ctx.db
+      .query('messages')
+      .withIndex('by_project_created_at', (query) => query.eq('projectId', projectId))
+      .collect(),
   ])
   const groupIds = new Set(groups.map((group) => String(group._id)))
-
-  const [groupMembers, groupReads, groupSettings, typing, attachments, auditEvents, invitations] = await Promise.all([
-    Promise.all(groups.map((group) => ctx.db.query('groupMembers').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
-    ctx.db.query('groupReadStates').collect().then((rows) => rows.filter((row) => row.projectId === projectId)),
-    ctx.db.query('groupNotificationSettings').collect(),
-    Promise.all(groups.map((group) => ctx.db.query('typingIndicators').withIndex('by_group_updated_at', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
-    Promise.all(groups.map((group) => ctx.db.query('attachments').withIndex('by_group', (query) => query.eq('groupId', group._id)).collect())).then((rows) => rows.flat()),
-    ctx.db.query('auditEvents').withIndex('by_project_created_at', (query) => query.eq('projectId', projectId)).collect(),
-    Promise.all((['pending', 'accepted', 'revoked', 'expired'] as const).map((status) => ctx.db.query('invitations').withIndex('by_project_status', (query) => query.eq('projectId', projectId).eq('status', status)).collect())).then((rows) => rows.flat()),
-  ])
-
+  const [groupMembers, groupReads, groupSettings, typing, attachments, auditEvents, invitations] =
+    await Promise.all([
+      Promise.all(
+        groups.map((group) =>
+          ctx.db
+            .query('groupMembers')
+            .withIndex('by_group', (query) => query.eq('groupId', group._id))
+            .collect(),
+        ),
+      ).then((rows) => rows.flat()),
+      ctx.db
+        .query('groupReadStates')
+        .collect()
+        .then((rows) => rows.filter((row) => row.projectId === projectId)),
+      ctx.db.query('groupNotificationSettings').collect(),
+      Promise.all(
+        groups.map((group) =>
+          ctx.db
+            .query('typingIndicators')
+            .withIndex('by_group_updated_at', (query) => query.eq('groupId', group._id))
+            .collect(),
+        ),
+      ).then((rows) => rows.flat()),
+      Promise.all(
+        groups.map((group) =>
+          ctx.db
+            .query('attachments')
+            .withIndex('by_group', (query) => query.eq('groupId', group._id))
+            .collect(),
+        ),
+      ).then((rows) => rows.flat()),
+      ctx.db
+        .query('auditEvents')
+        .withIndex('by_project_created_at', (query) => query.eq('projectId', projectId))
+        .collect(),
+      Promise.all(
+        (['pending', 'accepted', 'revoked', 'expired'] as const).map((status) =>
+          ctx.db
+            .query('invitations')
+            .withIndex('by_project_status', (query) =>
+              query.eq('projectId', projectId).eq('status', status),
+            )
+            .collect(),
+        ),
+      ).then((rows) => rows.flat()),
+    ])
   for (const row of groupSettings) {
     if (groupIds.has(String(row.groupId))) await ctx.db.delete(row._id)
   }
@@ -125,22 +163,33 @@ async function deleteProjectData(ctx: MutationCtx, projectId: Id<'projects'>) {
   for (const row of members) await ctx.db.delete(row._id)
   for (const row of groups) await ctx.db.delete(row._id)
   await ctx.db.delete(projectId)
-
 }
-
 async function clearFixture(ctx: MutationCtx, userId: Id<'users'>, namespace: string) {
-  const memberships = await ctx.db.query('projectMembers').withIndex('by_user', (query) => query.eq('userId', userId)).collect()
+  const memberships = await ctx.db
+    .query('projectMembers')
+    .withIndex('by_user', (query) => query.eq('userId', userId))
+    .collect()
   const fixtureProjects = []
   for (const membership of memberships) {
     const project = await ctx.db.get(membership.projectId)
-    if (project?.createdBy === userId && project.name.startsWith(`${fixtureNamePrefix}${namespace} `)) fixtureProjects.push(project)
+    if (
+      project?.createdBy === userId &&
+      project.name.startsWith(`${fixtureNamePrefix}${namespace} `)
+    )
+      fixtureProjects.push(project)
   }
   for (const project of fixtureProjects) await deleteProjectData(ctx, project._id)
 }
-
 async function createGroup(
   ctx: MutationCtx,
-  input: { projectId: Id<'projects'>; projectMemberId: Id<'projectMembers'>; userId: Id<'users'>; name: string; status: 'active' | 'archived'; now: number },
+  input: {
+    projectId: Id<'projects'>
+    projectMemberId: Id<'projectMembers'>
+    userId: Id<'users'>
+    name: string
+    status: 'active' | 'archived'
+    now: number
+  },
 ) {
   const groupId = await ctx.db.insert('groups', {
     projectId: input.projectId,
@@ -148,7 +197,6 @@ async function createGroup(
     name: input.name,
     status: input.status,
     archivedAt: input.status === 'archived' ? input.now : undefined,
-    revision: 1,
     nextChannelSequence: 0,
     createdBy: input.userId,
     createdAt: input.now,
@@ -165,10 +213,18 @@ async function createGroup(
   })
   return groupId
 }
-
 async function createMessage(
   ctx: MutationCtx,
-  input: { projectId: Id<'projects'>; groupId: Id<'groups'>; projectMemberId: Id<'projectMembers'>; userId: Id<'users'>; body: string; sequence: number; now: number; replyToMessageId?: Id<'messages'> },
+  input: {
+    projectId: Id<'projects'>
+    groupId: Id<'groups'>
+    projectMemberId: Id<'projectMembers'>
+    userId: Id<'users'>
+    body: string
+    sequence: number
+    now: number
+    replyToMessageId?: Id<'messages'>
+  },
 ) {
   return await ctx.db.insert('messages', {
     projectId: input.projectId,
@@ -183,24 +239,22 @@ async function createMessage(
     createdAt: input.now + input.sequence,
   })
 }
-
-async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: string, historyMessageCount = 0) {
+async function seedFixture(
+  ctx: MutationCtx,
+  user: Doc<'users'>,
+  namespace: string,
+  historyMessageCount = 0,
+) {
   const now = Date.now()
   const projectSpecs = [
     { name: `${fixtureNamePrefix}${namespace} Primary`, secondary: false },
     { name: `${fixtureNamePrefix}${namespace} Secondary`, secondary: true },
   ] as const
   const result: FixtureProject[] = []
-
   for (const [index, spec] of projectSpecs.entries()) {
     const projectId = await ctx.db.insert('projects', {
       name: spec.name,
       clientLabel: 'Isolated browser fixture',
-      accessProfile: 'legacy',
-      origin: 'single_company',
-      status: 'active',
-      participantRevision: 0,
-      revision: 1,
       createdBy: user._id,
       createdAt: now + index,
       updatedAt: now + index,
@@ -210,7 +264,6 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       userId: user._id,
       role: 'owner',
       status: 'active',
-      term: 1,
       createdAt: now + index,
       updatedAt: now + index,
     })
@@ -243,7 +296,9 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       groupId: activeGroupId,
       projectMemberId,
       userId: user._id,
-      body: spec.secondary ? 'Secondary project scope stays isolated.' : 'E2E source message: assign an owner before launch.',
+      body: spec.secondary
+        ? 'Secondary project scope stays isolated.'
+        : 'E2E source message: assign an owner before launch.',
       sequence: spec.secondary ? 1 : sourceSequence,
       now: now + index,
     })
@@ -252,7 +307,9 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
       groupId: activeGroupId,
       projectMemberId,
       userId: user._id,
-      body: spec.secondary ? 'Only the secondary project evidence belongs here.' : 'Conversation evidence stays in the group.',
+      body: spec.secondary
+        ? 'Only the secondary project evidence belongs here.'
+        : 'Conversation evidence stays in the group.',
       replyToMessageId: oldestMessageId,
       sequence: spec.secondary ? 2 : sourceSequence + 1,
       now: now + index,
@@ -281,12 +338,10 @@ async function seedFixture(ctx: MutationCtx, user: Doc<'users'>, namespace: stri
   }
   return { namespace, userId: user._id, projects: result }
 }
-
 const fixtureArgs = {
   namespace: v.string(),
   token: fixtureTokenArgument,
 }
-
 export const seed = mutation({
   args: fixtureArgs,
   handler: async (ctx, args) => {
@@ -298,7 +353,6 @@ export const seed = mutation({
     return await seedFixture(ctx, user, namespace)
   },
 })
-
 export const reset = mutation({
   args: fixtureArgs,
   handler: async (ctx, args) => {
@@ -310,7 +364,6 @@ export const reset = mutation({
     return await seedFixture(ctx, user, namespace)
   },
 })
-
 export const performanceReset = mutation({
   args: fixtureArgs,
   handler: async (ctx, args) => {
@@ -322,7 +375,6 @@ export const performanceReset = mutation({
     return await seedFixture(ctx, user, namespace, performanceHistoryMessageCount)
   },
 })
-
 export const quoteReset = mutation({
   args: fixtureArgs,
   handler: async (ctx, args) => {

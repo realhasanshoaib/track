@@ -285,15 +285,6 @@
   },
   {
     "type": "module",
-    "from": "convex/lib/projectExitArchive.ts",
-    "to": "convex/lib/projectExitArchive.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
     "from": "packages/shared/vitest.config.ts",
     "to": "packages/shared/vitest.config.ts",
     "rule": {

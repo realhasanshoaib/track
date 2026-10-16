@@ -1,30 +1,24 @@
 export type ComposerDraftScope = {
   actorId: string
-  actingCompanyId?: string
   projectMemberId?: string
   projectId: string
   groupId: string
 }
-
 export type ComposerDraft = {
   composer: string
   replyToMessageId: string | null
 }
-
 const sessionStorageKey = 'track:composer-drafts:v1'
 const memoryDrafts = new Map<string, ComposerDraft>()
-
 export function getComposerDraftKey(scope: ComposerDraftScope) {
   return [
     scope.actorId,
-    scope.actingCompanyId ?? 'legacy-company',
     scope.projectMemberId ?? 'legacy-membership',
     scope.projectId,
     scope.groupId,
     'channel',
   ].join(':')
 }
-
 export function readComposerDraft(scope: ComposerDraftScope): ComposerDraft | null {
   const key = getComposerDraftKey(scope)
   const memoryDraft = memoryDrafts.get(key)
@@ -46,7 +40,6 @@ export function readComposerDraft(scope: ComposerDraftScope): ComposerDraft | nu
     return null
   }
 }
-
 export function writeComposerDraft(scope: ComposerDraftScope, draft: ComposerDraft) {
   const key = getComposerDraftKey(scope)
   if (!draft.composer && draft.replyToMessageId === null) {
@@ -65,7 +58,6 @@ export function writeComposerDraft(scope: ComposerDraftScope, draft: ComposerDra
     // Session storage is an optional enhancement; the in-memory session remains usable.
   }
 }
-
 export function clearComposerDraft(scope: ComposerDraftScope) {
   const key = getComposerDraftKey(scope)
   memoryDrafts.delete(key)
@@ -80,7 +72,6 @@ export function clearComposerDraft(scope: ComposerDraftScope) {
     // Nothing else is required when optional session storage is unavailable.
   }
 }
-
 export function clearAllComposerDrafts() {
   memoryDrafts.clear()
   if (typeof window === 'undefined') return
@@ -90,25 +81,26 @@ export function clearAllComposerDrafts() {
     // Nothing else is required when optional session storage is unavailable.
   }
 }
-
 type StoredComposerDraft = {
   composer: string
   replyToMessageId?: string | null
 }
-
-type DraftMap = { [key: string]: StoredComposerDraft }
-
+type DraftMap = {
+  [key: string]: StoredComposerDraft
+}
 function parse(value: unknown): DraftMap | null {
   return isDraftMap(value) ? value : null
 }
-
 function isDraftMap(value: unknown): value is DraftMap {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   return Object.values(value).every(isStoredComposerDraft)
 }
-
 function isStoredComposerDraft(value: unknown): value is StoredComposerDraft {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   if (!('composer' in value) || typeof value.composer !== 'string') return false
-  return !('replyToMessageId' in value) || value.replyToMessageId === null || typeof value.replyToMessageId === 'string'
+  return (
+    !('replyToMessageId' in value) ||
+    value.replyToMessageId === null ||
+    typeof value.replyToMessageId === 'string'
+  )
 }

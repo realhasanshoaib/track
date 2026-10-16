@@ -78,6 +78,5 @@ The `.example` files own local and provider setup. Keep credentials and deployme
 selectors in ignored operator files or provider secret stores. Feature controls
 are server-authoritative; repository defaults are not proof of live settings.
 Production access, migrations, and deployment require explicit authorization.
-Existing archive-search migration work is tracked in `tracker.yaml`.
 
 [MIT License](LICENSE) · [Code of conduct](CODE_OF_CONDUCT.md).

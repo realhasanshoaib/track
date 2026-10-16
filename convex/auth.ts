@@ -5,15 +5,12 @@ import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth/minimal'
 import { twoFactor } from 'better-auth/plugins'
 import type { GenericDatabaseReader, GenericDatabaseWriter } from 'convex/server'
-
 import { components } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
 import { mutation, query } from './_generated/server'
 import authConfig from './auth.config'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { devAuthBypassUser, isDevAuthBypassEnabled } from './lib/devAuth'
-import { cancelProjectSnapshotForSourceRemoval } from './lib/projectSnapshotLock'
-
 const siteUrl = process.env.SITE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
 const trustedOrigins = [
   siteUrl,
@@ -27,12 +24,13 @@ const trustedOrigins = [
   'https://appleid.apple.com',
 ]
 const stepUpFreshMs = 10 * 60 * 1000
-
 export const authComponent = createClient<DataModel>(components.betterAuth)
-
-type ReadCtx = GenericCtx<DataModel> & { db: GenericDatabaseReader<DataModel> }
-type WriteCtx = GenericCtx<DataModel> & { db: GenericDatabaseWriter<DataModel> }
-
+type ReadCtx = GenericCtx<DataModel> & {
+  db: GenericDatabaseReader<DataModel>
+}
+type WriteCtx = GenericCtx<DataModel> & {
+  db: GenericDatabaseWriter<DataModel>
+}
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
     appName: 'Track',
@@ -58,7 +56,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       apple: {
         clientId: process.env.APPLE_CLIENT_ID ?? '',
         clientSecret: process.env.APPLE_CLIENT_SECRET ?? '',
-        appBundleIdentifier: process.env.APPLE_APP_BUNDLE_IDENTIFIER ?? process.env.APPLE_CLIENT_ID ?? '',
+        appBundleIdentifier:
+          process.env.APPLE_APP_BUNDLE_IDENTIFIER ?? process.env.APPLE_CLIENT_ID ?? '',
       },
     },
     plugins: [
@@ -78,14 +77,12 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       }),
     ],
   })
-
 export const getAuthUser = query({
   args: {},
   handler: async (ctx) => {
     return await authComponent.getAuthUser(ctx)
   },
 })
-
 async function getOptionalAuthUser(ctx: GenericCtx<DataModel>) {
   try {
     return await authComponent.getAuthUser(ctx)
@@ -97,59 +94,46 @@ async function getOptionalAuthUser(ctx: GenericCtx<DataModel>) {
     throw error
   }
 }
-
-function getAuthUserDisplayName(authUser: {
-  name?: string | null
-  email?: string | null
-}) {
+function getAuthUserDisplayName(authUser: { name?: string | null; email?: string | null }) {
   return authUser.name ?? authUser.email?.split('@')[0] ?? 'Track User'
 }
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
-
-function isProfileComplete(user: {
-  displayName?: string | null
-}) {
+function isProfileComplete(user: { displayName?: string | null }) {
   return Boolean(user.displayName?.trim())
 }
-
 async function assertCanManageTrackUser(ctx: WriteCtx, userId: string) {
   const authUser = await getOptionalAuthUser(ctx)
   if (!authUser) throw new Error('unauthenticated')
-
   const trackUser = await findTrackUserByAuth(ctx, authUser)
   if (!trackUser || trackUser._id !== userId) throw new Error('forbidden')
-
   return { authUser, trackUser }
 }
-
 async function findTrackUserByAuth(
   ctx: ReadCtx,
-  authUser: { _id: string; email?: string | null },
+  authUser: {
+    _id: string
+    email?: string | null
+  },
 ) {
   const byAuthId = await ctx.db
     .query('users')
     .withIndex('by_auth_user_id', (q) => q.eq('authUserId', authUser._id))
     .unique()
   if (byAuthId) return byAuthId
-
   const byLegacyAuthId = await ctx.db
     .query('users')
     .withIndex('by_google_subject', (q) => q.eq('googleSubject', authUser._id))
     .unique()
   if (byLegacyAuthId) return byLegacyAuthId
-
   const normalizedEmail = normalizeEmail(authUser.email ?? '')
   if (!normalizedEmail) return null
-
   return await ctx.db
     .query('users')
     .withIndex('by_normalized_email', (q) => q.eq('normalizedEmail', normalizedEmail))
     .unique()
 }
-
 async function upsertTrackUserFromAuth(
   ctx: WriteCtx,
   authUser: {
@@ -163,7 +147,6 @@ async function upsertTrackUserFromAuth(
   const normalizedEmail = normalizeEmail(authUser.email ?? '')
   const displayName = getAuthUserDisplayName(authUser)
   const existing = await findTrackUserByAuth(ctx, authUser)
-
   if (existing) {
     const patch: Partial<typeof existing> = {
       authUserId: authUser._id,
@@ -179,7 +162,6 @@ async function upsertTrackUserFromAuth(
     await ctx.db.patch(existing._id, patch)
     return existing._id
   }
-
   return await ctx.db.insert('users', {
     googleSubject: authUser._id,
     authUserId: authUser._id,
@@ -191,7 +173,6 @@ async function upsertTrackUserFromAuth(
     updatedAt: now,
   })
 }
-
 export const getEmailAuthHint = query({
   args: {
     email: v.string(),
@@ -199,15 +180,12 @@ export const getEmailAuthHint = query({
   handler: async (ctx, args) => {
     const email = normalizeEmail(args.email)
     if (!email.includes('@')) return { status: 'invalid' as const }
-
     const authUser = await ctx.runQuery(components.betterAuth.adapter.findOne, {
       model: 'user',
       where: [{ field: 'email', value: email }],
       select: ['_id', 'email'],
     })
-
     if (!authUser?._id) return { status: 'new' as const }
-
     const accounts = await ctx.runQuery(components.betterAuth.adapter.findMany, {
       model: 'account',
       where: [{ field: 'userId', value: authUser._id }],
@@ -218,35 +196,31 @@ export const getEmailAuthHint = query({
       password?: string | null
       providerId?: string | null
     }>
-    const hasCredential = page.some((account) => account.providerId === 'credential' && account.password)
+    const hasCredential = page.some(
+      (account) => account.providerId === 'credential' && account.password,
+    )
     const hasGoogle = page.some((account) => account.providerId === 'google')
-
     if (hasCredential) return { status: 'credential' as const }
     if (hasGoogle) return { status: 'google_only' as const }
     return { status: 'existing_without_password' as const }
   },
 })
-
 export const ensureCurrentUser = mutation({
   args: {},
   handler: async (ctx) => {
     const authUser = await getOptionalAuthUser(ctx)
     if (!authUser) return null
-
     return await upsertTrackUserFromAuth(ctx, authUser)
   },
 })
-
 export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
     const authUser = await getOptionalAuthUser(ctx)
     if (!authUser) return null
-
     return await findTrackUserByAuth(ctx, authUser)
   },
 })
-
 export const syncGoogleUser = mutation({
   args: {
     googleSubject: v.string(),
@@ -255,7 +229,11 @@ export const syncGoogleUser = mutation({
   },
   handler: async (ctx, args) => {
     const authUser = await getOptionalAuthUser(ctx)
-    if (!authUser || authUser._id !== args.googleSubject || normalizeEmail(authUser.email ?? '') !== normalizeEmail(args.email)) {
+    if (
+      !authUser ||
+      authUser._id !== args.googleSubject ||
+      normalizeEmail(authUser.email) !== normalizeEmail(args.email)
+    ) {
       throw new Error('actor_mismatch')
     }
     return await upsertTrackUserFromAuth(ctx, {
@@ -265,20 +243,17 @@ export const syncGoogleUser = mutation({
     })
   },
 })
-
 async function getDevAuthSubject(ctx: WriteCtx) {
   const identity = await ctx.auth.getUserIdentity()
   if (identity && normalizeEmail(identity.email ?? '') === devAuthBypassUser.email) {
     return identity.subject
   }
-
   const authUser = await authComponent.safeGetAuthUser(ctx)
   if (!authUser || normalizeEmail(authUser.email) !== devAuthBypassUser.email) {
     throw new Error('dev_auth_identity_required')
   }
   return authUser._id
 }
-
 export const syncDevUser = mutation({
   args: {},
   handler: async (ctx) => {
@@ -286,15 +261,11 @@ export const syncDevUser = mutation({
       throw new Error('dev_auth_bypass_disabled')
     }
     const authUserId = await getDevAuthSubject(ctx)
-
     const now = Date.now()
     const existing = await ctx.db
       .query('users')
-      .withIndex('by_google_subject', (q) =>
-        q.eq('googleSubject', devAuthBypassUser.googleSubject),
-      )
+      .withIndex('by_google_subject', (q) => q.eq('googleSubject', devAuthBypassUser.googleSubject))
       .unique()
-
     if (existing) {
       await ctx.db.patch(existing._id, {
         authUserId,
@@ -309,7 +280,6 @@ export const syncDevUser = mutation({
       })
       return existing._id
     }
-
     return await ctx.db.insert('users', {
       googleSubject: devAuthBypassUser.googleSubject,
       authUserId,
@@ -326,7 +296,6 @@ export const syncDevUser = mutation({
     })
   },
 })
-
 export const getUser = query({
   args: {
     userId: v.id('users'),
@@ -337,7 +306,6 @@ export const getUser = query({
     return await ctx.db.get(args.userId)
   },
 })
-
 export const setTwoFactorEnabled = mutation({
   args: {
     userId: v.id('users'),
@@ -351,7 +319,6 @@ export const setTwoFactorEnabled = mutation({
     })
   },
 })
-
 export const generateAvatarUploadUrl = mutation({
   args: {
     userId: v.id('users'),
@@ -361,7 +328,6 @@ export const generateAvatarUploadUrl = mutation({
     return await ctx.storage.generateUploadUrl()
   },
 })
-
 export const setAvatar = mutation({
   args: {
     userId: v.id('users'),
@@ -375,7 +341,6 @@ export const setAvatar = mutation({
     })
   },
 })
-
 export const getAvatarUrl = query({
   args: {
     userId: v.id('users'),
@@ -387,7 +352,6 @@ export const getAvatarUrl = query({
     return await ctx.storage.getUrl(user.avatarStorageId)
   },
 })
-
 export const getAvatarUrls = query({
   args: {
     userIds: v.array(v.id('users')),
@@ -395,16 +359,17 @@ export const getAvatarUrls = query({
   handler: async (ctx, args) => {
     await requireAuthenticatedActor(ctx)
     const uniqueUserIds = Array.from(new Set(args.userIds))
-    return await Promise.all(uniqueUserIds.map(async (userId) => {
-      const user = await ctx.db.get(userId)
-      return {
-        userId,
-        url: user?.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) : null,
-      }
-    }))
+    return await Promise.all(
+      uniqueUserIds.map(async (userId) => {
+        const user = await ctx.db.get(userId)
+        return {
+          userId,
+          url: user?.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) : null,
+        }
+      }),
+    )
   },
 })
-
 export const updateProfile = mutation({
   args: {
     userId: v.id('users'),
@@ -436,14 +401,12 @@ export const updateProfile = mutation({
       'storm-flash',
       'crystal-prism',
     ])
-
     if (!displayName) throw new Error('display_name_required')
     if (!profileDesignation) throw new Error('designation_required')
     if (!timezone) throw new Error('timezone_required')
     if (profileDesignation.length > 60) throw new Error('designation_too_long')
     if ((profileBio?.length ?? 0) > 180) throw new Error('bio_too_long')
     if (!validBannerStyles.has(profileBannerStyle)) throw new Error('banner_style_invalid')
-
     await ctx.db.patch(args.userId, {
       displayName,
       profileDesignation,
@@ -455,7 +418,6 @@ export const updateProfile = mutation({
     })
   },
 })
-
 export const getProfileStatus = query({
   args: {
     userId: v.id('users'),
@@ -471,7 +433,6 @@ export const getProfileStatus = query({
     }
   },
 })
-
 export const verifyStepUpTotp = mutation({
   args: {
     userId: v.id('users'),
@@ -483,16 +444,8 @@ export const verifyStepUpTotp = mutation({
     await assertCanManageTrackUser(ctx, args.userId)
     const user = await ctx.db.get(args.userId)
     if (!user?.authUserId) throw new Error('user_not_found')
-
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
-    const api = auth.api as {
-      verifyTOTP: (input: { body: { code: string }; headers: Headers }) => Promise<unknown>
-      verifyBackupCode: (input: {
-        body: { code: string; disableSession: boolean }
-        headers: Headers
-      }) => Promise<unknown>
-    }
-
+    const api = auth.api
     if (args.method === 'backup_code') {
       await api.verifyBackupCode({
         body: { code: args.code, disableSession: true },
@@ -504,13 +457,10 @@ export const verifyStepUpTotp = mutation({
         headers,
       })
     }
-
     const now = Date.now()
     const existing = await ctx.db
       .query('securityStepUps')
-      .withIndex('by_user_action', (q) =>
-        q.eq('userId', args.userId).eq('action', args.action),
-      )
+      .withIndex('by_user_action', (q) => q.eq('userId', args.userId).eq('action', args.action))
       .unique()
     const payload = {
       authUserId: user.authUserId,
@@ -526,11 +476,9 @@ export const verifyStepUpTotp = mutation({
         ...payload,
       })
     }
-
     return { expiresAt: payload.expiresAt }
   },
 })
-
 export const hasFreshStepUp = query({
   args: {
     userId: v.id('users'),
@@ -541,15 +489,11 @@ export const hasFreshStepUp = query({
     assertActorMatches(actor, args.userId)
     const stepUp = await ctx.db
       .query('securityStepUps')
-      .withIndex('by_user_action', (q) =>
-        q.eq('userId', args.userId).eq('action', args.action),
-      )
+      .withIndex('by_user_action', (q) => q.eq('userId', args.userId).eq('action', args.action))
       .unique()
-
     return Boolean(stepUp && stepUp.expiresAt > Date.now())
   },
 })
-
 export const resetStepUps = mutation({
   args: {
     userId: v.id('users'),
@@ -560,48 +504,26 @@ export const resetStepUps = mutation({
       .query('securityStepUps')
       .withIndex('by_user', (q) => q.eq('userId', args.userId))
       .collect()
-
     await Promise.all(stepUps.map((stepUp) => ctx.db.delete(stepUp._id)))
     return { removed: stepUps.length }
   },
 })
-
 export const requestAccountDeletion = mutation({
   args: {
     userId: v.id('users'),
   },
   handler: async (ctx, args) => {
-    const { authUser, trackUser } = await assertCanManageTrackUser(ctx, args.userId)
+    const { authUser } = await assertCanManageTrackUser(ctx, args.userId)
     const now = Date.now()
-    const companyMemberships = await ctx.db
-      .query('companyMembers')
-      .withIndex('by_user_status', (q) => q.eq('userId', args.userId).eq('status', 'active'))
-      .collect()
-    for (const membership of companyMemberships.filter((item) => item.role === 'owner')) {
-      const owners = await ctx.db
-        .query('companyMembers')
-        .withIndex('by_company_status_role', (q) =>
-          q.eq('companyId', membership.companyId).eq('status', 'active').eq('role', 'owner'),
-        )
-        .collect()
-      if (owners.length <= 1) throw new Error('company_ownership_transfer_required')
-    }
     const existing = await ctx.db
       .query('accountDeletionRequests')
       .withIndex('by_user', (q) => q.eq('userId', args.userId))
       .first()
     const retentionNote =
-      'Shared project messages, attachments, and audit events are retained where needed for other members and project integrity; personal profile fields and push subscriptions are removed.'
-
-    const projectMemberships = await ctx.db.query('projectMembers')
-      .withIndex('by_user', (q) => q.eq('userId', args.userId)).collect()
-    for (const projectId of new Set(projectMemberships.map((membership) => membership.projectId))) {
-      await cancelProjectSnapshotForSourceRemoval(ctx, projectId)
-    }
-
+      'Group messages and attachments remain for other members; personal profile fields and push subscriptions are removed.'
     if (existing) {
       await ctx.db.patch(existing._id, {
-        authUserId: authUser?._id ?? trackUser.authUserId,
+        authUserId: authUser._id,
         status: 'requested',
         requestedAt: now,
         retentionNote,
@@ -609,18 +531,21 @@ export const requestAccountDeletion = mutation({
     } else {
       await ctx.db.insert('accountDeletionRequests', {
         userId: args.userId,
-        authUserId: authUser?._id ?? trackUser.authUserId,
+        authUserId: authUser._id,
         status: 'requested',
         requestedAt: now,
         retentionNote,
       })
     }
-
     const [subscriptions, pushInstallations] = await Promise.all([
-      ctx.db.query('notificationSubscriptions')
-        .withIndex('by_user', (q) => q.eq('userId', args.userId)).collect(),
-      ctx.db.query('pushInstallations')
-        .withIndex('by_user', (q) => q.eq('userId', args.userId)).collect(),
+      ctx.db
+        .query('notificationSubscriptions')
+        .withIndex('by_user', (q) => q.eq('userId', args.userId))
+        .collect(),
+      ctx.db
+        .query('pushInstallations')
+        .withIndex('by_user', (q) => q.eq('userId', args.userId))
+        .collect(),
     ])
     await Promise.all(
       subscriptions.map((subscription) =>
@@ -630,20 +555,18 @@ export const requestAccountDeletion = mutation({
         }),
       ),
     )
-    await Promise.all(pushInstallations.map((installation) =>
-      ctx.db.patch(installation._id, {
-        userId: undefined,
-        expoPushToken: undefined,
-        nativePushToken: undefined,
-        enabled: false,
-        failureReason: 'account_deleted',
-        updatedAt: now,
-      }),
-    ))
-    await Promise.all(companyMemberships.map((membership) =>
-      ctx.db.patch(membership._id, { status: 'removed', endedAt: now, updatedAt: now }),
-    ))
-
+    await Promise.all(
+      pushInstallations.map((installation) =>
+        ctx.db.patch(installation._id, {
+          userId: undefined,
+          expoPushToken: undefined,
+          nativePushToken: undefined,
+          enabled: false,
+          failureReason: 'account_deleted',
+          updatedAt: now,
+        }),
+      ),
+    )
     await ctx.db.patch(args.userId, {
       displayName: 'Deleted Track user',
       profileDesignation: undefined,
@@ -655,7 +578,6 @@ export const requestAccountDeletion = mutation({
       email: `deleted+${args.userId}@track.local`,
       updatedAt: now,
     })
-
     return { requestedAt: now }
   },
 })

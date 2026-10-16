@@ -13,7 +13,6 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { authClient } from '@/lib/auth-client';
 import { convexClient } from '@/lib/convex-client';
 import { TrackUserProvider } from '@/contexts/track-user-context';
-import { CompanyProvider } from '@/contexts/company-context';
 import { ThemeOverrideProvider, useThemeOverride } from '@/contexts/theme-override-context';
 import { Colors } from '@/constants/theme';
 import { PushNotificationBridge } from '@/lib/push-notifications';
@@ -75,7 +74,6 @@ function AppLayout() {
       <ThemeProvider value={navTheme}>
         <TrackUserProvider>
           <PushNotificationBridge>
-            <CompanyProvider>
               <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
               <Stack
                 screenOptions={{
@@ -94,11 +92,9 @@ function AppLayout() {
                 <Stack.Screen name="sign-in" options={{ headerShown: false }} />
                 <Stack.Screen name="projects" options={{ title: 'Projects' }} />
                 <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
-                <Stack.Screen name="company" options={{ title: 'Companies' }} />
                 <Stack.Screen name="groups" options={{ title: 'Channels' }} />
                 <Stack.Screen name="conversation" options={{ title: 'Conversation' }} />
               </Stack>
-            </CompanyProvider>
           </PushNotificationBridge>
         </TrackUserProvider>
       </ThemeProvider>

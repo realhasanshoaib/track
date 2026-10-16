@@ -1,41 +1,27 @@
 /// <reference types="vite/client" />
-
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-
+import { describe, expect, it } from 'vitest'
 import { api } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import schema from './schema'
-
 const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
-
 type TestBackend = ReturnType<typeof convexTest>
-
-const originalCompanyFlag = process.env.TRACK_COMPANY_MODEL_ENABLED
-
-beforeEach(() => {
-  process.env.TRACK_COMPANY_MODEL_ENABLED = 'false'
-})
-
-afterEach(() => {
-  process.env.TRACK_COMPANY_MODEL_ENABLED = originalCompanyFlag
-})
-
 describe('Channel messages', () => {
-
   it('returns bounded Channel context around an older target message', async () => {
     const { groupId, owner, projectId, t } = await seedLegacyChannel()
     const actor = asUser(t, owner)
     const messageIds: Array<Id<'messages'>> = []
     for (const [index, body] of ['One', 'Two', 'Three', 'Four', 'Five', 'Six'].entries()) {
-      messageIds.push(await actor.mutation(api.messages.send, {
-        authorId: owner,
-        body,
-        groupId,
-        idempotencyKey: `bounded-history-${index}`,
-        projectId,
-      }))
+      messageIds.push(
+        await actor.mutation(api.messages.send, {
+          authorId: owner,
+          body,
+          groupId,
+          idempotencyKey: `bounded-history-${index}`,
+          projectId,
+        }),
+      )
     }
     const page = await actor.query(api.messages.listPage, {
       groupId,
@@ -48,7 +34,6 @@ describe('Channel messages', () => {
     expect(pageIds.length).toBeLessThanOrEqual(5)
     expect(pageIds).toEqual(expect.arrayContaining([messageIds[1], messageIds[3]]))
   })
-
   it('hydrates a quote outside the latest page and loads its original on demand', async () => {
     const { groupId, owner, projectId, t } = await seedLegacyChannel()
     const actor = asUser(t, owner)
@@ -56,8 +41,13 @@ describe('Channel messages', () => {
       let original: Id<'messages'> | undefined
       for (let index = 0; index < 150; index += 1) {
         const id = await ctx.db.insert('messages', {
-          projectId, groupId, authorId: owner, body: `History ${index}`,
-          mentions: [], attachmentIds: [], channelSequence: index + 1,
+          projectId,
+          groupId,
+          authorId: owner,
+          body: `History ${index}`,
+          mentions: [],
+          attachmentIds: [],
+          channelSequence: index + 1,
           createdAt: Date.now() - 1000 + index,
         })
         original ??= id
@@ -66,28 +56,37 @@ describe('Channel messages', () => {
       return original
     })
     const replyId = await actor.mutation(api.messages.send, {
-      authorId: owner, projectId, groupId, body: 'A quote reply', replyToMessageId: originalId,
+      authorId: owner,
+      projectId,
+      groupId,
+      body: 'A quote reply',
+      replyToMessageId: originalId,
     })
     const latest = await actor.query(api.messages.listPage, {
-      groupId, userId: owner, paginationOpts: { cursor: null, numItems: 5 },
+      groupId,
+      userId: owner,
+      paginationOpts: { cursor: null, numItems: 5 },
     })
     expect(latest.page.some((item) => item.message._id === originalId)).toBe(false)
     expect(latest.page.find((item) => item.message._id === replyId)?.replyTo).toMatchObject({
-      messageId: originalId, body: 'History 0',
+      messageId: originalId,
+      body: 'History 0',
     })
     const focused = await actor.query(api.messages.listPage, {
-      groupId, userId: owner, targetMessageId: originalId,
+      groupId,
+      userId: owner,
+      targetMessageId: originalId,
       paginationOpts: { cursor: null, numItems: 5 },
     })
     expect(focused.page.some((item) => item.message._id === originalId)).toBe(true)
     expect(focused.page.length).toBeLessThanOrEqual(5)
   })
-
   it('atomically links uploaded attachments and converges a send retry', async () => {
     const { groupId, owner, projectId, t } = await seedLegacyChannel()
     const actor = asUser(t, owner)
-    const storageId = await t.run(async (ctx) =>
-      await ctx.storage.store(new Blob(['atomic attachment'], { type: 'text/plain' })),
+    const storageId = await t.run(
+      async (ctx) =>
+        await ctx.storage.store(new Blob(['atomic attachment'], { type: 'text/plain' })),
     )
     const uploadIntent = await actor.mutation(api.messages.generateUploadUrl, {
       contentType: 'text/plain',
@@ -104,12 +103,14 @@ describe('Channel messages', () => {
     })
     const sendArgs = {
       authorId: owner,
-      attachments: [{
-        contentType: 'text/plain',
-        filename: 'atomic.txt',
-        size: 17,
-        uploadIntentId: uploadIntent.intentId,
-      }],
+      attachments: [
+        {
+          contentType: 'text/plain',
+          filename: 'atomic.txt',
+          size: 17,
+          uploadIntentId: uploadIntent.intentId,
+        },
+      ],
       body: 'Atomic send',
       groupId,
       idempotencyKey: 'atomic-send-retry',
@@ -129,7 +130,6 @@ describe('Channel messages', () => {
       storageId,
     })
   })
-
   it('enforces message deletion authority and writes a body-free audit', async () => {
     const { groupId, member, owner, projectId, t } = await seedLegacyChannel()
     const ownerActor = asUser(t, owner)
@@ -140,29 +140,29 @@ describe('Channel messages', () => {
       idempotencyKey: 'deletable-message',
       projectId,
     })
-    await expect(asUser(t, member).mutation(api.messages.remove, {
-      actorId: member,
-      messageId,
-    })).rejects.toThrow('message_delete_forbidden')
+    await expect(
+      asUser(t, member).mutation(api.messages.remove, {
+        actorId: member,
+        messageId,
+      }),
+    ).rejects.toThrow('message_delete_forbidden')
     expect(await t.run(async (ctx) => await ctx.db.get(messageId))).not.toBeNull()
-
     await ownerActor.mutation(api.messages.remove, {
       actorId: owner,
       messageId,
     })
-
     expect(await t.run(async (ctx) => await ctx.db.get(messageId))).toBeNull()
-    const deletionAudit = await t.run(async (ctx) =>
-      await ctx.db
-        .query('auditEvents')
-        .withIndex('by_entity', (q) => q.eq('entityType', 'message').eq('entityId', messageId))
-        .filter((q) => q.eq(q.field('action'), 'message.deleted'))
-        .unique(),
+    const deletionAudit = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query('auditEvents')
+          .withIndex('by_entity', (q) => q.eq('entityType', 'message').eq('entityId', messageId))
+          .filter((q) => q.eq(q.field('action'), 'message.deleted'))
+          .unique(),
     )
     expect(deletionAudit?.before).toMatchObject({ attachmentCount: 0 })
     expect(deletionAudit?.before).not.toHaveProperty('body')
   })
-
   it('keeps shared storage until its last attachment is deleted', async () => {
     const { groupId, owner, projectId, t } = await seedLegacyChannel()
     const actor = asUser(t, owner)
@@ -194,18 +194,30 @@ describe('Channel messages', () => {
         uploadedBy: owner,
         createdAt,
       }
-      const firstId = await ctx.db.insert('attachments', { ...attachment, messageId: firstMessageId })
-      const secondId = await ctx.db.insert('attachments', { ...attachment, messageId: secondMessageId })
+      const firstId = await ctx.db.insert('attachments', {
+        ...attachment,
+        messageId: firstMessageId,
+      })
+      const secondId = await ctx.db.insert('attachments', {
+        ...attachment,
+        messageId: secondMessageId,
+      })
       await ctx.db.patch(firstMessageId, { attachmentIds: [firstId] })
       await ctx.db.patch(secondMessageId, { attachmentIds: [secondId] })
-      return { firstAttachmentId: firstId, secondAttachmentId: secondId, storageId: sharedStorageId }
+      return {
+        firstAttachmentId: firstId,
+        secondAttachmentId: secondId,
+        storageId: sharedStorageId,
+      }
     })
     await actor.mutation(api.messages.remove, { actorId: owner, messageId: firstMessageId })
-    expect(await t.run(async (ctx) => ({
-      firstAttachment: await ctx.db.get(firstAttachmentId),
-      secondAttachment: await ctx.db.get(secondAttachmentId),
-      storage: await ctx.db.system.get(storageId),
-    }))).toMatchObject({
+    expect(
+      await t.run(async (ctx) => ({
+        firstAttachment: await ctx.db.get(firstAttachmentId),
+        secondAttachment: await ctx.db.get(secondAttachmentId),
+        storage: await ctx.db.system.get(storageId),
+      })),
+    ).toMatchObject({
       firstAttachment: null,
       secondAttachment: { _id: secondAttachmentId },
       storage: { _id: storageId },
@@ -213,9 +225,7 @@ describe('Channel messages', () => {
     await actor.mutation(api.messages.remove, { actorId: owner, messageId: secondMessageId })
     expect(await t.run(async (ctx) => await ctx.db.system.get(storageId))).toBeNull()
   })
-
 })
-
 async function seedLegacyChannel() {
   const t = convexTest(schema, modules)
   registerRateLimiter(t)
@@ -225,7 +235,6 @@ async function seedLegacyChannel() {
   const now = Date.now()
   const fixture = await t.run(async (ctx) => {
     const projectId = await ctx.db.insert('projects', {
-      accessProfile: 'legacy',
       name: 'Chat Project',
       createdBy: owner,
       createdAt: now,
@@ -252,7 +261,6 @@ async function seedLegacyChannel() {
       kind: 'general',
       name: 'General',
       status: 'active',
-      revision: 1,
       createdBy: owner,
       createdAt: now,
       updatedAt: now,
@@ -279,7 +287,6 @@ async function seedLegacyChannel() {
   })
   return { ...fixture, member, outsider, owner, t }
 }
-
 async function seedUser(t: TestBackend, subject: string) {
   return await t.run(async (ctx) => {
     const userId = await ctx.db.insert('users', {
@@ -294,7 +301,6 @@ async function seedUser(t: TestBackend, subject: string) {
     return userId
   })
 }
-
 function asUser(t: TestBackend, userId: Id<'users'>) {
   return t.withIdentity({ subject: String(userId) })
 }

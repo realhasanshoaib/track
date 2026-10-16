@@ -1,54 +1,45 @@
-import { Pressable, StyleSheet, View } from 'react-native';
-
-import { AttachmentList } from '@/components/chat/attachment-list';
-import { MessageText } from '@/components/chat/message-text';
-import type { DetailedMessage } from '@/components/chat/types';
-import { ColoredAvatar } from '@/components/colored-avatar';
-import { PlatformIcon } from '@/components/platform-icon';
-import { ThemedText } from '@/components/themed-text';
-import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
-import { isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
-import { hapticLight } from '@/lib/haptics';
-import { useTheme } from '@/hooks/use-theme';
-
-const AVATAR_SIZE = 32;
+import { Pressable, StyleSheet, View } from 'react-native'
+import { AttachmentList } from '@/components/chat/attachment-list'
+import { MessageText } from '@/components/chat/message-text'
+import type { DetailedMessage } from '@/components/chat/types'
+import { ColoredAvatar } from '@/components/colored-avatar'
+import { ThemedText } from '@/components/themed-text'
+import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme'
+import { isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation'
+import { hapticLight } from '@/lib/haptics'
+import { useTheme } from '@/hooks/use-theme'
+const AVATAR_SIZE = 32
 /** Media sits nearly edge-to-edge; text sections add the rest of the inset. */
-const MEDIA_PAD = 3;
-
+const MEDIA_PAD = 3
 type Props = {
-  isFirstInGroup: boolean;
-  isOwnMessage: boolean;
-  message: DetailedMessage;
-  onLongPress: () => void;
-
-  onPressReply?: () => void;
-  timeLabel: string;
-};
-
+  isFirstInGroup: boolean
+  isOwnMessage: boolean
+  message: DetailedMessage
+  onLongPress: () => void
+  onPressReply?: () => void
+  timeLabel: string
+}
 export function MessageBubble({
   isFirstInGroup,
   isOwnMessage,
   message,
   onLongPress,
-
   onPressReply,
   timeLabel,
 }: Props) {
-  const theme = useTheme();
-  const name = message.author?.displayName ?? 'Member';
-  const authorId = message.author?._id ?? name;
-  const rawBody = message.message.body.trim();
-  const body = message.attachments.length && isAutoAttachmentBody(rawBody) ? '' : rawBody;
-  const showHeader = isFirstInGroup && !isOwnMessage;
+  const theme = useTheme()
+  const name = message.author?.displayName ?? 'Member'
+  const authorId = message.author?._id ?? name
+  const rawBody = message.message.body.trim()
+  const body = message.attachments.length && isAutoAttachmentBody(rawBody) ? '' : rawBody
+  const showHeader = isFirstInGroup && !isOwnMessage
   const hasMedia = message.attachments.some(
     ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
-  );
+  )
   // Media-closed bubbles overlay the timestamp on the image, WhatsApp-style.
-  const mediaClosesBubble =
-    message.attachments.every(
-      ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
-    );
-
+  const mediaClosesBubble = message.attachments.every(
+    ({ attachment, url }) => url && isImageAttachment(attachment.contentType),
+  )
   return (
     <View style={[styles.row, isOwnMessage ? styles.rowOwn : styles.rowOther]}>
       {isOwnMessage ? null : isFirstInGroup ? (
@@ -64,7 +55,8 @@ export function MessageBubble({
           hasMedia ? styles.bubbleMedia : styles.bubbleText,
           { backgroundColor: isOwnMessage ? theme.bubbleOwn : theme.bubbleOther },
           isFirstInGroup && (isOwnMessage ? styles.tailOwn : styles.tailOther),
-        ]}>
+        ]}
+      >
         {showHeader ? (
           <View style={[styles.header, hasMedia && styles.inset, hasMedia && styles.insetTop]}>
             <ThemedText numberOfLines={1} style={styles.authorName} type="smallBold">
@@ -77,18 +69,7 @@ export function MessageBubble({
                 </ThemedText>
               </View>
             ) : null}
-            {message.authorCompany ? (
-              <View
-                style={[
-                  styles.companyBadge,
-                  { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline },
-                ]}>
-                <PlatformIcon color={theme.textSecondary} name="office-building" size={12} />
-                <ThemedText numberOfLines={1} style={styles.companyName} type="captionBold">
-                  {message.authorCompany.displayName}
-                </ThemedText>
-              </View>
-            ) : null}
+            {null}
           </View>
         ) : null}
 
@@ -100,15 +81,16 @@ export function MessageBubble({
             disabled={!onPressReply}
             onLongPress={onLongPress}
             onPress={() => {
-              if (!onPressReply) return;
-              hapticLight();
-              onPressReply();
+              if (!onPressReply) return
+              hapticLight()
+              onPressReply()
             }}
             style={[
               styles.quote,
               hasMedia && styles.quoteInMedia,
               { backgroundColor: theme.backgroundElevated, borderLeftColor: theme.textTertiary },
-            ]}>
+            ]}
+          >
             <ThemedText numberOfLines={1} themeColor="textSecondary" type="captionBold">
               {message.replyTo.authorName}
             </ThemedText>
@@ -137,7 +119,8 @@ export function MessageBubble({
                 accessibilityLabel={`Sent at ${timeLabel}`}
                 style={styles.timeInline}
                 themeColor="textSecondary"
-                type="caption">
+                type="caption"
+              >
                 {timeLabel}
               </ThemedText>
             </View>
@@ -151,7 +134,8 @@ export function MessageBubble({
             <ThemedText
               accessibilityLabel={`Sent at ${timeLabel}`}
               style={styles.timeOverlayText}
-              type="caption">
+              type="caption"
+            >
               {timeLabel}
             </ThemedText>
           </View>
@@ -160,15 +144,15 @@ export function MessageBubble({
             accessibilityLabel={`Sent at ${timeLabel}`}
             style={[styles.timeFooter, hasMedia && styles.inset]}
             themeColor="textSecondary"
-            type="caption">
+            type="caption"
+          >
             {timeLabel}
           </ThemedText>
         )}
       </Pressable>
     </View>
-  );
+  )
 }
-
 const styles = StyleSheet.create({
   authorName: {
     flexShrink: 1,
@@ -192,21 +176,6 @@ const styles = StyleSheet.create({
   bubbleText: {
     paddingHorizontal: Spacing.two,
     paddingVertical: 6,
-  },
-  companyBadge: {
-    alignItems: 'center',
-    borderRadius: Radius.small,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    flexShrink: 1,
-    gap: 3,
-    minWidth: 0,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  companyName: {
-    flexShrink: 1,
-    minWidth: 0,
   },
   header: {
     alignItems: 'center',
@@ -292,4 +261,4 @@ const styles = StyleSheet.create({
   timeSpacer: {
     color: 'transparent',
   },
-});
+})

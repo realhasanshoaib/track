@@ -1,74 +1,44 @@
-import { resolveProjectAccessProfile } from '@track/shared/feature-flags'
 import type { Id } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
-
 import { assertActorMatches, requireAuthenticatedActor } from './actorContext'
-import { resolveCompanyProjectAccess } from './companyPolicy'
-import { assertProjectSnapshotWritable } from './projectSnapshotLock'
 import { requireGroupMember, requireProjectManager, requireProjectMember } from './permissions'
 
-type RequestCtx = QueryCtx | MutationCtx
-type RequiredCapability = 'readProject' | 'writeProject' | 'manageProject' | 'readChannel' | 'writeChannel' | 'stewardChannel'
-
-function requiresWritableProject(capability: RequiredCapability) {
-  return capability === 'writeProject' ||
-    capability === 'manageProject' ||
-    capability === 'writeChannel' ||
-    capability === 'stewardChannel'
-}
-
-export type ScopedRequest = {
-  projectId: Id<'projects'>
-  claimedUserId: Id<'users'>
-  groupId?: Id<'groups'>
-  actingCompanyId?: Id<'companies'>
-  projectMemberId?: Id<'projectMembers'>
-}
-
+type RequiredCapability =
+  | 'readProject'
+  | 'writeProject'
+  | 'manageProject'
+  | 'readChannel'
+  | 'writeChannel'
+  | 'stewardChannel'
 export async function authorizeScopedRequest(
-  ctx: RequestCtx,
-  input: ScopedRequest,
+  ctx: QueryCtx | MutationCtx,
+  input: {
+    projectId: Id<'projects'>
+    claimedUserId: Id<'users'>
+    groupId?: Id<'groups'>
+    projectMemberId?: Id<'projectMembers'>
+  },
   required: RequiredCapability,
 ) {
   const actor = await requireAuthenticatedActor(ctx)
   assertActorMatches(actor, input.claimedUserId)
   const project = await ctx.db.get(input.projectId)
   if (!project) throw new Error('project_unavailable')
-
-  if (resolveProjectAccessProfile(project.accessProfile) === 'legacy') {
-    const projectMember = required === 'manageProject' || required === 'stewardChannel'
+  const projectMember =
+    required === 'manageProject' || required === 'stewardChannel'
       ? await requireProjectManager(ctx, project._id, actor.userId)
       : await requireProjectMember(ctx, project._id, actor.userId)
-    if (input.groupId && (required === 'readChannel' || required === 'writeChannel' || required === 'stewardChannel')) {
-      await requireGroupMember(ctx, input.groupId, actor.userId)
-    }
-    if (input.projectMemberId && input.projectMemberId !== projectMember._id) {
-      throw new Error('actor_context_mismatch')
-    }
-    if (requiresWritableProject(required)) {
-      await assertProjectSnapshotWritable(ctx, project._id)
-    }
-    return { actor, project, projectMember, companyAccess: null }
+  if (input.groupId) {
+    const group = await ctx.db.get(input.groupId)
+    if (!group || group.projectId !== project._id) throw new Error('group_project_mismatch')
+    await requireGroupMember(ctx, input.groupId, actor.userId)
+    if (
+      (required === 'writeChannel' || required === 'stewardChannel') &&
+      group.status === 'archived'
+    )
+      throw new Error('group_archived')
   }
-
-  if (!input.actingCompanyId || !input.projectMemberId) throw new Error('actor_context_required')
-  const companyAccess = await resolveCompanyProjectAccess(ctx, actor, {
-    projectId: project._id,
-    groupId: input.groupId,
-    actingCompanyId: input.actingCompanyId,
-    projectMemberId: input.projectMemberId,
-  })
-  const allowed = {
-    readProject: companyAccess.capabilities.canReadProject,
-    writeProject: companyAccess.capabilities.canWriteProject,
-    manageProject: companyAccess.capabilities.canManageProject,
-    readChannel: companyAccess.capabilities.canReadChannel,
-    writeChannel: companyAccess.capabilities.canWriteChannel,
-    stewardChannel: companyAccess.capabilities.canStewardChannel,
-  }[required]
-  if (!allowed) throw new Error(required.includes('Channel') ? 'channel_unavailable' : 'project_unavailable')
-  if (requiresWritableProject(required)) {
-    await assertProjectSnapshotWritable(ctx, project._id)
-  }
-  return { actor, project, projectMember: companyAccess.projectMember, companyAccess }
+  if (input.projectMemberId && input.projectMemberId !== projectMember._id)
+    throw new Error('actor_context_mismatch')
+  return { actor, project, projectMember }
 }

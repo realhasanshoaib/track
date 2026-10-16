@@ -1,6 +1,5 @@
 import { useMutation } from 'convex/react'
 import { useRef } from 'react'
-
 import { api } from '../../../../../../convex/_generated/api'
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import { parseMentions } from '@track/shared'
@@ -18,7 +17,6 @@ import {
 import type { WorkspaceMentionOption } from '#/features/workspace/lib/mentions'
 import type { GroupMessageItem } from '#/features/workspace/thread-items'
 import type { PendingWorkspaceAttachment } from '#/features/workspace/hooks/usePendingAttachments'
-
 export function useWorkspaceMessageActions({
   activeGroupId,
   activeProjectId,
@@ -54,8 +52,10 @@ export function useWorkspaceMessageActions({
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl)
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent)
   const attachFileMutation = useMutation(api.messages.attachFile)
-  const sendAttemptRef = useRef<MessageSendAttempt<Id<'messages'>, UploadedPendingAttachment> | null>(null)
-
+  const sendAttemptRef = useRef<MessageSendAttempt<
+    Id<'messages'>,
+    UploadedPendingAttachment
+  > | null>(null)
   async function withMessageBusy(label: string, action: () => Promise<void>) {
     onBusyChange(label)
     onClearError()
@@ -67,7 +67,6 @@ export function useWorkspaceMessageActions({
       onBusyChange(null)
     }
   }
-
   async function handleSendMessage() {
     if (!trackUserId || !activeProjectId || !activeGroupId) return
     const body = composer.trim()
@@ -129,11 +128,9 @@ export function useWorkspaceMessageActions({
             claimUploadIntent: async (input) =>
               await claimUploadIntent({
                 ...input,
-                actingCompanyId: undefined,
                 projectMemberId: undefined,
               }),
-            generateUploadUrl: async (input) =>
-              await generateUploadUrl(input),
+            generateUploadUrl: async (input) => await generateUploadUrl(input),
             intentKey: attempt.idempotencyKey,
             pendingAttachment,
             trackUserId,
@@ -143,7 +140,6 @@ export function useWorkspaceMessageActions({
       onAfterSend()
     })
   }
-
   async function handleForwardMessage(input: {
     sourceMessageId: Id<'messages'>
     targetGroupId: Id<'groups'>
@@ -172,7 +168,6 @@ export function useWorkspaceMessageActions({
       onBusyChange(null)
     }
   }
-
   async function handleDeleteMessage(messageId: Id<'messages'>) {
     if (!trackUserId) return false
     onBusyChange(`delete-${messageId}`)
@@ -188,7 +183,6 @@ export function useWorkspaceMessageActions({
       onBusyChange(null)
     }
   }
-
   return {
     handleDeleteMessage,
     handleForwardMessage,

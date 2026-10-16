@@ -13,24 +13,6 @@ sizing: >-
   before sizing. Working entries have no remaining work to size. Waiting does not increase
   size. Revisit estimates when the work is inspected.
 outcomes:
-  - id: groups.remove_company_collaboration
-    title: Remove companies, relationships and exit archives
-    area: groups
-    state: planned
-    priority: P0
-    size: L
-    size_reason: Company rules run through membership, navigation and search in both apps.
-    summary: >-
-      Companies, relationship types, Project ownership transfer and frozen exit archives are still
-      implemented. In Q9 Chat, people from another company are ordinary group members.
-    remaining:
-      - Delete company, relationship, ownership, exit and archive code, tables and screens.
-      - Keep every person's existing group access while the company layer goes.
-    theory: theory.md#groups
-    code:
-      - convex/companies.ts
-      - convex/projectExit.ts
-
   - id: groups.groups_without_projects
     title: Groups are the only container
     area: groups

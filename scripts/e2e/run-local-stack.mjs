@@ -60,7 +60,6 @@ writeFileSync(convexEnvFile, [
   'DEV_AUTH_BYPASS=1',
   `SITE_URL=${siteUrl}`,
   `BETTER_AUTH_URL=${siteUrl}`,
-  'TRACK_COMPANY_MODEL_ENABLED=false',
 ].join('\n') + '\n')
 
 const supportedNodeDirs = [

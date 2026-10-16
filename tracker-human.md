@@ -17,16 +17,9 @@ Details, code references and evidence stay in tracker.yaml.
 
 ## First (P0)
 
-3 items — S: 0 · M: 1 · L: 2 · Unknown: 0
+2 items — S: 0 · M: 1 · L: 1 · Unknown: 0
 
 ### Groups
-
-- [Not started] Remove companies, relationships and exit archives
-    **Size**: L — Company rules run through membership, navigation and search in both
-              apps.
-    **Left**: Delete company, relationship, ownership, exit and archive code, tables and
-              screens.
-    **Left**: Keep every person's existing group access while the company layer goes.
 
 - [Not started] Groups are the only container
     **Size**: L — Project IDs key groups, members, messages, invitations and search

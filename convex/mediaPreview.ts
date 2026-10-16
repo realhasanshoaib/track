@@ -16,29 +16,6 @@ import {
 
 const maxPreviewOutputBytes = 2 * 1024 * 1024
 const previewQuality = 78
-const previewCommitRetryMs = 5_000
-
-const previewFailureReason = v.union(
-  v.literal('image_too_large'),
-  v.literal('missing_source'),
-  v.literal('not_an_image'),
-  v.literal('processor_failed'),
-)
-
-// Convex registration uses property validators; the discriminated domain
-// payload is retained in PreviewCommitArgs and enforced by the commit mutation.
-const previewCommitArgs = {
-  attachmentId: v.id('attachments'),
-  sourceStorageId: v.id('_storage'),
-  status: v.union(v.literal('ready'), v.literal('failed')),
-  reason: v.optional(previewFailureReason),
-  previewStorageId: v.optional(v.id('_storage')),
-  width: v.optional(v.number()),
-  height: v.optional(v.number()),
-  previewWidth: v.optional(v.number()),
-  previewHeight: v.optional(v.number()),
-}
-
 type PreviewFailureCommitArgs = {
   attachmentId: Id<'attachments'>
   reason: 'image_too_large' | 'missing_source' | 'not_an_image' | 'processor_failed'
@@ -93,10 +70,7 @@ export const generate = internalAction({
         sourceStorageId: args.sourceStorageId,
         status: 'failed',
       }
-      const outcome = await ctx.runMutation(internal.messages.commitMediaPreview, commitArgs)
-      if (outcome.deferred) {
-        await ctx.scheduler.runAfter(previewCommitRetryMs, internal.mediaPreview.retryCommit, commitArgs)
-      }
+      await ctx.runMutation(internal.messages.commitMediaPreview, commitArgs)
       return {
         attachmentId: args.attachmentId,
         reason,
@@ -179,13 +153,9 @@ export const generate = internalAction({
         }
         const outcome = await ctx.runMutation(internal.messages.commitMediaPreview, commitArgs)
         if (!outcome.committed) {
-          if (outcome.deferred) {
-            await ctx.scheduler.runAfter(previewCommitRetryMs, internal.mediaPreview.retryCommit, commitArgs)
-          } else {
             await ctx.storage.delete(previewStorageId).catch(() => {
               // Cleanup is best effort after the commit outcome is known.
             })
-          }
         }
       } catch {
         await ctx.storage.delete(previewStorageId).catch(() => {
@@ -196,20 +166,6 @@ export const generate = internalAction({
       return result
     } catch {
       return await commitFailure('processor_failed')
-    }
-  },
-})
-
-export const retryCommit = internalAction({
-  args: previewCommitArgs,
-  handler: async (ctx, args) => {
-    const outcome = await ctx.runMutation(internal.messages.commitMediaPreview, args)
-    if (outcome.deferred) {
-      await ctx.scheduler.runAfter(previewCommitRetryMs, internal.mediaPreview.retryCommit, args)
-    } else if (!outcome.committed && args.status === 'ready' && args.previewStorageId) {
-      await ctx.storage.delete(args.previewStorageId).catch(() => {
-        // Cleanup is best effort after the authoritative commit decision.
-      })
     }
   },
 })

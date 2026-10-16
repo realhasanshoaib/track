@@ -1,23 +1,18 @@
 import { defineTable } from 'convex/server'
 import { v } from 'convex/values'
-
 const uploadIntentStatus = v.union(
   v.literal('issued'),
   v.literal('uploaded'),
   v.literal('claimed'),
   v.literal('abandoned'),
 )
-
 const uploadIntentKind = v.union(v.literal('file'), v.literal('voice_note'))
-
 export const messageUploadTables = {
   messageUploadIntents: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
-
     uploaderId: v.id('users'),
     uploaderProjectMemberId: v.id('projectMembers'),
-    actingCompanyId: v.optional(v.id('companies')),
     intentKey: v.string(),
     storageId: v.optional(v.id('_storage')),
     filename: v.string(),

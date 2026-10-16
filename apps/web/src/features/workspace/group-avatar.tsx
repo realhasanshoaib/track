@@ -63,9 +63,17 @@ type GroupAvatarRule = GroupAvatar & {
 }
 
 const groupAvatarRules: GroupAvatarRule[] = [
-  { keywords: ['general', 'main', 'default', 'chat', 'all hands', 'common'], Icon: MessagesSquare, tone: 'sun' },
+  {
+    keywords: ['general', 'main', 'default', 'chat', 'all hands', 'common'],
+    Icon: MessagesSquare,
+    tone: 'sun',
+  },
   { keywords: ['internal', 'private', 'team', 'staff', 'ops room'], Icon: UsersRound, tone: 'sky' },
-  { keywords: ['commercial', 'sales', 'deal', 'revenue', 'pipeline'], Icon: BadgeDollarSign, tone: 'mint' },
+  {
+    keywords: ['commercial', 'sales', 'deal', 'revenue', 'pipeline'],
+    Icon: BadgeDollarSign,
+    tone: 'mint',
+  },
   { keywords: ['customer', 'account', 'success'], Icon: Handshake, tone: 'rose' },
   { keywords: ['support', 'help', 'service', 'care'], Icon: Headphones, tone: 'indigo' },
   { keywords: ['engineering', 'dev', 'code', 'frontend', 'backend'], Icon: Code2, tone: 'slate' },
@@ -78,13 +86,21 @@ const groupAvatarRules: GroupAvatarRule[] = [
   { keywords: ['qa', 'quality', 'test', 'testing'], Icon: ClipboardCheck, tone: 'green' },
   { keywords: ['bug', 'issue', 'incident', 'hotfix'], Icon: Bug, tone: 'red' },
   { keywords: ['release', 'launch', 'deploy', 'shipping'], Icon: Rocket, tone: 'orange' },
-  { keywords: ['data', 'analytics', 'reporting', 'metrics'], Icon: ChartNoAxesColumnIncreasing, tone: 'cyan' },
+  {
+    keywords: ['data', 'analytics', 'reporting', 'metrics'],
+    Icon: ChartNoAxesColumnIncreasing,
+    tone: 'cyan',
+  },
   { keywords: ['database', 'db', 'warehouse', 'storage'], Icon: Database, tone: 'teal' },
   { keywords: ['infra', 'platform', 'server', 'cloud'], Icon: Server, tone: 'zinc' },
   { keywords: ['ai', 'automation', 'agent', 'bot'], Icon: Bot, tone: 'purple' },
   { keywords: ['research', 'discovery', 'analysis', 'insights'], Icon: SearchCheck, tone: 'lime' },
   { keywords: ['docs', 'documentation', 'notes', 'knowledge'], Icon: BookOpen, tone: 'yellow' },
-  { keywords: ['training', 'education', 'onboarding', 'learning'], Icon: GraduationCap, tone: 'cyan' },
+  {
+    keywords: ['training', 'education', 'onboarding', 'learning'],
+    Icon: GraduationCap,
+    tone: 'cyan',
+  },
   { keywords: ['mobile', 'ios', 'android', 'app'], Icon: MonitorSmartphone, tone: 'blue' },
   { keywords: ['web', 'website', 'landing', 'site'], Icon: Globe2, tone: 'sky' },
   { keywords: ['api', 'integration', 'sync', 'connector'], Icon: Cpu, tone: 'violet' },
@@ -93,8 +109,12 @@ const groupAvatarRules: GroupAvatarRule[] = [
   { keywords: ['procurement', 'supplier', 'purchase'], Icon: ShoppingCart, tone: 'amber' },
   { keywords: ['logistics', 'delivery', 'shipping', 'fleet'], Icon: Truck, tone: 'orange' },
   { keywords: ['hr', 'people', 'recruiting', 'hiring'], Icon: UserRoundCheck, tone: 'rose' },
-  { keywords: ['executive', 'leadership', 'board', 'strategy'], Icon: BriefcaseBusiness, tone: 'slate' },
-  { keywords: ['office', 'admin', 'facility', 'company'], Icon: Building2, tone: 'zinc' },
+  {
+    keywords: ['executive', 'leadership', 'board', 'strategy'],
+    Icon: BriefcaseBusiness,
+    tone: 'slate',
+  },
+  { keywords: ['office', 'admin', 'facility'], Icon: Building2, tone: 'zinc' },
   { keywords: ['bank', 'treasury', 'capital', 'investor'], Icon: Landmark, tone: 'emerald' },
   { keywords: ['budget', 'cost', 'pricing', 'money'], Icon: Banknote, tone: 'mint' },
   { keywords: ['performance', 'speed', 'latency', 'optimization'], Icon: Gauge, tone: 'red' },
@@ -102,7 +122,11 @@ const groupAvatarRules: GroupAvatarRule[] = [
   { keywords: ['maintenance', 'repair', 'fix', 'cleanup'], Icon: Wrench, tone: 'amber' },
   { keywords: ['content', 'copy', 'writing', 'editorial'], Icon: PenTool, tone: 'pink' },
   { keywords: ['call', 'phone', 'voice', 'outbound'], Icon: PhoneCall, tone: 'green' },
-  { keywords: ['partnership', 'partner', 'alliance', 'channel'], Icon: HeartHandshake, tone: 'rose' },
+  {
+    keywords: ['partnership', 'partner', 'alliance', 'channel'],
+    Icon: HeartHandshake,
+    tone: 'rose',
+  },
   { keywords: ['goal', 'okr', 'target', 'milestone'], Icon: Target, tone: 'red' },
   { keywords: ['experiment', 'lab', 'prototype', 'r&d'], Icon: FlaskConical, tone: 'purple' },
   { keywords: ['audit', 'approval', 'review', 'signoff'], Icon: FileCheck2, tone: 'blue' },
@@ -133,7 +157,9 @@ function stableIndex(value: string, modulo: number) {
 
 export function getGroupAvatar(group: GroupReference): GroupAvatar {
   const name = group.name.toLowerCase()
-  const match = groupAvatarRules.find((rule) => rule.keywords.some((keyword) => name.includes(keyword)))
+  const match = groupAvatarRules.find((rule) =>
+    rule.keywords.some((keyword) => name.includes(keyword)),
+  )
   if (match) return match
 
   if (group.kind === 'internal') return { Icon: UsersRound, tone: 'sky' }

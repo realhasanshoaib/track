@@ -1,6 +1,4 @@
-import { assertProjectSnapshotWritable } from './lib/projectSnapshotLock'
 import { v } from 'convex/values'
-
 import { mutation, query } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
@@ -9,22 +7,18 @@ import {
   requireProjectManager,
   requireProjectMember,
 } from './lib/permissions'
-
 const role = v.union(
   v.literal('owner'),
   v.literal('admin'),
   v.literal('staff'),
   v.literal('client'),
 )
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
-
 function newInviteToken() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`
 }
-
 export const listForProject = query({
   args: {
     projectId: v.id('projects'),
@@ -41,7 +35,6 @@ export const listForProject = query({
       .take(50)
   },
 })
-
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -54,10 +47,8 @@ export const create = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.invitedBy)
     await requireProjectManager(ctx, args.projectId, args.invitedBy)
-    await assertProjectSnapshotWritable(ctx, args.projectId)
     const email = normalizeEmail(args.email)
     if (!email.includes('@')) throw new Error('invalid_email')
-
     const now = Date.now()
     const inviteId = await ctx.db.insert('invitations', {
       projectId: args.projectId,
@@ -71,7 +62,6 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     })
-
     await appendAuditEvent(ctx, {
       projectId: args.projectId,
       groupId: args.groupId,
@@ -85,11 +75,9 @@ export const create = mutation({
         groupId: args.groupId,
       },
     })
-
     return inviteId
   },
 })
-
 export const acceptPendingForCurrentUser = mutation({
   args: {
     userId: v.id('users'),
@@ -106,9 +94,7 @@ export const acceptPendingForCurrentUser = mutation({
         q.eq('email', normalizeEmail(user.email)).eq('status', 'pending'),
       )
       .collect()
-
     const accepted: Array<string> = []
-
     for (const invite of pending) {
       if (invite.expiresAt < now) {
         await ctx.db.patch(invite._id, {
@@ -117,14 +103,12 @@ export const acceptPendingForCurrentUser = mutation({
         })
         continue
       }
-
       const existingProjectMember = await ctx.db
         .query('projectMembers')
         .withIndex('by_project_user', (q) =>
           q.eq('projectId', invite.projectId).eq('userId', args.userId),
         )
         .unique()
-
       if (existingProjectMember) {
         await ctx.db.patch(existingProjectMember._id, {
           role: invite.role,
@@ -136,27 +120,22 @@ export const acceptPendingForCurrentUser = mutation({
           userId: args.userId,
           role: invite.role,
           status: 'active',
-          term: 1,
           createdAt: now,
           updatedAt: now,
         })
       }
-
       const groups = invite.groupId
         ? [await ctx.db.get(invite.groupId)]
         : await ctx.db
             .query('groups')
             .withIndex('by_project', (q) => q.eq('projectId', invite.projectId))
             .collect()
-
       for (const group of groups) {
         if (!group) continue
         if (!invite.groupId && !canRoleJoinDefaultGroup(invite.role, group.kind)) continue
         const existingGroupMember = await ctx.db
           .query('groupMembers')
-          .withIndex('by_group_user', (q) =>
-            q.eq('groupId', group._id).eq('userId', args.userId),
-          )
+          .withIndex('by_group_user', (q) => q.eq('groupId', group._id).eq('userId', args.userId))
           .unique()
         if (!existingGroupMember) {
           await ctx.db.insert('groupMembers', {
@@ -169,14 +148,12 @@ export const acceptPendingForCurrentUser = mutation({
           })
         }
       }
-
       await ctx.db.patch(invite._id, {
         status: 'accepted',
         acceptedBy: args.userId,
         acceptedAt: now,
         updatedAt: now,
       })
-
       await appendAuditEvent(ctx, {
         projectId: invite.projectId,
         groupId: invite.groupId,
@@ -186,10 +163,8 @@ export const acceptPendingForCurrentUser = mutation({
         action: 'invitation.accepted',
         after: { email: user.email, role: invite.role },
       })
-
       accepted.push(invite._id)
     }
-
     return accepted
   },
 })

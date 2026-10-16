@@ -1,17 +1,13 @@
 'use node'
-
 import { v } from 'convex/values'
 import webPush from 'web-push'
-
 import { internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import { action, internalAction } from './_generated/server'
 import { sendNativePushBatch } from './lib/nativePush'
 import { messagePushCopy } from './lib/pushDelivery'
 import type { NativePushInput } from './lib/pushProviderTypes'
-
 type NativeTarget = {
-  actingCompanyId?: string
   badge?: number
   eventKind: string
   installationId: Id<'pushInstallations'>
@@ -23,9 +19,7 @@ type NativeTarget = {
   soundEnabled: boolean
   tokenOrEndpoint: string
 }
-
 type WebTarget = {
-  actingCompanyId?: string
   eventKind?: string
   kind: 'web'
   platform: 'web'
@@ -34,124 +28,144 @@ type WebTarget = {
   subscriptionId: Id<'notificationSubscriptions'>
   tokenOrEndpoint: string
 }
-
 type LegacyNativeTarget = Omit<NativeTarget, 'installationId' | 'kind'> & {
   kind: 'legacy_native'
   subscriptionId: Id<'notificationSubscriptions'>
 }
-
 export function resolveMessageNotificationUrls(input: {
-  actingCompanyId?: string
-
   groupId: string
   legacyWebUrl: string
   messageId: string
   projectId: string
   projectMemberId?: string
 }) {
-  const represented = input.actingCompanyId && input.projectMemberId
-    ? { companyId: input.actingCompanyId, membershipId: input.projectMemberId }
-    : null
-  const webUrl = represented
-      ? `/workspace/company-projects/${encodeURIComponent(input.projectId)}?${new URLSearchParams({
-          ...represented,
-          groupId: input.groupId,
-        })}#message-${encodeURIComponent(input.messageId)}`
-      : `${input.legacyWebUrl}#message-${encodeURIComponent(input.messageId)}`
-  const mobileContext = represented
-    ? `&companyId=${encodeURIComponent(represented.companyId)}&membershipId=${encodeURIComponent(represented.membershipId)}`
-    : ''
-  const mobileUrl = `/conversation?projectId=${encodeURIComponent(input.projectId)}&groupId=${encodeURIComponent(input.groupId)}${mobileContext}&messageId=${encodeURIComponent(input.messageId)}`
+  const webUrl = `${input.legacyWebUrl}#message-${encodeURIComponent(input.messageId)}`
+  const mobileUrl = `/conversation?projectId=${encodeURIComponent(input.projectId)}&groupId=${encodeURIComponent(input.groupId)}&messageId=${encodeURIComponent(input.messageId)}`
   return { mobileUrl, webUrl }
 }
-
+const webSubscription = {
+  parse(value: unknown): webPush.PushSubscription {
+    if (
+      typeof value !== 'object' || value === null ||
+      !('endpoint' in value) || typeof value.endpoint !== 'string' ||
+      !('keys' in value) || typeof value.keys !== 'object' || value.keys === null ||
+      !('p256dh' in value.keys) || typeof value.keys.p256dh !== 'string' ||
+      !('auth' in value.keys) || typeof value.keys.auth !== 'string'
+    ) {
+      throw new Error('push_subscription_invalid')
+    }
+    return {
+      endpoint: value.endpoint,
+      keys: { p256dh: value.keys.p256dh, auth: value.keys.auth },
+    }
+  },
+}
 function webPushDetails() {
   const publicKey = process.env.VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
   if (!publicKey || !privateKey) return false
-  webPush.setVapidDetails(process.env.VAPID_SUBJECT ?? 'mailto:support@q9labs.ai', publicKey, privateKey)
+  webPush.setVapidDetails(
+    process.env.VAPID_SUBJECT ?? 'mailto:support@q9labs.ai',
+    publicKey,
+    privateKey,
+  )
   return true
 }
-
 export const deliverMessageNotifications = internalAction({
   args: { messageId: v.id('messages') },
   handler: async (ctx, args) => {
-    const notification = await ctx.runQuery(internal.notifications.collectMessageNotificationTargets, args)
+    const notification = await ctx.runQuery(
+      internal.notifications.collectMessageNotificationTargets,
+      args,
+    )
     if (!notification) return
     if (!notification.targets.length) {
       await ctx.runMutation(internal.pushDelivery.recordEvent, {
-        sourceKind: 'message', sourceId: String(args.messageId), eventKind: 'message',
-        eligibleRecipientCount: 0, createdIntentCount: 0, webTargetCount: 0,
+        sourceKind: 'message',
+        sourceId: String(args.messageId),
+        eventKind: 'message',
+        eligibleRecipientCount: 0,
+        createdIntentCount: 0,
+        webTargetCount: 0,
       })
       return
     }
     const webConfigured = webPushDetails()
     const nativeIntentIds: Array<Id<'pushDeliveryIntents'>> = []
-    await Promise.all(notification.targets.map(async (rawTarget) => {
-      const target = rawTarget as NativeTarget | LegacyNativeTarget | WebTarget
-      const urls = resolveMessageNotificationUrls({
-        actingCompanyId: target.actingCompanyId,
-
-        groupId: String(notification.groupId),
-        legacyWebUrl: notification.url,
-        messageId: String(args.messageId),
-        projectId: String(notification.projectId),
-        projectMemberId: target.projectMemberId,
-      })
-      const copy = messagePushCopy({
-        eventKind: target.eventKind ?? 'message',
-        senderName: notification.senderName,
-        groupName: notification.groupName,
-        messagePreview: notification.messagePreview,
-        previewMode: target.kind === 'web' ? 'context' : target.previewMode,
-      })
-      if (target.kind === 'web') {
-        if (!webConfigured) return
-        try {
-          await webPush.sendNotification(JSON.parse(target.tokenOrEndpoint), JSON.stringify({
-            ...copy, icon: '/logo192.png', tag: `track-message-${args.messageId}`, url: urls.webUrl,
-          }))
-        } catch (error) {
-          const statusCode = typeof error === 'object' && error && 'statusCode' in error ? error.statusCode : null
-          if (statusCode === 404 || statusCode === 410) {
-            await ctx.runMutation(internal.notifications.disableSubscription, { subscriptionId: target.subscriptionId })
-          }
-        }
-        return
-      }
-      const installationId = target.kind === 'native'
-        ? target.installationId
-        : await ctx.runMutation(internal.notifications.migrateLegacyNativeSubscription, {
-            subscriptionId: target.subscriptionId,
-          })
-      if (!installationId) return
-      const intentId = await ctx.runMutation(internal.pushDelivery.createIntent, {
-        sourceKind: 'message',
-        sourceId: String(args.messageId),
-        eventKind: target.eventKind,
-        recipientUserId: target.recipientUserId,
-        recipientProjectMemberId: target.projectMemberId as Id<'projectMembers'> | undefined,
-        installationId,
-        idempotencyKey: `message:${args.messageId}:${target.projectMemberId ?? 'legacy'}:${installationId}`,
-        title: copy.title,
-        body: copy.body,
-        data: {
-          schemaVersion: '1',
-          eventKind: target.eventKind,
-          projectId: String(notification.projectId),
+    await Promise.all(
+      notification.targets.map(async (rawTarget) => {
+        const target = rawTarget as NativeTarget | LegacyNativeTarget | WebTarget
+        const urls = resolveMessageNotificationUrls({
           groupId: String(notification.groupId),
+          legacyWebUrl: notification.url,
           messageId: String(args.messageId),
-          ...(target.actingCompanyId ? { companyId: String(target.actingCompanyId) } : {}),
-          ...(target.projectMemberId ? { membershipId: String(target.projectMemberId) } : {}),
-          url: urls.mobileUrl,
-        },
-        soundEnabled: target.soundEnabled,
-        badge: target.badge,
-        ttlMs: 24 * 60 * 60 * 1_000,
-        deferDispatch: true,
-      })
-      if (intentId) nativeIntentIds.push(intentId)
-    }))
+          projectId: String(notification.projectId),
+          projectMemberId: target.projectMemberId,
+        })
+        const copy = messagePushCopy({
+          eventKind: target.eventKind ?? 'message',
+          senderName: notification.senderName,
+          groupName: notification.groupName,
+          messagePreview: notification.messagePreview,
+          previewMode: target.kind === 'web' ? 'context' : target.previewMode,
+        })
+        if (target.kind === 'web') {
+          if (!webConfigured) return
+          try {
+            await webPush.sendNotification(
+              webSubscription.parse(JSON.parse(target.tokenOrEndpoint)),
+              JSON.stringify({
+                ...copy,
+                icon: '/logo192.png',
+                tag: `track-message-${args.messageId}`,
+                url: urls.webUrl,
+              }),
+            )
+          } catch (error) {
+            const statusCode =
+              typeof error === 'object' && error && 'statusCode' in error ? error.statusCode : null
+            if (statusCode === 404 || statusCode === 410) {
+              await ctx.runMutation(internal.notifications.disableSubscription, {
+                subscriptionId: target.subscriptionId,
+              })
+            }
+          }
+          return
+        }
+        const installationId =
+          target.kind === 'native'
+            ? target.installationId
+            : await ctx.runMutation(internal.notifications.migrateLegacyNativeSubscription, {
+                subscriptionId: target.subscriptionId,
+              })
+        if (!installationId) return
+        const intentId = await ctx.runMutation(internal.pushDelivery.createIntent, {
+          sourceKind: 'message',
+          sourceId: String(args.messageId),
+          eventKind: target.eventKind,
+          recipientUserId: target.recipientUserId,
+          recipientProjectMemberId: target.projectMemberId as Id<'projectMembers'> | undefined,
+          installationId,
+          idempotencyKey: `message:${args.messageId}:${target.projectMemberId ?? 'legacy'}:${installationId}`,
+          title: copy.title,
+          body: copy.body,
+          data: {
+            schemaVersion: '1',
+            eventKind: target.eventKind,
+            projectId: String(notification.projectId),
+            groupId: String(notification.groupId),
+            messageId: String(args.messageId),
+            ...(target.projectMemberId ? { membershipId: String(target.projectMemberId) } : {}),
+            url: urls.mobileUrl,
+          },
+          soundEnabled: target.soundEnabled,
+          badge: target.badge,
+          ttlMs: 24 * 60 * 60 * 1000,
+          deferDispatch: true,
+        })
+        if (intentId) nativeIntentIds.push(intentId)
+      }),
+    )
     for (let index = 0; index < nativeIntentIds.length; index += 100) {
       await ctx.runAction(internal.pushNotifications.dispatchDeliveryBatch, {
         intentIds: nativeIntentIds.slice(index, index + 100),
@@ -161,14 +175,16 @@ export const deliverMessageNotifications = internalAction({
       sourceKind: 'message',
       sourceId: String(args.messageId),
       eventKind: 'message',
-      eligibleRecipientCount: new Set(notification.targets.map((target) =>
-        `${target.recipientUserId ?? 'web'}:${target.projectMemberId ?? 'legacy'}`)).size,
+      eligibleRecipientCount: new Set(
+        notification.targets.map(
+          (target) => `${target.recipientUserId}:${target.projectMemberId ?? 'legacy'}`,
+        ),
+      ).size,
       createdIntentCount: nativeIntentIds.length,
       webTargetCount: notification.targets.filter((target) => target.kind === 'web').length,
     })
   },
 })
-
 async function isIntentStillEligible(ctx: any, row: any) {
   const { intent, installation } = row
   if (!installation || !installation.enabled || !installation.nativePushToken ||
@@ -310,7 +326,7 @@ export const sendTestNotification = action({
       if (target.kind === 'web') {
         if (!webConfigured) { failed += 1; continue }
         try {
-          await webPush.sendNotification(JSON.parse(target.tokenOrEndpoint), JSON.stringify({
+          await webPush.sendNotification(webSubscription.parse(JSON.parse(target.tokenOrEndpoint)), JSON.stringify({
             title: 'Track test alert', body: 'Browser alerts are connected.', icon: '/logo192.png',
             tag: `track-test-${Date.now()}`, url: '/workspace',
           }))

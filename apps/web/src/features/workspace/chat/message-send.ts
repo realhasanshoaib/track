@@ -1,6 +1,5 @@
 import type { Id } from '../../../../../../convex/_generated/dataModel'
 import type { PendingWorkspaceAttachment } from '#/features/workspace/hooks/usePendingAttachments'
-
 export type UploadedPendingAttachment = {
   contentType: string
   durationMs?: number
@@ -10,7 +9,6 @@ export type UploadedPendingAttachment = {
   storageId: Id<'_storage'>
   uploadIntentId: Id<'messageUploadIntents'>
 }
-
 export type UploadIntentResponse = {
   expiresAt: number
   intentId: Id<'messageUploadIntents'>
@@ -18,10 +16,7 @@ export type UploadIntentResponse = {
   storageId: Id<'_storage'> | null
   uploadUrl: string | null
 }
-
 export type GenerateUploadUrlInput = {
-  actingCompanyId?: Id<'companies'>
-
   contentType: string
   durationMs?: number
   filename: string
@@ -32,16 +27,15 @@ export type GenerateUploadUrlInput = {
   size: number
   userId: Id<'users'>
 }
-
 export type ClaimUploadIntentInput = {
-  actingCompanyId?: Id<'companies'>
   intentId: Id<'messageUploadIntents'>
   projectMemberId?: Id<'projectMembers'>
   storageId: Id<'_storage'>
   userId: Id<'users'>
 }
-
-export function isUploadResponse(value: unknown): value is { storageId: Id<'_storage'> } {
+export function isUploadResponse(value: unknown): value is {
+  storageId: Id<'_storage'>
+} {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -50,12 +44,18 @@ export function isUploadResponse(value: unknown): value is { storageId: Id<'_sto
     value.storageId.length > 0
   )
 }
-
 export function resolveMentionedUserIds<UserId>(
   mentionHandles: Array<string>,
   mentionOptions: ReadonlyArray<
-    | { kind: 'member'; handle: string; id: UserId }
-    | { kind: 'group'; handle: string }
+    | {
+        kind: 'member'
+        handle: string
+        id: UserId
+      }
+    | {
+        kind: 'group'
+        handle: string
+      }
   >,
 ) {
   const mentionedUserIds: Array<UserId> = []
@@ -65,7 +65,6 @@ export function resolveMentionedUserIds<UserId>(
   }
   return mentionedUserIds
 }
-
 export function getAttachmentNotificationPreview({
   body,
   pendingAttachments,
@@ -74,11 +73,11 @@ export function getAttachmentNotificationPreview({
   pendingAttachments: Array<PendingWorkspaceAttachment>
 }) {
   if (body) return undefined
-  if (pendingAttachments.some((attachment) => attachment.kind === 'voice_note')) return 'Sent a voice note.'
+  if (pendingAttachments.some((attachment) => attachment.kind === 'voice_note'))
+    return 'Sent a voice note.'
   if (pendingAttachments.length > 0) return 'Sent an attachment.'
   return undefined
 }
-
 export async function uploadPendingAttachments({
   activeGroupId,
   claimUploadIntent,
@@ -108,7 +107,6 @@ export async function uploadPendingAttachments({
     ),
   )
 }
-
 export async function uploadPendingAttachment({
   activeGroupId,
   claimUploadIntent,

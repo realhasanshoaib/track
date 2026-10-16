@@ -6,10 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./channel-membership": "./src/channel-membership.ts",
-    "./company": "./src/company.ts",
     "./domain": "./src/domain.ts",
-    "./feature-flags": "./src/feature-flags.ts",
-    "./project-policy": "./src/project-policy.ts",
     "./theme": "./src/theme.ts"
   },
   "scripts": {

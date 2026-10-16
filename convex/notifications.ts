@@ -1,38 +1,27 @@
 import { v } from 'convex/values'
-
-import type { Id } from './_generated/dataModel'
 import { internalMutation, internalQuery, mutation, query } from './_generated/server'
 import { appendAuditEvent } from './lib/audit'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
 import { isExpoPushToken } from './lib/pushTokens'
 import { authorizeScopedRequest } from './lib/requestAuthorization'
-
-const notificationMode = v.union(
-  v.literal('all'),
-  v.literal('mentions'),
-  v.literal('none'),
-)
-
+const notificationMode = v.union(v.literal('all'), v.literal('mentions'), v.literal('none'))
 const groupNotificationMode = v.union(
   v.literal('inherit'),
   v.literal('all'),
   v.literal('mentions'),
   v.literal('none'),
 )
-
 const pushPermissionState = v.union(
   v.literal('not_determined'),
   v.literal('denied'),
   v.literal('granted'),
   v.literal('provisional'),
 )
-
 const pushEnvironment = v.union(
   v.literal('development'),
   v.literal('preview'),
   v.literal('production'),
 )
-
 export function shouldNotifyForMessage(input: {
   globalMode: 'all' | 'mentions' | 'none'
   groupMode: 'inherit' | 'all' | 'mentions' | 'none'
@@ -44,27 +33,23 @@ export function shouldNotifyForMessage(input: {
   if (mode === 'all') return true
   return input.mentioned || Boolean(input.directReply)
 }
-
 function legacyInstallationId(platform: 'ios' | 'android', token: string) {
-  let hash = 2_166_136_261
+  let hash = 2166136261
   for (let index = 0; index < token.length; index += 1) {
     hash ^= token.charCodeAt(index)
-    hash = Math.imul(hash, 16_777_619)
+    hash = Math.imul(hash, 16777619)
   }
   return `legacy:${platform}:${(hash >>> 0).toString(16)}`
 }
-
 function installationTokenValues(token: string) {
   return isExpoPushToken(token)
     ? { expoPushToken: token, nativePushToken: undefined }
     : { expoPushToken: undefined, nativePushToken: token }
 }
-
 export function serverPushEnvironment(): 'development' | 'preview' | 'production' {
   const configured = process.env.TRACK_PUSH_ENVIRONMENT
   return configured === 'preview' || configured === 'production' ? configured : 'development'
 }
-
 export const getSettings = query({
   args: {
     userId: v.id('users'),
@@ -81,9 +66,10 @@ export const getSettings = query({
       .query('groupNotificationSettings')
       .withIndex('by_user_group', (q) => q.eq('userId', args.userId))
       .collect()
-    const groups = allGroups.filter((setting) => args.projectMemberId
-      ? setting.projectMemberId === args.projectMemberId
-      : !setting.projectMemberId,
+    const groups = allGroups.filter((setting) =>
+      args.projectMemberId
+        ? setting.projectMemberId === args.projectMemberId
+        : !setting.projectMemberId,
     )
     return {
       global: {
@@ -96,12 +82,10 @@ export const getSettings = query({
     }
   },
 })
-
 export const getWebPushPublicKey = query({
   args: {},
   handler: () => process.env.VAPID_PUBLIC_KEY ?? null,
 })
-
 export const setGlobalMode = mutation({
   args: {
     userId: v.id('users'),
@@ -115,7 +99,6 @@ export const setGlobalMode = mutation({
       .query('notificationSettings')
       .withIndex('by_user', (q) => q.eq('userId', args.userId))
       .unique()
-
     if (existing) {
       await ctx.db.patch(existing._id, {
         globalMode: args.mode,
@@ -123,7 +106,6 @@ export const setGlobalMode = mutation({
       })
       return existing._id
     }
-
     return await ctx.db.insert('notificationSettings', {
       userId: args.userId,
       globalMode: args.mode,
@@ -132,7 +114,6 @@ export const setGlobalMode = mutation({
     })
   },
 })
-
 export const setMobilePreferences = mutation({
   args: {
     userId: v.id('users'),
@@ -167,34 +148,40 @@ export const setMobilePreferences = mutation({
     })
   },
 })
-
 export const setGroupMode = mutation({
   args: {
     groupId: v.id('groups'),
     userId: v.id('users'),
     mode: groupNotificationMode,
-    actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
   },
   handler: async (ctx, args) => {
     const group = await ctx.db.get(args.groupId)
     if (!group) throw new Error('channel_unavailable')
-    await authorizeScopedRequest(ctx, {
-      projectId: group.projectId,
-      groupId: group._id,
-      claimedUserId: args.userId,
-      actingCompanyId: args.actingCompanyId,
-      projectMemberId: args.projectMemberId,
-    }, 'readChannel')
+    await authorizeScopedRequest(
+      ctx,
+      {
+        projectId: group.projectId,
+        groupId: group._id,
+        claimedUserId: args.userId,
+        projectMemberId: args.projectMemberId,
+      },
+      'readChannel',
+    )
     const now = Date.now()
     const existing = args.projectMemberId
-      ? await ctx.db.query('groupNotificationSettings').withIndex('by_project_member_group', (q) =>
-          q.eq('projectMemberId', args.projectMemberId).eq('groupId', args.groupId),
-        ).unique()
-      : await ctx.db.query('groupNotificationSettings').withIndex('by_user_group', (q) =>
-          q.eq('userId', args.userId).eq('groupId', args.groupId),
-        ).unique()
-
+      ? await ctx.db
+          .query('groupNotificationSettings')
+          .withIndex('by_project_member_group', (q) =>
+            q.eq('projectMemberId', args.projectMemberId).eq('groupId', args.groupId),
+          )
+          .unique()
+      : await ctx.db
+          .query('groupNotificationSettings')
+          .withIndex('by_user_group', (q) =>
+            q.eq('userId', args.userId).eq('groupId', args.groupId),
+          )
+          .unique()
     if (existing) {
       await ctx.db.patch(existing._id, {
         mode: args.mode,
@@ -202,7 +189,6 @@ export const setGroupMode = mutation({
       })
       return existing._id
     }
-
     return await ctx.db.insert('groupNotificationSettings', {
       userId: args.userId,
       projectMemberId: args.projectMemberId,
@@ -213,7 +199,6 @@ export const setGroupMode = mutation({
     })
   },
 })
-
 export const registerSubscription = mutation({
   args: {
     userId: v.id('users'),
@@ -248,7 +233,6 @@ export const registerSubscription = mutation({
         return subscription.tokenOrEndpoint === args.endpoint
       }
     })
-
     if (existing) {
       await ctx.db.patch(existing._id, {
         enabled: true,
@@ -263,7 +247,6 @@ export const registerSubscription = mutation({
       })
       return existing._id
     }
-
     const subscriptionId = await ctx.db.insert('notificationSubscriptions', {
       userId: args.userId,
       platform: args.platform,
@@ -272,7 +255,6 @@ export const registerSubscription = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-
     await appendAuditEvent(ctx, {
       actorId: args.userId,
       entityType: 'notificationSubscription',
@@ -280,17 +262,14 @@ export const registerSubscription = mutation({
       action: 'notification_subscription.registered',
       after: { platform: args.platform },
     })
-
     console.info('[Track push] registerSubscription created subscription', {
       platform: args.platform,
       subscriptionId,
       userId: args.userId,
     })
-
     return subscriptionId
   },
 })
-
 export const registerNativeToken = mutation({
   args: {
     userId: v.id('users'),
@@ -305,8 +284,11 @@ export const registerNativeToken = mutation({
     if (!token) throw new Error('push_token_required')
     if (args.projectMemberId) {
       const projectMember = await ctx.db.get(args.projectMemberId)
-      if (!projectMember || projectMember.userId !== actor.userId ||
-        (projectMember.status !== undefined && projectMember.status !== 'active')) {
+      if (
+        !projectMember ||
+        projectMember.userId !== actor.userId ||
+        (projectMember.status !== undefined && projectMember.status !== 'active')
+      ) {
         throw new Error('notification_membership_invalid')
       }
     }
@@ -317,12 +299,13 @@ export const registerNativeToken = mutation({
       .collect()
     const existing = subscriptions.find(
       (subscription) =>
-        subscription.platform === args.platform && subscription.tokenOrEndpoint === token &&
+        subscription.platform === args.platform &&
+        subscription.tokenOrEndpoint === token &&
         subscription.projectMemberId === args.projectMemberId,
     )
-
     const installationId = legacyInstallationId(args.platform, token)
-    const installation = await ctx.db.query('pushInstallations')
+    const installation = await ctx.db
+      .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
     const installationValues = {
@@ -336,12 +319,12 @@ export const registerNativeToken = mutation({
       updatedAt: now,
     }
     if (installation) await ctx.db.patch(installation._id, installationValues)
-    else await ctx.db.insert('pushInstallations', {
-      installationId,
-      ...installationValues,
-      createdAt: now,
-    })
-
+    else
+      await ctx.db.insert('pushInstallations', {
+        installationId,
+        ...installationValues,
+        createdAt: now,
+      })
     if (existing) {
       await ctx.db.patch(existing._id, {
         enabled: true,
@@ -349,7 +332,6 @@ export const registerNativeToken = mutation({
       })
       return existing._id
     }
-
     const subscriptionId = await ctx.db.insert('notificationSubscriptions', {
       userId: args.userId,
       projectMemberId: args.projectMemberId,
@@ -359,7 +341,6 @@ export const registerNativeToken = mutation({
       createdAt: now,
       updatedAt: now,
     })
-
     await appendAuditEvent(ctx, {
       actorId: args.userId,
       entityType: 'notificationSubscription',
@@ -367,11 +348,9 @@ export const registerNativeToken = mutation({
       action: 'notification_subscription.registered',
       after: { platform: args.platform },
     })
-
     return subscriptionId
   },
 })
-
 export const registerNativeInstallation = mutation({
   args: {
     userId: v.id('users'),
@@ -387,21 +366,24 @@ export const registerNativeInstallation = mutation({
     assertActorMatches(actor, args.userId)
     const installationId = args.installationId.trim()
     const token = args.token.trim()
-    if (!installationId || installationId.length > 160) throw new Error('push_installation_id_invalid')
+    if (!installationId || installationId.length > 160)
+      throw new Error('push_installation_id_invalid')
     if (!token || token.length > 512) throw new Error('push_token_invalid')
     const now = Date.now()
-
     const expoToken = isExpoPushToken(token)
     const tokenOwners = expoToken
-      ? await ctx.db.query('pushInstallations')
-          .withIndex('by_token', (q) => q.eq('expoPushToken', token)).collect()
-      : await ctx.db.query('pushInstallations')
-          .withIndex('by_native_token', (q) => q.eq('nativePushToken', token)).collect()
+      ? await ctx.db
+          .query('pushInstallations')
+          .withIndex('by_token', (q) => q.eq('expoPushToken', token))
+          .collect()
+      : await ctx.db
+          .query('pushInstallations')
+          .withIndex('by_native_token', (q) => q.eq('nativePushToken', token))
+          .collect()
     const existing = await ctx.db
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
-
     for (const tokenOwner of tokenOwners) {
       if (tokenOwner._id === existing?._id) continue
       await ctx.db.patch(tokenOwner._id, {
@@ -411,7 +393,6 @@ export const registerNativeInstallation = mutation({
         updatedAt: now,
       })
     }
-
     const values = {
       userId: args.userId,
       platform: args.platform,
@@ -428,7 +409,6 @@ export const registerNativeInstallation = mutation({
       await ctx.db.patch(existing._id, values)
       return existing._id
     }
-
     const id = await ctx.db.insert('pushInstallations', {
       installationId,
       ...values,
@@ -444,7 +424,6 @@ export const registerNativeInstallation = mutation({
     return id
   },
 })
-
 export const reportNativePermission = mutation({
   args: {
     userId: v.id('users'),
@@ -458,13 +437,15 @@ export const reportNativePermission = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     const installationId = args.installationId.trim()
-    if (!installationId || installationId.length > 160) throw new Error('push_installation_id_invalid')
+    if (!installationId || installationId.length > 160)
+      throw new Error('push_installation_id_invalid')
     const now = Date.now()
     const existing = await ctx.db
       .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
-    const enabled = (args.permissionState === 'granted' || args.permissionState === 'provisional') &&
+    const enabled =
+      (args.permissionState === 'granted' || args.permissionState === 'provisional') &&
       Boolean(existing?.nativePushToken)
     const values = {
       userId: args.userId,
@@ -487,7 +468,6 @@ export const reportNativePermission = mutation({
     })
   },
 })
-
 export const detachNativeInstallation = mutation({
   args: { installationId: v.string() },
   handler: async (ctx, args) => {
@@ -504,12 +484,11 @@ export const detachNativeInstallation = mutation({
       .collect()
     for (const subscription of legacySubscriptions) {
       if (subscription.platform === 'web' || !subscription.enabled) continue
-      const matchesToken = subscription.tokenOrEndpoint ===
-        (existing.nativePushToken ?? existing.expoPushToken)
-      const matchesLegacyInstallation = legacyInstallationId(
-        subscription.platform,
-        subscription.tokenOrEndpoint,
-      ) === existing.installationId
+      const matchesToken =
+        subscription.tokenOrEndpoint === (existing.nativePushToken ?? existing.expoPushToken)
+      const matchesLegacyInstallation =
+        legacyInstallationId(subscription.platform, subscription.tokenOrEndpoint) ===
+        existing.installationId
       if (matchesToken || matchesLegacyInstallation) {
         await ctx.db.patch(subscription._id, { enabled: false, updatedAt: now })
       }
@@ -524,14 +503,14 @@ export const detachNativeInstallation = mutation({
     return true
   },
 })
-
 export const getNativeStatus = query({
   args: { userId: v.id('users'), installationId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     const installation = args.installationId
-      ? await ctx.db.query('pushInstallations')
+      ? await ctx.db
+          .query('pushInstallations')
           .withIndex('by_installation_id', (q) => q.eq('installationId', args.installationId!))
           .unique()
       : null
@@ -547,7 +526,6 @@ export const getNativeStatus = query({
     }
   },
 })
-
 export const recordPushOpen = mutation({
   args: {
     userId: v.id('users'),
@@ -558,13 +536,19 @@ export const recordPushOpen = mutation({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     const [installation, intent] = await Promise.all([
-      ctx.db.query('pushInstallations')
+      ctx.db
+        .query('pushInstallations')
         .withIndex('by_installation_id', (q) => q.eq('installationId', args.installationId))
         .unique(),
       ctx.db.get(args.intentId),
     ])
-    if (!installation || installation.userId !== args.userId ||
-      !intent || intent.recipientUserId !== args.userId || intent.installationId !== installation._id) {
+    if (
+      !installation ||
+      installation.userId !== args.userId ||
+      !intent ||
+      intent.recipientUserId !== args.userId ||
+      intent.installationId !== installation._id
+    ) {
       throw new Error('push_open_unauthorized')
     }
     if (intent.openedAt) {
@@ -578,7 +562,6 @@ export const recordPushOpen = mutation({
     return { duplicate: false }
   },
 })
-
 export const collectMessageNotificationTargets = internalQuery({
   args: {
     messageId: v.id('messages'),
@@ -587,7 +570,6 @@ export const collectMessageNotificationTargets = internalQuery({
     const pushEnvironment = serverPushEnvironment()
     const message = await ctx.db.get(args.messageId)
     if (!message) return null
-
     const [author, group, project, replyToMessage] = await Promise.all([
       ctx.db.get(message.authorId),
       ctx.db.get(message.groupId),
@@ -595,68 +577,58 @@ export const collectMessageNotificationTargets = internalQuery({
       message.replyToMessageId ? ctx.db.get(message.replyToMessageId) : null,
     ])
     if (!group || !project) return null
-
     const groupMembers = await ctx.db
       .query('groupMembers')
       .withIndex('by_group', (q) => q.eq('groupId', message.groupId))
       .collect()
-
     const targets = await Promise.all(
       groupMembers.map(async (membership) => {
         if (membership.status && membership.status !== 'active') return []
         if (membership.userId === message.authorId) return []
-
-        let actingCompanyId: Id<'companies'> | undefined
         let projectMemberId = membership.projectMemberId
         if (!projectMemberId) {
-          projectMemberId = (await ctx.db
-            .query('projectMembers')
-            .withIndex('by_project_user', (q) =>
-              q.eq('projectId', message.projectId).eq('userId', membership.userId),
-            )
-            .unique())?._id
+          projectMemberId = (
+            await ctx.db
+              .query('projectMembers')
+              .withIndex('by_project_user', (q) =>
+                q.eq('projectId', message.projectId).eq('userId', membership.userId),
+              )
+              .unique()
+          )?._id
         }
-        const projectMember = projectMemberId ? await ctx.db.get(projectMemberId) : null
         const mentioned = message.mentionedProjectMemberIds
           ? Boolean(
               membership.projectMemberId &&
               message.mentionedProjectMemberIds.includes(membership.projectMemberId) &&
               message.mentions.includes(membership.userId),
             )
-          : project.accessProfile !== 'company' && message.mentions.some((userId) => userId === membership.userId)
+          : message.mentions.some((userId) => userId === membership.userId)
         const directReply = Boolean(
           replyToMessage &&
           replyToMessage.authorId === membership.userId &&
-          (!replyToMessage.authorProjectMemberId || replyToMessage.authorProjectMemberId === projectMemberId),
+          (!replyToMessage.authorProjectMemberId ||
+            replyToMessage.authorProjectMemberId === projectMemberId),
         )
-
-        if (project.accessProfile === 'company') {
-          if (!membership.projectMemberId) return []
-          if (!projectMember || projectMember.status !== 'active' || !projectMember.companyId || !projectMember.projectCompanyId) return []
-          const [company, companyMember, projectCompany] = await Promise.all([
-            ctx.db.get(projectMember.companyId),
-            ctx.db.query('companyMembers').withIndex('by_company_user', (q) =>
-              q.eq('companyId', projectMember.companyId!).eq('userId', projectMember.userId),
-            ).unique(),
-            ctx.db.get(projectMember.projectCompanyId),
-          ])
-          if (!company || company.status !== 'active' || companyMember?.status !== 'active' || projectCompany?.status !== 'active') return []
-          actingCompanyId = projectMember.companyId
-          projectMemberId = projectMember._id
-        }
-
         const [globalSettings, groupSettings, subscriptions, installations] = await Promise.all([
           ctx.db
             .query('notificationSettings')
             .withIndex('by_user', (q) => q.eq('userId', membership.userId))
             .unique(),
           membership.projectMemberId
-            ? ctx.db.query('groupNotificationSettings').withIndex('by_project_member_group', (q) =>
-                q.eq('projectMemberId', membership.projectMemberId).eq('groupId', message.groupId),
-              ).unique()
-            : ctx.db.query('groupNotificationSettings').withIndex('by_user_group', (q) =>
-                q.eq('userId', membership.userId).eq('groupId', message.groupId),
-              ).unique(),
+            ? ctx.db
+                .query('groupNotificationSettings')
+                .withIndex('by_project_member_group', (q) =>
+                  q
+                    .eq('projectMemberId', membership.projectMemberId)
+                    .eq('groupId', message.groupId),
+                )
+                .unique()
+            : ctx.db
+                .query('groupNotificationSettings')
+                .withIndex('by_user_group', (q) =>
+                  q.eq('userId', membership.userId).eq('groupId', message.groupId),
+                )
+                .unique(),
           ctx.db
             .query('notificationSubscriptions')
             .withIndex('by_user', (q) => q.eq('userId', membership.userId))
@@ -666,7 +638,6 @@ export const collectMessageNotificationTargets = internalQuery({
             .withIndex('by_user', (q) => q.eq('userId', membership.userId))
             .collect(),
         ])
-
         const shouldNotify = shouldNotifyForMessage({
           globalMode: globalSettings?.globalMode ?? 'all',
           groupMode: groupSettings?.mode ?? 'inherit',
@@ -674,54 +645,62 @@ export const collectMessageNotificationTargets = internalQuery({
           directReply,
         })
         if (!shouldNotify) return []
-
         const readState = projectMemberId
-          ? await ctx.db.query('groupReadStates').withIndex('by_project_member_group', (q) =>
-              q.eq('projectMemberId', projectMemberId!).eq('groupId', message.groupId),
-            ).unique()
-          : await ctx.db.query('groupReadStates').withIndex('by_user_group', (q) =>
-              q.eq('userId', membership.userId).eq('groupId', message.groupId),
-            ).unique()
-        const unreadMessages = await ctx.db.query('messages')
-          .withIndex('by_group_created_at', (q) => readState
-            ? q.eq('groupId', message.groupId).gt('createdAt', readState.lastReadAt)
-            : q.eq('groupId', message.groupId))
+          ? await ctx.db
+              .query('groupReadStates')
+              .withIndex('by_project_member_group', (q) =>
+                q.eq('projectMemberId', projectMemberId!).eq('groupId', message.groupId),
+              )
+              .unique()
+          : await ctx.db
+              .query('groupReadStates')
+              .withIndex('by_user_group', (q) =>
+                q.eq('userId', membership.userId).eq('groupId', message.groupId),
+              )
+              .unique()
+        const unreadMessages = await ctx.db
+          .query('messages')
+          .withIndex('by_group_created_at', (q) =>
+            readState
+              ? q.eq('groupId', message.groupId).gt('createdAt', readState.lastReadAt)
+              : q.eq('groupId', message.groupId),
+          )
           .take(100)
         const badge = Math.min(
           99,
           unreadMessages.filter((candidate) => candidate.authorId !== membership.userId).length,
         )
-
         const webTargets = subscriptions
-          .filter((subscription) =>
-            subscription.enabled &&
-            subscription.platform === 'web' &&
-            (!subscription.projectMemberId || subscription.projectMemberId === projectMemberId),
+          .filter(
+            (subscription) =>
+              subscription.enabled &&
+              subscription.platform === 'web' &&
+              (!subscription.projectMemberId || subscription.projectMemberId === projectMemberId),
           )
           .map((subscription) => ({
             kind: 'web' as const,
             subscriptionId: subscription._id,
             platform: 'web' as const,
             tokenOrEndpoint: subscription.tokenOrEndpoint,
-            actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : 'message',
             exactMembership: subscription.projectMemberId === projectMemberId,
           }))
         const nativeTargets = installations
-          .filter((installation) =>
-            installation.enabled &&
-            installation.environment === pushEnvironment &&
-            Boolean(installation.nativePushToken) &&
-            (installation.permissionState === 'granted' || installation.permissionState === 'provisional'),
+          .filter(
+            (installation) =>
+              installation.enabled &&
+              installation.environment === pushEnvironment &&
+              Boolean(installation.nativePushToken) &&
+              (installation.permissionState === 'granted' ||
+                installation.permissionState === 'provisional'),
           )
           .map((installation) => ({
             kind: 'native' as const,
             installationId: installation._id,
             platform: installation.platform,
             tokenOrEndpoint: installation.nativePushToken!,
-            actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
             previewMode: globalSettings?.previewMode ?? 'full',
@@ -729,18 +708,24 @@ export const collectMessageNotificationTargets = internalQuery({
             badge: globalSettings?.badgesEnabled === false ? undefined : badge,
             eventKind: mentioned ? 'mention' : directReply ? 'direct_reply' : 'message',
           }))
-        const installationTokens = new Set(installations.flatMap((installation) =>
-          [installation.nativePushToken, installation.expoPushToken].filter(Boolean)))
+        const installationTokens = new Set(
+          installations.flatMap((installation) =>
+            [installation.nativePushToken, installation.expoPushToken].filter(Boolean),
+          ),
+        )
         const legacyNativeTargets = subscriptions
-          .filter((subscription) => subscription.enabled && subscription.platform !== 'web' &&
-            !installationTokens.has(subscription.tokenOrEndpoint) &&
-            (!subscription.projectMemberId || subscription.projectMemberId === projectMemberId))
+          .filter(
+            (subscription) =>
+              subscription.enabled &&
+              subscription.platform !== 'web' &&
+              !installationTokens.has(subscription.tokenOrEndpoint) &&
+              (!subscription.projectMemberId || subscription.projectMemberId === projectMemberId),
+          )
           .map((subscription) => ({
             kind: 'legacy_native' as const,
             subscriptionId: subscription._id,
             platform: subscription.platform,
             tokenOrEndpoint: subscription.tokenOrEndpoint,
-            actingCompanyId,
             projectMemberId,
             recipientUserId: membership.userId,
             previewMode: globalSettings?.previewMode ?? 'context',
@@ -752,20 +737,19 @@ export const collectMessageNotificationTargets = internalQuery({
         return [...webTargets, ...nativeTargets, ...legacyNativeTargets]
       }),
     )
-
     const uniqueTargets = new Map<string, (typeof targets)[number][number]>()
     for (const target of targets.flat()) {
-      const key = target.kind === 'native'
-        ? `native:${target.installationId}:${target.projectMemberId ?? 'legacy'}`
-        : target.kind === 'legacy_native'
-          ? `legacy_native:${target.tokenOrEndpoint}:${target.projectMemberId ?? 'legacy'}`
-        : `web:${target.tokenOrEndpoint}:${target.projectMemberId ?? 'legacy'}`
+      const key =
+        target.kind === 'native'
+          ? `native:${target.installationId}:${target.projectMemberId ?? 'legacy'}`
+          : target.kind === 'legacy_native'
+            ? `legacy_native:${target.tokenOrEndpoint}:${target.projectMemberId ?? 'legacy'}`
+            : `web:${target.tokenOrEndpoint}:${target.projectMemberId ?? 'legacy'}`
       const existing = uniqueTargets.get(key)
-      if (!existing || ('exactMembership' in target && target.exactMembership)) uniqueTargets.set(key, target)
+      if (!existing || ('exactMembership' in target && target.exactMembership))
+        uniqueTargets.set(key, target)
     }
-
     return {
-
       groupId: message.groupId,
       groupName: group.name,
       projectId: message.projectId,
@@ -777,7 +761,6 @@ export const collectMessageNotificationTargets = internalQuery({
     }
   },
 })
-
 export const collectUserNotificationTargets = internalQuery({
   args: {
     userId: v.id('users'),
@@ -786,12 +769,18 @@ export const collectUserNotificationTargets = internalQuery({
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
     const [subscriptions, installations, settings] = await Promise.all([
-      ctx.db.query('notificationSubscriptions')
-        .withIndex('by_user', (q) => q.eq('userId', args.userId)).collect(),
-      ctx.db.query('pushInstallations')
-        .withIndex('by_user', (q) => q.eq('userId', args.userId)).collect(),
-      ctx.db.query('notificationSettings')
-        .withIndex('by_user', (q) => q.eq('userId', args.userId)).unique(),
+      ctx.db
+        .query('notificationSubscriptions')
+        .withIndex('by_user', (q) => q.eq('userId', args.userId))
+        .collect(),
+      ctx.db
+        .query('pushInstallations')
+        .withIndex('by_user', (q) => q.eq('userId', args.userId))
+        .collect(),
+      ctx.db
+        .query('notificationSettings')
+        .withIndex('by_user', (q) => q.eq('userId', args.userId))
+        .unique(),
     ])
     return [
       ...subscriptions
@@ -803,9 +792,12 @@ export const collectUserNotificationTargets = internalQuery({
           tokenOrEndpoint: subscription.tokenOrEndpoint,
         })),
       ...installations
-        .filter((installation) => installation.enabled &&
-          installation.environment === serverPushEnvironment() &&
-          Boolean(installation.nativePushToken))
+        .filter(
+          (installation) =>
+            installation.enabled &&
+            installation.environment === serverPushEnvironment() &&
+            Boolean(installation.nativePushToken),
+        )
         .map((installation) => ({
           kind: 'native' as const,
           installationId: installation._id,
@@ -814,9 +806,16 @@ export const collectUserNotificationTargets = internalQuery({
           soundEnabled: settings?.soundEnabled ?? true,
         })),
       ...subscriptions
-        .filter((subscription) => subscription.enabled && subscription.platform !== 'web' &&
-          !installations.some((installation) =>
-            (installation.nativePushToken ?? installation.expoPushToken) === subscription.tokenOrEndpoint))
+        .filter(
+          (subscription) =>
+            subscription.enabled &&
+            subscription.platform !== 'web' &&
+            !installations.some(
+              (installation) =>
+                (installation.nativePushToken ?? installation.expoPushToken) ===
+                subscription.tokenOrEndpoint,
+            ),
+        )
         .map((subscription) => ({
           kind: 'legacy_native' as const,
           subscriptionId: subscription._id,
@@ -827,7 +826,6 @@ export const collectUserNotificationTargets = internalQuery({
     ]
   },
 })
-
 export const disableSubscription = internalMutation({
   args: {
     subscriptionId: v.id('notificationSubscriptions'),
@@ -839,7 +837,6 @@ export const disableSubscription = internalMutation({
     })
   },
 })
-
 export const disableInstallation = internalMutation({
   args: {
     installationId: v.id('pushInstallations'),
@@ -850,16 +847,16 @@ export const disableInstallation = internalMutation({
     const now = Date.now()
     const pushToken = installation?.nativePushToken ?? installation?.expoPushToken
     if (installation?.userId && pushToken) {
-      const subscriptions = await ctx.db.query('notificationSubscriptions')
+      const subscriptions = await ctx.db
+        .query('notificationSubscriptions')
         .withIndex('by_user', (q) => q.eq('userId', installation.userId!))
         .collect()
       for (const subscription of subscriptions) {
         if (subscription.platform === 'web' || !subscription.enabled) continue
         const matchesToken = subscription.tokenOrEndpoint === pushToken
-        const matchesLegacyInstallation = legacyInstallationId(
-          subscription.platform,
-          subscription.tokenOrEndpoint,
-        ) === installation.installationId
+        const matchesLegacyInstallation =
+          legacyInstallationId(subscription.platform, subscription.tokenOrEndpoint) ===
+          installation.installationId
         if (matchesToken || matchesLegacyInstallation) {
           await ctx.db.patch(subscription._id, { enabled: false, updatedAt: now })
         }
@@ -874,14 +871,14 @@ export const disableInstallation = internalMutation({
     })
   },
 })
-
 export const migrateLegacyNativeSubscription = internalMutation({
   args: { subscriptionId: v.id('notificationSubscriptions') },
   handler: async (ctx, args) => {
     const subscription = await ctx.db.get(args.subscriptionId)
     if (!subscription || !subscription.enabled || subscription.platform === 'web') return null
     const installationId = legacyInstallationId(subscription.platform, subscription.tokenOrEndpoint)
-    const existing = await ctx.db.query('pushInstallations')
+    const existing = await ctx.db
+      .query('pushInstallations')
       .withIndex('by_installation_id', (q) => q.eq('installationId', installationId))
       .unique()
     const now = Date.now()

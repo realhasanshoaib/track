@@ -1,6 +1,5 @@
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
-
 export type MessageUploadMetadata = {
   filename: string
   contentType: string
@@ -8,38 +7,29 @@ export type MessageUploadMetadata = {
   kind?: Doc<'messageUploadIntents'>['kind']
   durationMs?: number
 }
-
 export type MessageUploadScope = {
   projectId: Id<'projects'>
   groupId: Id<'groups'>
-
   uploaderId: Id<'users'>
   uploaderProjectMemberId: Id<'projectMembers'>
-  actingCompanyId?: Id<'companies'>
 }
-
-function matchesScope(
-  intent: Doc<'messageUploadIntents'>,
-  scope: MessageUploadScope,
-) {
-  return intent.projectId === scope.projectId &&
+function matchesScope(intent: Doc<'messageUploadIntents'>, scope: MessageUploadScope) {
+  return (
+    intent.projectId === scope.projectId &&
     intent.groupId === scope.groupId &&
     intent.uploaderId === scope.uploaderId &&
-    intent.uploaderProjectMemberId === scope.uploaderProjectMemberId &&
-    intent.actingCompanyId === scope.actingCompanyId
+    intent.uploaderProjectMemberId === scope.uploaderProjectMemberId
+  )
 }
-
-function matchesMetadata(
-  intent: Doc<'messageUploadIntents'>,
-  metadata: MessageUploadMetadata,
-) {
-  return intent.filename === metadata.filename &&
+function matchesMetadata(intent: Doc<'messageUploadIntents'>, metadata: MessageUploadMetadata) {
+  return (
+    intent.filename === metadata.filename &&
     intent.contentType === metadata.contentType &&
     intent.size === metadata.size &&
     intent.kind === metadata.kind &&
     intent.durationMs === metadata.durationMs
+  )
 }
-
 async function requireIntent(
   ctx: MutationCtx,
   intentId: Id<'messageUploadIntents'>,
@@ -71,7 +61,6 @@ async function requireIntent(
   }
   return intent
 }
-
 export async function markMessageUploadAsUploaded(
   ctx: MutationCtx,
   input: {
@@ -121,7 +110,6 @@ export async function markMessageUploadAsUploaded(
   if (!uploaded) throw new Error('upload_intent_not_found')
   return uploaded
 }
-
 export async function resolveMessageUploadIntent(
   ctx: MutationCtx,
   input: {
@@ -133,7 +121,6 @@ export async function resolveMessageUploadIntent(
 ) {
   return await requireIntent(ctx, input.intentId, input.scope, input.metadata, input.messageId)
 }
-
 export async function claimMessageUploadIntent(
   ctx: MutationCtx,
   input: {

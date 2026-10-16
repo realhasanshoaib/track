@@ -1,4 +1,3 @@
-import { resolveProjectAccessProfile } from '@track/shared/feature-flags'
 import { isActiveChannelMembership } from '@track/shared/channel-membership'
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
@@ -12,9 +11,7 @@ export async function getProjectMember(
 ) {
   return await ctx.db
     .query('projectMembers')
-    .withIndex('by_project_user', (q) =>
-      q.eq('projectId', projectId).eq('userId', userId),
-    )
+    .withIndex('by_project_user', (q) => q.eq('projectId', projectId).eq('userId', userId))
     .unique()
 }
 
@@ -23,10 +20,6 @@ export async function requireProjectMember(
   projectId: Id<'projects'>,
   userId: Id<'users'>,
 ) {
-  const project = await ctx.db.get(projectId)
-  if (!project || resolveProjectAccessProfile(project.accessProfile) !== 'legacy') {
-    throw new Error('company_policy_required')
-  }
   const member = await getProjectMember(ctx, projectId, userId)
   if (!member) {
     throw new Error('not_project_member')
@@ -58,27 +51,16 @@ export async function requireProjectOwner(
   return member
 }
 
-export async function requireGroupMember(
-  ctx: AppCtx,
-  groupId: Id<'groups'>,
-  userId: Id<'users'>,
-) {
+export async function requireGroupMember(ctx: AppCtx, groupId: Id<'groups'>, userId: Id<'users'>) {
   const membership = await ctx.db
     .query('groupMembers')
-    .withIndex('by_group_user', (q) =>
-      q.eq('groupId', groupId).eq('userId', userId),
-    )
+    .withIndex('by_group_user', (q) => q.eq('groupId', groupId).eq('userId', userId))
     .unique()
   if (!membership) {
     throw new Error('not_group_member')
   }
-  const project = await ctx.db.get(membership.projectId)
-  const accessProfile = resolveProjectAccessProfile(project?.accessProfile)
-  if (!isActiveChannelMembership(membership, accessProfile)) {
+  if (!isActiveChannelMembership(membership)) {
     throw new Error('not_group_member')
-  }
-  if (!project || accessProfile !== 'legacy') {
-    throw new Error('company_policy_required')
   }
   return membership
 }
