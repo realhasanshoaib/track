@@ -59,7 +59,7 @@ import { shouldShowJumpToLatest } from '@/lib/thread-list';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { archivePresentation } from '@/lib/archive-presentation';
-import { scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset } from '@/lib/chat-scroll-follow';
+import { restoreChatScrollAfterDeletion, scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
 import { groupThreadTimeline } from '@/lib/grouped-thread-items';
 
 function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
@@ -252,12 +252,13 @@ export default function ThreadScreen() {
   }, [composerDraft.setDraft]);
   const sendKey = useRef<string | null>(null);
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
-  const pendingBulkHideAnchorRef = useRef<{
+  const pendingBulkDeleteScrollRef = useRef<ChatDeleteScrollSnapshot & {
     selectedIds: Set<Id<'messages'>>;
-    wasAtBottom: boolean;
-    wasFollowingLatest: boolean;
-    pinAfterSend: boolean;
+    hideForMe: boolean;
+    restorationScheduled: boolean;
+    userScrolled: boolean;
   } | null>(null);
+  const pendingDeleteScrollRestoreFrameRef = useRef<number | null>(null);
   const scrollAfterSendMessageIdRef = useRef<string | null>(null);
   const screenActiveRef = useRef(false);
   const lastViewedSequenceRef = useRef(0);
@@ -330,6 +331,11 @@ export default function ThreadScreen() {
     atBottomRef.current = distanceFromBottom <= 80;
     if (atBottomRef.current) setNewReplyCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
+  }, []);
+  useEffect(() => () => {
+    if (pendingDeleteScrollRestoreFrameRef.current !== null) {
+      cancelAnimationFrame(pendingDeleteScrollRestoreFrameRef.current);
+    }
   }, []);
   const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
     archived: readOnly,
@@ -470,17 +476,37 @@ export default function ThreadScreen() {
 
   const newestFeedItemKey = threadItems.at(-1)?.key;
   useEffect(() => {
-    if (pendingBulkHideAnchorRef.current) return;
+    if (pendingBulkDeleteScrollRef.current) return;
     if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)
       && (followingLatestRef.current || atBottomRef.current)) {
       scrollToLatest();
     }
   }, [newestFeedItemKey, scrollToLatest, targetMessageId]);
   useEffect(() => {
-    const pending = pendingBulkHideAnchorRef.current;
-    if (!pending || [...pending.selectedIds].some((id) => threadItems.some((item) => item.kind === 'message' && item.item.message._id === id))) return;
-    pendingBulkHideAnchorRef.current = null;
-  }, [threadItems]);
+    const pending = pendingBulkDeleteScrollRef.current;
+    if (!pending || pending.restorationScheduled) return;
+    const settled = [...pending.selectedIds].every((id) => {
+      const current = threadItems.find((item) => item.kind === 'message' && item.item.message._id === id);
+      return pending.hideForMe
+        ? current === undefined
+        : current?.kind === 'message' && current.item.message.deletedAt !== undefined;
+    });
+    if (!settled) return;
+
+    pending.restorationScheduled = true;
+    pendingDeleteScrollRestoreFrameRef.current = requestAnimationFrame(() => {
+      pendingDeleteScrollRestoreFrameRef.current = requestAnimationFrame(() => {
+        pendingDeleteScrollRestoreFrameRef.current = null;
+        if (pendingBulkDeleteScrollRef.current !== pending) return;
+        pendingBulkDeleteScrollRef.current = null;
+        atBottomRef.current = pending.wasAtBottom;
+        followingLatestRef.current = pending.followingLatest;
+        pinToLatestAfterSendRef.current = pending.pinAfterSend;
+        restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest);
+        updateJumpToLatest();
+      });
+    });
+  }, [scrollToLatest, threadItems, updateJumpToLatest]);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -869,17 +895,19 @@ export default function ThreadScreen() {
         text: confirmLabel,
         style: 'destructive',
         onPress: () => {
-          if (hideForMe) {
-            pendingBulkHideAnchorRef.current = {
-              selectedIds,
-              wasAtBottom: atBottomRef.current,
-              wasFollowingLatest: followingLatestRef.current,
-              pinAfterSend: pinToLatestAfterSendRef.current,
-            };
-            atBottomRef.current = false;
-            followingLatestRef.current = false;
-            pinToLatestAfterSendRef.current = false;
-          }
+          pendingBulkDeleteScrollRef.current = {
+            selectedIds,
+            hideForMe,
+            offsetY: scrollMetricsRef.current.offsetY,
+            wasAtBottom: atBottomRef.current,
+            followingLatest: followingLatestRef.current,
+            pinAfterSend: pinToLatestAfterSendRef.current,
+            restorationScheduled: false,
+            userScrolled: false,
+          };
+          atBottomRef.current = false;
+          followingLatestRef.current = false;
+          pinToLatestAfterSendRef.current = false;
           bulkDeleteBusyRef.current = true;
           setBulkDeleteBusy(true);
           const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
@@ -895,13 +923,14 @@ export default function ThreadScreen() {
               tone: 'success',
             });
           }).catch((caught) => {
-            const pending = pendingBulkHideAnchorRef.current;
+            const pending = pendingBulkDeleteScrollRef.current;
             if (pending) {
+              pendingBulkDeleteScrollRef.current = null;
               atBottomRef.current = pending.wasAtBottom;
-              followingLatestRef.current = pending.wasFollowingLatest;
+              followingLatestRef.current = pending.followingLatest;
               pinToLatestAfterSendRef.current = pending.pinAfterSend;
+              requestAnimationFrame(() => restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest));
             }
-            pendingBulkHideAnchorRef.current = null;
             setError(communicationErrorMessage(caught, 'delete these messages'));
           }).finally(() => {
             bulkDeleteBusyRef.current = false;
@@ -910,7 +939,7 @@ export default function ThreadScreen() {
         },
       },
     ]);
-  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, scrollToLatest, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
 
   async function submitReport(reason: ReportReason, note: string) {
     const target = reportTarget;
@@ -1309,8 +1338,8 @@ export default function ThreadScreen() {
               }
             }
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
-            updateJumpToLatest();
-            if (!pendingBulkHideAnchorRef.current) {
+            if (!pendingBulkDeleteScrollRef.current) {
+              updateJumpToLatest();
               scheduleLatestScrollAfterViewportLayout({
                 followingLatest: followingLatestRef.current,
                 pinAfterSend: pinToLatestAfterSendRef.current,
@@ -1322,27 +1351,47 @@ export default function ThreadScreen() {
             scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            updateJumpToLatest();
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending?.userScrolled) {
+              pending.offsetY = nativeEvent.contentOffset.y;
+              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
+            } else if (!pending) {
+              updateJumpToLatest();
+            }
           }}
           onScrollBeginDrag={() => {
-            atBottomRef.current = false;
-            followingLatestRef.current = false;
-            pinToLatestAfterSendRef.current = false;
-            scrollAfterSendMessageIdRef.current = null;
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending) {
+              pending.userScrolled = true;
+              pending.wasAtBottom = false;
+              pending.followingLatest = false;
+              pending.pinAfterSend = false;
+            } else {
+              atBottomRef.current = false;
+              followingLatestRef.current = false;
+              pinToLatestAfterSendRef.current = false;
+              scrollAfterSendMessageIdRef.current = null;
+            }
           }}
           onMomentumScrollEnd={({ nativeEvent }) => {
             scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            updateJumpToLatest();
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending?.userScrolled) {
+              pending.offsetY = nativeEvent.contentOffset.y;
+              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
+            } else if (!pending) {
+              updateJumpToLatest();
+            }
           }}
           scrollEventThrottle={16}
           onViewableItemsChanged={onViewableItemsChanged}
           onContentSizeChange={(_width, height) => {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
+            if (pendingBulkDeleteScrollRef.current) return;
             updateJumpToLatest();
-            if (pendingBulkHideAnchorRef.current) return;
             if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)
               && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
               scrollToLatest();

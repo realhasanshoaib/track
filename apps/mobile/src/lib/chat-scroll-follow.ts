@@ -14,6 +14,23 @@ export interface ChatListScrollTarget {
   scrollToOffset(options: { animated: boolean; offset: number }): void;
 }
 
+export interface ChatDeleteScrollSnapshot extends ViewportLayoutFollowState {
+  offsetY: number;
+}
+
+/** Restore the reader's place after deleted rows or tombstones change height. */
+export function restoreChatScrollAfterDeletion(
+  list: ChatListScrollTarget | null,
+  snapshot: ChatDeleteScrollSnapshot,
+  scrollToLatest: () => void,
+): void {
+  if (snapshot.wasAtBottom || snapshot.followingLatest || snapshot.pinAfterSend) {
+    scrollToLatest();
+    return;
+  }
+  list?.scrollToOffset({ animated: false, offset: Math.max(0, snapshot.offsetY) });
+}
+
 /** Use measured layout dimensions so Android applies a changed IME inset immediately. */
 export function scrollListToLatest(
   list: ChatListScrollTarget | null,

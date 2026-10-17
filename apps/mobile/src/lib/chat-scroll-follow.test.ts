@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  restoreChatScrollAfterDeletion,
   scheduleLatestScrollAfterViewportLayout,
   scrollListToLatest,
   shouldCompensateAndroidKeyboardInset,
@@ -23,6 +24,49 @@ describe('scrollListToLatest', () => {
 
     expect(list.scrollToEnd).toHaveBeenCalledWith({ animated: false });
     expect(list.scrollToOffset).not.toHaveBeenCalled();
+  });
+});
+
+describe('restoreChatScrollAfterDeletion', () => {
+  it('restores the reader to the same offset when they were browsing history', () => {
+    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
+    const scrollToLatest = vi.fn();
+
+    restoreChatScrollAfterDeletion(
+      list,
+      { offsetY: 1_248, wasAtBottom: false, followingLatest: false, pinAfterSend: false },
+      scrollToLatest,
+    );
+
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 1_248 });
+    expect(list.scrollToEnd).not.toHaveBeenCalled();
+    expect(scrollToLatest).not.toHaveBeenCalled();
+  });
+
+  it('keeps the reader pinned to latest when deletion happens at the bottom', () => {
+    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
+    const scrollToLatest = vi.fn();
+
+    restoreChatScrollAfterDeletion(
+      list,
+      { offsetY: 1_248, wasAtBottom: true, followingLatest: false, pinAfterSend: false },
+      scrollToLatest,
+    );
+
+    expect(scrollToLatest).toHaveBeenCalledOnce();
+    expect(list.scrollToOffset).not.toHaveBeenCalled();
+  });
+
+  it('clamps a negative rubber-band offset before restoring it', () => {
+    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
+
+    restoreChatScrollAfterDeletion(
+      list,
+      { offsetY: -18, wasAtBottom: false, followingLatest: false, pinAfterSend: false },
+      vi.fn(),
+    );
+
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 0 });
   });
 });
 

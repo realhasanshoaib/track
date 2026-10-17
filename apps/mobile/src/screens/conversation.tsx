@@ -60,7 +60,7 @@ import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pen
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
-import { scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset } from '@/lib/chat-scroll-follow';
+import { restoreChatScrollAfterDeletion, scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
 
 export default function ConversationScreen() {
   const theme = useTheme();
@@ -186,12 +186,13 @@ export default function ConversationScreen() {
       : 'skip',
   );
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
-  const pendingBulkHideAnchorRef = useRef<{
+  const pendingBulkDeleteScrollRef = useRef<ChatDeleteScrollSnapshot & {
     selectedIds: Set<Id<'messages'>>;
-    wasAtBottom: boolean;
-    wasFollowingLatest: boolean;
-    pinAfterSend: boolean;
+    hideForMe: boolean;
+    restorationScheduled: boolean;
+    userScrolled: boolean;
   } | null>(null);
+  const pendingDeleteScrollRestoreFrameRef = useRef<number | null>(null);
   /** Tracks whether the reader is pinned to the newest message, so arriving messages never yank them off history. */
   const atBottomRef = useRef(true);
   const followingLatestRef = useRef(!targetMessageId);
@@ -438,6 +439,11 @@ export default function ConversationScreen() {
     if (atBottomRef.current) setNewMessageCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
   }, []);
+  useEffect(() => () => {
+    if (pendingDeleteScrollRestoreFrameRef.current !== null) {
+      cancelAnimationFrame(pendingDeleteScrollRestoreFrameRef.current);
+    }
+  }, []);
   const stopFollowingAfterUserScroll = useCallback(() => {
     atBottomRef.current = false;
     followingLatestRef.current = false;
@@ -667,17 +673,19 @@ export default function ConversationScreen() {
         text: confirmLabel,
         style: 'destructive',
         onPress: () => {
-          if (hideForMe) {
-            pendingBulkHideAnchorRef.current = {
-              selectedIds,
-              wasAtBottom: atBottomRef.current,
-              wasFollowingLatest: followingLatestRef.current,
-              pinAfterSend: pinToLatestAfterSendRef.current,
-            };
-            atBottomRef.current = false;
-            followingLatestRef.current = false;
-            pinToLatestAfterSendRef.current = false;
-          }
+          pendingBulkDeleteScrollRef.current = {
+            selectedIds,
+            hideForMe,
+            offsetY: scrollMetricsRef.current.offsetY,
+            wasAtBottom: atBottomRef.current,
+            followingLatest: followingLatestRef.current,
+            pinAfterSend: pinToLatestAfterSendRef.current,
+            restorationScheduled: false,
+            userScrolled: false,
+          };
+          atBottomRef.current = false;
+          followingLatestRef.current = false;
+          pinToLatestAfterSendRef.current = false;
           bulkDeleteBusyRef.current = true;
           setBulkDeleteBusy(true);
           const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
@@ -693,13 +701,14 @@ export default function ConversationScreen() {
               tone: 'success',
             });
           }).catch(() => {
-            const pending = pendingBulkHideAnchorRef.current;
+            const pending = pendingBulkDeleteScrollRef.current;
             if (pending) {
+              pendingBulkDeleteScrollRef.current = null;
               atBottomRef.current = pending.wasAtBottom;
-              followingLatestRef.current = pending.wasFollowingLatest;
+              followingLatestRef.current = pending.followingLatest;
               pinToLatestAfterSendRef.current = pending.pinAfterSend;
+              requestAnimationFrame(() => restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest));
             }
-            pendingBulkHideAnchorRef.current = null;
             showToast({ title: 'Messages not deleted', message: 'Check your connection and try again.', tone: 'error' });
           }).finally(() => {
             bulkDeleteBusyRef.current = false;
@@ -708,7 +717,7 @@ export default function ConversationScreen() {
         },
       },
     ]);
-  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, scrollToLatest, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
 
   async function saveMessageEdit() {
     const target = editTarget;
@@ -758,14 +767,34 @@ export default function ConversationScreen() {
 
   const newestFeedItemKey = threadItems.at(-1)?.key;
   useEffect(() => {
-    if (pendingBulkHideAnchorRef.current) return;
+    if (pendingBulkDeleteScrollRef.current) return;
     if (!targetMessageId && (followingLatestRef.current || atBottomRef.current)) scrollToLatest();
   }, [newestFeedItemKey, scrollToLatest, targetMessageId]);
   useEffect(() => {
-    const pending = pendingBulkHideAnchorRef.current;
-    if (!pending || [...pending.selectedIds].some((id) => threadItems.some((item) => item.kind === 'message' && item.item.message._id === id))) return;
-    pendingBulkHideAnchorRef.current = null;
-  }, [threadItems]);
+    const pending = pendingBulkDeleteScrollRef.current;
+    if (!pending || pending.restorationScheduled) return;
+    const settled = [...pending.selectedIds].every((id) => {
+      const current = threadItems.find((item) => item.kind === 'message' && item.item.message._id === id);
+      return pending.hideForMe
+        ? current === undefined
+        : current?.kind === 'message' && current.item.message.deletedAt !== undefined;
+    });
+    if (!settled) return;
+
+    pending.restorationScheduled = true;
+    pendingDeleteScrollRestoreFrameRef.current = requestAnimationFrame(() => {
+      pendingDeleteScrollRestoreFrameRef.current = requestAnimationFrame(() => {
+        pendingDeleteScrollRestoreFrameRef.current = null;
+        if (pendingBulkDeleteScrollRef.current !== pending) return;
+        pendingBulkDeleteScrollRef.current = null;
+        atBottomRef.current = pending.wasAtBottom;
+        followingLatestRef.current = pending.followingLatest;
+        pinToLatestAfterSendRef.current = pending.pinAfterSend;
+        restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest);
+        updateJumpToLatest();
+      });
+    });
+  }, [scrollToLatest, threadItems, updateJumpToLatest]);
 
   useEffect(() => {
     if (!messages || !assistantStreams) return;
@@ -1437,8 +1466,8 @@ export default function ConversationScreen() {
               }
             }
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
-            updateJumpToLatest();
-            if (!pendingBulkHideAnchorRef.current) {
+            if (!pendingBulkDeleteScrollRef.current) {
+              updateJumpToLatest();
               scheduleLatestScrollAfterViewportLayout({
                 followingLatest: followingLatestRef.current,
                 pinAfterSend: pinToLatestAfterSendRef.current,
@@ -1446,26 +1475,48 @@ export default function ConversationScreen() {
               }, scrollToLatest);
             }
           }}
-          onScrollBeginDrag={stopFollowingAfterUserScroll}
+          onScrollBeginDrag={() => {
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending) {
+              pending.userScrolled = true;
+              pending.wasAtBottom = false;
+              pending.followingLatest = false;
+              pending.pinAfterSend = false;
+            } else {
+              stopFollowingAfterUserScroll();
+            }
+          }}
           onScroll={({ nativeEvent }) => {
             scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            updateJumpToLatest();
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending?.userScrolled) {
+              pending.offsetY = nativeEvent.contentOffset.y;
+              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
+            } else if (!pending) {
+              updateJumpToLatest();
+            }
           }}
           onMomentumScrollEnd={({ nativeEvent }) => {
             scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            updateJumpToLatest();
+            const pending = pendingBulkDeleteScrollRef.current;
+            if (pending?.userScrolled) {
+              pending.offsetY = nativeEvent.contentOffset.y;
+              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
+            } else if (!pending) {
+              updateJumpToLatest();
+            }
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           scrollEventThrottle={16}
           onContentSizeChange={(_width, height) => {
             const wasAtBottom = atBottomRef.current;
             scrollMetricsRef.current.contentHeight = height;
+            if (pendingBulkDeleteScrollRef.current) return;
             updateJumpToLatest();
-            if (pendingBulkHideAnchorRef.current) return;
             if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
               scrollToLatest();
             }
