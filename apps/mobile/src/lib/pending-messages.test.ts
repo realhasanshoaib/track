@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pendingMessageAcknowledgementKey, reconcilePendingMessages, type PendingMessage } from './pending-messages';
+import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, reconcilePendingMessages, type PendingMessage } from './pending-messages';
 
 describe('reconcilePendingMessages', () => {
   it('keeps a pending row when an older message has the same body', () => {
@@ -51,5 +51,39 @@ describe('pendingMessageAcknowledgementKey', () => {
     const acknowledged = { ...pending, messageId: 'message-1' };
 
     expect(pendingMessageAcknowledgementKey([acknowledged])).not.toBe(pendingMessageAcknowledgementKey([pending]));
+  });
+});
+
+describe('pendingMessageGroupStarts', () => {
+  const today = new Date(2026, 9, 17, 19).getTime();
+
+  it('keeps adjacent outgoing optimistic rows in the confirmed message group', () => {
+    const starts = pendingMessageGroupStarts(
+      [{ at: today + 1_000, id: 'pending-1' }, { at: today + 2_000, id: 'pending-2' }],
+      'author-1',
+      { at: today, authorId: 'author-1', key: 'previous-message', kind: 'message' },
+    );
+
+    expect([...starts]).toEqual([['pending-1', false], ['pending-2', false]]);
+  });
+
+  it('starts a fresh row group after another author, an assistant, a long gap, a new day, or a task card', () => {
+    const sameTime = today + 1_000;
+    const cases = [
+      { previous: { at: today, authorId: 'author-2', key: 'other', kind: 'message' as const } },
+      { previous: { at: today, authorId: null, key: 'assistant', kind: 'assistant' as const } },
+      { previous: { at: today - 6 * 60_000, authorId: 'author-1', key: 'old', kind: 'message' as const } },
+      { previous: { at: new Date(2026, 9, 16, 23, 59).getTime(), authorId: 'author-1', key: 'yesterday', kind: 'message' as const } },
+    ];
+
+    for (const { previous } of cases) {
+      expect(pendingMessageGroupStarts([{ at: sameTime, id: 'pending' }], 'author-1', previous).get('pending')).toBe(true);
+    }
+    expect(pendingMessageGroupStarts(
+      [{ at: sameTime, id: 'pending' }],
+      'author-1',
+      { at: today, authorId: 'author-1', key: 'task-linked', kind: 'message' },
+      new Set(['task-linked']),
+    ).get('pending')).toBe(true);
   });
 });

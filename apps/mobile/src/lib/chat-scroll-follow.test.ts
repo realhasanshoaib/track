@@ -44,22 +44,22 @@ describe('createCoalescedChatScrollScheduler', () => {
 });
 
 describe('scrollListToLatest', () => {
-  it('scrolls to the measured bottom after keyboard padding expands content', () => {
+  it('scrolls through the fixed composer padding after an insert', () => {
     const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
 
-    scrollListToLatest(list, { contentHeight: 2_896, viewportHeight: 731 });
+    scrollListToLatest(list, { contentHeight: 3_484, viewportHeight: 651 });
 
-    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 2_165 });
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 2_833 });
     expect(list.scrollToEnd).not.toHaveBeenCalled();
   });
 
-  it('uses scrollToEnd until native content and viewport sizes are measured', () => {
+  it('keeps native animation choice when moving to the latest row', () => {
     const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
 
-    scrollListToLatest(list, { contentHeight: 0, viewportHeight: 0 });
+    scrollListToLatest(list, { contentHeight: 3_484, viewportHeight: 651 }, true);
 
-    expect(list.scrollToEnd).toHaveBeenCalledWith({ animated: false });
-    expect(list.scrollToOffset).not.toHaveBeenCalled();
+    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: true, offset: 2_833 });
+    expect(list.scrollToEnd).not.toHaveBeenCalled();
   });
 });
 

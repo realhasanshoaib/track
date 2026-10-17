@@ -34,8 +34,10 @@ export function rememberChatImageDimensions(id: string, image: ImageDimensions) 
 
 /** Reserve identical bounds before decoding optimistic and confirmed images. */
 export function chatImageAspectRatio(image: ImageDimensions): number {
+  const rememberedRatio = image.id ? sentImageRatios.get(image.id) : undefined;
+  if (rememberedRatio !== undefined) return rememberedRatio;
   const { width, height } = image;
   if (typeof width !== 'number' || typeof height !== 'number' ||
-      !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return (image.id ? sentImageRatios.get(image.id) : undefined) ?? 4 / 3;
+      !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 4 / 3;
   return Math.min(Math.max(width / height, 0.56), 1.9);
 }

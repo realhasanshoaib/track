@@ -4,6 +4,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MessageBubbleFrame } from '@/components/chat/message-bubble';
+import { MESSAGE_MAX_WIDTH_RATIO } from '@/components/chat/message-layout';
 import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
 import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
@@ -19,10 +20,11 @@ import { chatImageAspectRatio } from '@/lib/chat-image-layout';
 const GAP = 2;
 const MAX_TILES = 4;
 
-export function PendingMessageBubble({ attachments = [], at, body: rawBody, offline = false }: {
+export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFirstInGroup = true, offline = false }: {
   attachments?: PendingMessageAttachment[];
   at: number;
   body: string;
+  isFirstInGroup?: boolean;
   offline?: boolean;
 }) {
   const theme = useTheme();
@@ -34,7 +36,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
   const imageProgress = images.some((file) => file.progress !== undefined)
     ? images.reduce((total, file) => total + clampProgress(file.progress), 0) / Math.max(images.length, 1)
     : undefined;
-  const maxWidth = Math.min(width * 0.72, 320);
+  const maxWidth = Math.min(width * 0.72, 320, width * MESSAGE_MAX_WIDTH_RATIO);
   const fileListWidth = Math.min(maxWidth, Math.max(208, Math.min(width * 0.58, 260)));
   const visibleImages = images.slice(0, MAX_TILES);
   const overflow = images.length - visibleImages.length;
@@ -55,7 +57,8 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
     : Array.from({ length: Math.ceil(visibleImages.length / 2) }, (_, index) => visibleImages.slice(index * 2, index * 2 + 2));
 
   return (
-    <View testID="pending-message-row" style={styles.row}>
+    <View style={[styles.timelineRow, isFirstInGroup ? styles.groupStart : styles.grouped]}>
+      <View testID="pending-message-row" style={styles.row}>
       <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage>
         {attachments.length === 0 ? (
           inlineTextMeta ? (
@@ -98,7 +101,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
               {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
             </View>
           ) : null}
-          {files.length ? <View style={[styles.fileList, { width: fileListWidth }]}>
+          {files.length ? <View style={[styles.fileList, { width: fileListWidth }, hasImages && styles.fileListAfterImage]}>
             {files.map((file) => <PendingFileCard file={file} key={file.id} offline={offline} />)}
           </View> : null}
           {body ? <View style={styles.body}><MessageText body={body} /></View> : null}
@@ -109,6 +112,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
           </View>
         ) : null}
       </MessageBubbleFrame>
+      </View>
     </View>
   );
 }
@@ -241,12 +245,13 @@ const styles = StyleSheet.create({
   fileCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
   fileContent: { flex: 1, gap: Spacing.half, minWidth: 0 },
   fileIcon: { alignItems: 'center', borderRadius: Radius.small, height: 36, justifyContent: 'center', width: 36 },
-  fileList: { gap: Spacing.two, paddingHorizontal: Spacing.one, paddingTop: Spacing.two },
+  fileList: { gap: Spacing.two, paddingHorizontal: Spacing.one },
+  fileListAfterImage: { paddingTop: Spacing.two },
   fileName: { flexShrink: 1, minWidth: 0 },
   fileStatus: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minHeight: 14 },
   fileStatusText: { flexShrink: 1 },
   fill: { height: '100%', width: '100%' },
-  grid: { borderCurve: 'continuous', borderRadius: Radius.medium, marginTop: Spacing.one, overflow: 'hidden', position: 'relative', gap: GAP },
+  grid: { borderCurve: 'continuous', borderRadius: Radius.medium, overflow: 'hidden', position: 'relative', gap: GAP },
   gridRow: { flexDirection: 'row', gap: GAP },
   gridTile: { borderCurve: 'continuous', borderRadius: Radius.medium, overflow: 'hidden' },
   imageOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
@@ -256,10 +261,13 @@ const styles = StyleSheet.create({
   overflowText: { color: '#fff' },
   progressFill: { borderRadius: Radius.pill, height: '100%' },
   progressTrack: { borderRadius: Radius.pill, height: 3, overflow: 'hidden' },
-  // Match confirmed message rows exactly so reconciliation cannot collapse
-  // the optimistic row's extra top/bottom gutter after a slow upload.
-  row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: MESSAGE_ROW_VERTICAL_PADDING },
-  singleImage: { borderCurve: 'continuous', borderRadius: Radius.large, marginTop: Spacing.one, overflow: 'hidden' },
+  // Use the same outer group and row gutters as ThreadRow/MessageBubble so
+  // reconciliation does not change scroll extent when the server row arrives.
+  row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: MESSAGE_ROW_VERTICAL_PADDING, width: '100%' },
+  timelineRow: { paddingBottom: Spacing.half, width: '100%' },
+  groupStart: { paddingTop: Spacing.two },
+  grouped: { paddingTop: 2 },
+  singleImage: { borderCurve: 'continuous', borderRadius: Radius.large, overflow: 'hidden' },
   textMeta: { alignItems: 'center', alignSelf: 'flex-end', flexDirection: 'row', marginTop: Spacing.half },
   inlineText: { flexShrink: 1, minWidth: 0 },
   inlineTextRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },

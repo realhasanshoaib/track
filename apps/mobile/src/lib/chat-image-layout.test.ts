@@ -33,7 +33,13 @@ describe('chatImageAspectRatio', () => {
   it('keeps sent image bounds when the server cannot produce dimension metadata', () => {
     rememberChatImageDimensions('sent-photo', { width: 3024, height: 4032 });
     expect(chatImageAspectRatio({ id: 'sent-photo' })).toBe(0.75);
-    expect(chatImageAspectRatio({ id: 'sent-photo', width: 800, height: 600 })).toBe(4 / 3);
+    expect(chatImageAspectRatio({ id: 'sent-photo', width: 800, height: 600 })).toBe(0.75);
+  });
+
+  it('keeps optimistic image geometry when confirmed server metadata differs', () => {
+    rememberChatImageDimensions('confirmed-photo', { width: 900, height: 1200 });
+
+    expect(chatImageAspectRatio({ id: 'confirmed-photo', width: 1200, height: 900 })).toBe(0.75);
   });
 
   it('bounds remembered geometry so a long session cannot grow the cache forever', () => {

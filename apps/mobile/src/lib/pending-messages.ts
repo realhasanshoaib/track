@@ -11,6 +11,39 @@ export type PendingMessage = {
   messageId?: string;
 };
 
+export type PendingMessageGroupAnchor = {
+  at: number;
+  authorId: string | null;
+  key: string;
+  kind: 'assistant' | 'message';
+};
+
+const FIVE_MINUTES = 5 * 60 * 1000;
+
+/** Match the row top spacing the confirmed timeline will use after send. */
+export function pendingMessageGroupStarts(
+  pending: readonly Pick<PendingMessage, 'at' | 'id'>[],
+  authorId: string,
+  previous: PendingMessageGroupAnchor | null,
+  interruptedRowIds: ReadonlySet<string> = new Set(),
+): ReadonlyMap<string, boolean> {
+  const starts = new Map<string, boolean>();
+  let previousItem = previous;
+
+  for (const message of [...pending].sort((left, right) => left.at - right.at)) {
+    const sameDay = previousItem !== null && new Date(previousItem.at).toDateString() === new Date(message.at).toDateString();
+    const continuesGroup = previousItem?.kind === 'message'
+      && previousItem.authorId === authorId
+      && sameDay
+      && message.at - previousItem.at <= FIVE_MINUTES
+      && !interruptedRowIds.has(previousItem.key);
+    starts.set(message.id, !continuesGroup);
+    previousItem = { at: message.at, authorId, key: message.id, kind: 'message' };
+  }
+
+  return starts;
+}
+
 /** Stable across upload-progress changes so screens can keep confirmed list data memoized. */
 export function pendingMessageAcknowledgementKey(pending: readonly PendingMessage[]): string {
   return pending.flatMap(({ messageId }) => messageId ? [messageId] : []).join('\0');

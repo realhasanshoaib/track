@@ -95,4 +95,39 @@ describe('sendComposerMessage recovery', () => {
     expect(target.sendMessage).toHaveBeenCalledTimes(1);
     expect(target.attachFile).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the injected native uploader without copying attachment bytes into a JS blob', async () => {
+    const uploadFile = vi.fn().mockResolvedValue('uploaded-storage-id');
+    const generateUploadUrl = vi.fn().mockResolvedValue({
+      expiresAt: Date.now() + 60_000,
+      intentId: 'intent-native' as Id<'messageUploadIntents'>,
+      status: 'issued' as const,
+      storageId: null,
+      uploadUrl: 'https://uploads.example.test/native',
+    });
+    const target = makeTarget({
+      generateUploadUrl,
+      getFileSize: vi.fn().mockReturnValue(4),
+      uploadFile,
+    });
+    const fetchFile = vi.fn(() => { throw new Error('JS blob path should not run'); });
+    vi.stubGlobal('fetch', fetchFile);
+
+    const result = await sendComposerMessage({
+      attachments: [makeFile('native', 'photo.png')],
+      body: '',
+      idempotencyKey: 'send-native',
+      reportProgress: vi.fn(),
+      target,
+    });
+
+    expect(result).toEqual({ failedIds: [], messageId: 'message-1' });
+    expect(generateUploadUrl).toHaveBeenCalledWith(expect.objectContaining({ size: 4 }));
+    expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({
+      contentType: 'text/plain',
+      file: expect.objectContaining({ uri: 'file:///photo.png' }),
+      url: 'https://uploads.example.test/native',
+    }));
+    expect(fetchFile).not.toHaveBeenCalled();
+  });
 });

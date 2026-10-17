@@ -4,14 +4,14 @@ export interface ViewportLayoutFollowState {
   wasAtBottom: boolean;
 }
 
-export interface ChatScrollMetrics {
-  contentHeight: number;
-  viewportHeight: number;
-}
-
 export interface ChatListScrollTarget {
   scrollToEnd(options: { animated: boolean }): void;
   scrollToOffset(options: { animated: boolean; offset: number }): void;
+}
+
+export interface ChatScrollMetrics {
+  contentHeight: number;
+  viewportHeight: number;
 }
 
 /** Collapse same-frame layout events into one scroll using the latest measurements. */
@@ -62,6 +62,8 @@ export function scrollListToLatest(
     list.scrollToEnd({ animated });
     return;
   }
+  // The list ends under a fixed composer. Include its measured bottom padding
+  // when targeting the viewport end so the newest row clears the overlay.
   list.scrollToOffset({
     animated,
     offset: Math.max(0, metrics.contentHeight - metrics.viewportHeight),

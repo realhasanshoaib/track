@@ -59,6 +59,15 @@ export type AttachmentUploadTarget = {
     idempotencyKey?: string;
     replyToMessageId?: Id<'messages'>;
   }) => Promise<Id<'messages'>>;
+  /** Read size without loading the file bytes into the JavaScript heap. */
+  getFileSize?: (file: UploadableFile) => number | Promise<number>;
+  /** Stream the local file through a platform-native uploader when available. */
+  uploadFile?: (input: {
+    contentType: string;
+    file: UploadableFile;
+    onProgress: (fraction: number) => void;
+    url: string;
+  }) => Promise<string>;
 };
 
 export type UploadIntentResponse = {
@@ -178,25 +187,40 @@ async function uploadOne(input: {
   onProgress: (fraction: number) => void;
   target: AttachmentUploadTarget;
 }): Promise<PreparedAttachment> {
-  const blob = await (await fetch(input.file.uri)).blob();
-  const contentType = input.file.contentType || blob.type || 'application/octet-stream';
+  let blob: Blob | undefined;
+  let size: number;
+  if (input.target.uploadFile && input.target.getFileSize) {
+    size = await input.target.getFileSize(input.file);
+  } else {
+    blob = await (await fetch(input.file.uri)).blob();
+    size = blob.size;
+  }
+  if (!Number.isFinite(size) || size < 0) throw new Error('file_size_unavailable');
+  const contentType = input.file.contentType || blob?.type || 'application/octet-stream';
   const intent = await withOperationTimeout(input.target.generateUploadUrl({
     contentType,
     durationMs: input.file.durationMs,
     filename: input.file.filename,
     intentKey: input.intentKey,
     kind: input.file.kind,
-    size: blob.size,
+    size,
   }), BackendMutationTimeoutMs, 'attachment_upload_intent');
   let storageId = intent.storageId;
   if (!storageId) {
     if (!intent.uploadUrl) throw new Error('upload_intent_unavailable');
-    const uploadedStorageId = await putBlob({
-      blob,
-      contentType,
-      onProgress: input.onProgress,
-      url: intent.uploadUrl,
-    });
+    const uploadedStorageId = input.target.uploadFile
+      ? await input.target.uploadFile({
+          contentType,
+          file: input.file,
+          onProgress: input.onProgress,
+          url: intent.uploadUrl,
+        })
+      : await putBlob({
+          blob: blob!,
+          contentType,
+          onProgress: input.onProgress,
+          url: intent.uploadUrl,
+        });
     const claimed = await withOperationTimeout(input.target.claimUploadIntent({
       intentId: intent.intentId,
       storageId: uploadedStorageId,
@@ -209,7 +233,7 @@ async function uploadOne(input: {
     durationMs: input.file.durationMs,
     file: input.file,
     kind: input.file.kind ?? 'file',
-    size: blob.size,
+    size,
     storageId,
     uploadIntentId: intent.intentId,
   };

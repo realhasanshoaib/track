@@ -3,6 +3,7 @@ import { useNetworkState } from 'expo-network';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import { File as ExpoFile, UploadType } from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
 import * as Clipboard from 'expo-clipboard';
@@ -56,7 +57,7 @@ import { setActivePushContext } from '@/lib/push-presentation';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
-import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, type PendingMessage, type PendingMessageGroupAnchor } from '@/lib/pending-messages';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
@@ -207,6 +208,7 @@ export default function ConversationScreen() {
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const pinToLatestAfterSendRef = useRef(false);
+  const animateSendFollowUntilRef = useRef(0);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
@@ -345,6 +347,23 @@ export default function ConversationScreen() {
     missingAuthorKey: 'anon',
     pendingMessageIds,
   }), [assistantStreams, cardRowIds, messages, pendingMessageIds]);
+  const lastTimelineAnchor = useMemo<PendingMessageGroupAnchor | null>(() => {
+    for (let index = threadItems.length - 1; index >= 0; index--) {
+      const item = threadItems[index];
+      if (item?.kind === 'message') return {
+        at: item.at,
+        authorId: item.item.author?._id ?? 'anon',
+        key: item.key,
+        kind: 'message',
+      };
+      if (item?.kind === 'assistant') return { at: item.at, authorId: null, key: item.key, kind: 'assistant' };
+    }
+    return null;
+  }, [threadItems]);
+  const pendingGroupStarts = useMemo(
+    () => pendingMessageGroupStarts(pendingMessages, trackUserId ? String(trackUserId) : '', lastTimelineAnchor, cardRowIds),
+    [cardRowIds, lastTimelineAnchor, pendingMessages, trackUserId],
+  );
   const selectedMessages = useMemo(
     () => threadItems.filter((item): item is Extract<GroupedThreadItem, { kind: 'message' }> =>
       item.kind === 'message' && selectedMessageIds.has(item.item.message._id),
@@ -741,11 +760,6 @@ export default function ConversationScreen() {
 
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
-  const newestFeedItemKey = threadItems.at(-1)?.key;
-  useEffect(() => {
-    if (pendingBulkDeleteScrollRef.current) return;
-    if (!targetMessageId && (followingLatestRef.current || atBottomRef.current)) scrollToLatest();
-  }, [newestFeedItemKey, scrollToLatest, targetMessageId]);
   useEffect(() => {
     const pending = pendingBulkDeleteScrollRef.current;
     if (!pending || pending.restorationScheduled) return;
@@ -897,6 +911,7 @@ export default function ConversationScreen() {
     atBottomRef.current = true;
     followingLatestRef.current = true;
     pinToLatestAfterSendRef.current = true;
+    animateSendFollowUntilRef.current = Date.now() + 450;
     if (pendingId) {
       setNewMessageCount(0);
       setShowJumpToLatest(false);
@@ -932,6 +947,36 @@ export default function ConversationScreen() {
         },
         replyToMessageId,
         target: {
+          getFileSize: (file) => {
+            const size = new ExpoFile(file.uri).size;
+            return size > 0 ? size : file.size ?? size;
+          },
+          uploadFile: async ({ contentType, file, onProgress, url }) => {
+            const nativeFile = new ExpoFile(file.uri);
+            const abortController = new AbortController();
+            const timeout = setTimeout(() => abortController.abort(), 120_000);
+            const upload = nativeFile.createUploadTask(url, {
+              headers: { 'Content-Type': contentType },
+              httpMethod: 'POST',
+              onProgress: ({ bytesSent, totalBytes }) => {
+                onProgress(totalBytes > 0 ? bytesSent / totalBytes : 0);
+              },
+              signal: abortController.signal,
+              uploadType: UploadType.BINARY_CONTENT,
+            });
+            try {
+              const response = await upload.uploadAsync();
+              if (response.status < 200 || response.status >= 300) throw new Error('upload_failed');
+              const payload: unknown = JSON.parse(response.body);
+              if (typeof payload !== 'object' || payload === null || !('storageId' in payload) || typeof payload.storageId !== 'string' || payload.storageId.length === 0) {
+                throw new Error('upload_failed');
+              }
+              return payload.storageId;
+            } finally {
+              clearTimeout(timeout);
+              upload.release();
+            }
+          },
           attachFile: (input) => attachFile({
             projectId: pid, groupId: gid, userId: trackUserId,
             actingCompanyId: cid, projectMemberId: pmid,
@@ -991,6 +1036,7 @@ export default function ConversationScreen() {
       }
       return result;
     } catch (failure) {
+      animateSendFollowUntilRef.current = 0;
       pinToLatestAfterSendRef.current = false;
       if (pendingId) {
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
@@ -1409,6 +1455,9 @@ export default function ConversationScreen() {
           data={threadItems}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          // Keep native anchoring stable through optimistic-to-confirmed swaps.
+          // Appending at the latest edge leaves the current visible anchor intact;
+          // explicit scroll-follow below handles new content at the bottom.
           maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
           onScrollToIndexFailed={({ averageItemLength, index }) => requestAnimationFrame(() => {
             if (index >= threadItems.length - 1) {
@@ -1487,7 +1536,9 @@ export default function ConversationScreen() {
             if (pendingBulkDeleteScrollRef.current) return;
             updateJumpToLatest();
             if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
-              scrollToLatest();
+              const animateSend = Date.now() <= animateSendFollowUntilRef.current;
+              if (animateSend) animateSendFollowUntilRef.current = 0;
+              scrollToLatest(animateSend);
             }
           }}
           removeClippedSubviews={false}
@@ -1520,7 +1571,13 @@ export default function ConversationScreen() {
                     entering={reducedMotion ? undefined : PendingMessageEntering}
                     key={m.id}
                   >
-                  <PendingMessageBubble at={m.at} attachments={m.attachments} body={m.body} offline={isOffline} />
+                  <PendingMessageBubble
+                    at={m.at}
+                    attachments={m.attachments}
+                    body={m.body}
+                    isFirstInGroup={pendingGroupStarts.get(m.id) ?? true}
+                    offline={isOffline}
+                  />
                   </Animated.View>
                 ))}
               </View>
@@ -1552,7 +1609,7 @@ export default function ConversationScreen() {
       {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <KeyboardStickyView
         enabled={Platform.OS === 'ios'}
         offset={{ closed: Platform.OS === 'ios' ? -composerClosedOffset : 0, opened: 0 }}
-        style={[styles.composerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
+        style={[styles.composerOverlay, Platform.OS === 'android' && styles.androidComposerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
         <View
           onLayout={({ nativeEvent }) => {
             if (composerExpanded) return;
@@ -1711,6 +1768,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   connection: { marginHorizontal: Spacing.three, marginTop: Spacing.two },
   composerOverlay: { bottom: 0, left: 0, position: 'absolute', right: 0, zIndex: 2 },
+  androidComposerOverlay: { elevation: 4 },
   composerExpandedOverlay: { bottom: 0, left: 0, right: 0, top: 0, zIndex: 4 },
   jumpToLatest: {
     alignItems: 'center',

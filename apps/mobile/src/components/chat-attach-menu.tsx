@@ -84,7 +84,7 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
   }));
 
   return (
-    <Animated.View accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'} pointerEvents={visible ? 'auto' : 'none'} style={[styles.stripClip, revealStyle]}>
+    <Animated.View accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'} pointerEvents={visible ? 'auto' : 'none'} testID="composer-pending-attachments" style={[styles.stripClip, revealStyle]}>
       <ScrollView
         contentContainerStyle={styles.strip}
         horizontal

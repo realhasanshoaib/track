@@ -42,7 +42,7 @@ import type { DetailedMessage } from '@/components/thread-row';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/attachment-presentation';
-import { composerTextMaxHeight } from '@/lib/composer-layout';
+import { composerSurfaceBackgroundColor, composerTextMaxHeight } from '@/lib/composer-layout';
 import { createSubmissionGate } from '@/lib/submission-state';
 import type {
   ComposerSubmission,
@@ -59,6 +59,7 @@ import {
 import { useVoiceRecorder } from '@/lib/media-capture';
 import {
   nextVoiceGestureOutcome,
+  shouldFinishVoiceOnRelease,
   VoiceGestureCancelDistance as CancelDistance,
   VoiceGestureLockDistance as LockDistance,
   type VoiceGestureOutcome,
@@ -177,8 +178,10 @@ function ComposerImpl({
   /** Set for one commit after inserting a mention, to place the caret after it. */
   const [selection, setSelection] = useState<{ end: number; start: number } | null>(null);
   const [sending, setSending] = useState(false);
+  const [voiceActivationBlocked, setVoiceActivationBlocked] = useState(false);
   const [draftValue, setDraftValue] = useState(value);
   const draftRevisionRef = useRef(0);
+  const voiceActivationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyToRef = useRef(replyTo);
   replyToRef.current = replyTo;
   const keyboardReady = inputFocused && keyboardVisible;
@@ -194,6 +197,10 @@ function ComposerImpl({
   useEffect(() => {
     setDraftValue(value);
   }, [value]);
+
+  useEffect(() => () => {
+    if (voiceActivationTimerRef.current !== null) clearTimeout(voiceActivationTimerRef.current);
+  }, []);
 
   useEffect(() => {
     onExpandedChange?.(inputExpanded);
@@ -218,6 +225,34 @@ function ComposerImpl({
   const attachmentsLocked = sending || Boolean(failedSubmission) || Boolean(retryMessageId);
   /** Keep the recording control mounted until the hold gesture has ended. */
   const showSend = mode === 'idle' && (hasContent || sending);
+
+  function blockVoiceActivationForTransition() {
+    setVoiceActivationBlocked(true);
+    if (voiceActivationTimerRef.current !== null) clearTimeout(voiceActivationTimerRef.current);
+    voiceActivationTimerRef.current = setTimeout(() => {
+      voiceActivationTimerRef.current = null;
+      setVoiceActivationBlocked(false);
+    }, 240);
+  }
+
+  function cancelVoiceWithTransitionLock() {
+    blockVoiceActivationForTransition();
+    void voice.cancel().finally(blockVoiceActivationForTransition);
+  }
+
+  function finishVoiceWithTransitionLock() {
+    blockVoiceActivationForTransition();
+    void voice.finish().finally(blockVoiceActivationForTransition);
+  }
+
+  function releaseVoiceWithTransitionLock(outcomeValue: VoiceGestureOutcome) {
+    if (shouldFinishVoiceOnRelease(mode, outcomeValue)) {
+      blockVoiceActivationForTransition();
+      void voice.finish().finally(blockVoiceActivationForTransition);
+      return;
+    }
+    void voice.release(outcomeValue);
+  }
 
   const mentionRange = mode === 'idle' ? findMentionQuery(draftValue, caret) : null;
   const mentions = mentionRange ? filterMentionCandidates(mentionCandidates, mentionRange.query) : [];
@@ -308,6 +343,7 @@ function ComposerImpl({
       }
     } finally {
       sendingRef.current = false;
+      blockVoiceActivationForTransition();
       setSending(false);
       submissionGate.current.finish(submissionToken);
       if (retainInputFocus) requestAnimationFrame(() => inputRef.current?.focus());
@@ -316,6 +352,7 @@ function ComposerImpl({
 
   function handleSend() {
     if (!canSend) return;
+    blockVoiceActivationForTransition();
     hapticMedium();
     setCaret(0);
     void submit(attachments, retryMessageId ? '' : draftValue.trim(), replyTo?.message._id);
@@ -353,7 +390,7 @@ function ComposerImpl({
   }
 
   const micPan = Gesture.Pan()
-    .enabled(!hasFailedSubmission)
+    .enabled(!hasFailedSubmission && !voiceActivationBlocked)
     .activateAfterLongPress(HoldDelay)
     .onStart(() => {
       if (mode !== 'idle' || hasFailedSubmission) return;
@@ -374,7 +411,7 @@ function ComposerImpl({
       dragY.value = Math.min(0, event.translationY);
       outcome.value = nextOutcome;
       if (nextOutcome === 1) {
-        scheduleOnRN(voice.cancel);
+        scheduleOnRN(cancelVoiceWithTransitionLock);
       } else if (nextOutcome === 2) {
         scheduleOnRN(voice.lock);
       }
@@ -384,22 +421,23 @@ function ComposerImpl({
       dragX.value = withTiming(0, { duration: settleDuration });
       dragY.value = withTiming(0, { duration: settleDuration });
       if (isIOS) micScale.value = withSpring(1, { dampingRatio: 0.8, duration: reducedMotion ? 0 : 200 });
-      scheduleOnRN(voice.release, outcome.value);
+      scheduleOnRN(releaseVoiceWithTransitionLock, outcome.value);
     });
 
   const micTap = Gesture.Tap()
-    .enabled(!hasFailedSubmission)
+    .enabled(!hasFailedSubmission && !voiceActivationBlocked)
     .onBegin(() => { if (isIOS) micScale.value = withSpring(0.96, { dampingRatio: 0.7, duration: reducedMotion ? 0 : 150 }); })
     .onEnd(() => {
       if (hasFailedSubmission) return;
       outcome.value = 2;
-      if (mode === 'locked') scheduleOnRN(voice.finish);
+      if (mode === 'locked' || mode === 'recording') scheduleOnRN(finishVoiceWithTransitionLock);
       else if (mode === 'idle') scheduleOnRN(voice.start, true);
     })
     .onFinalize(() => { if (isIOS) micScale.value = withSpring(1, { dampingRatio: 0.8, duration: reducedMotion ? 0 : 200 }); });
 
   const voiceControl = <GestureDetector gesture={Gesture.Exclusive(micPan, micTap)}>
     <Animated.View
+      testID="composer-voice-control"
       accessibilityActions={mode === 'idle'
         ? [{ name: 'activate', label: 'Start voice recording' }]
         : [{ name: 'activate', label: mode === 'locked' ? 'Send voice note' : 'Finish voice recording' }, { name: 'cancel', label: 'Discard voice note' }]}
@@ -409,16 +447,16 @@ function ComposerImpl({
           ? 'Tap or activate to send this voice note. Use the cancel action to discard it.'
           : 'Recording voice note. Release to send, or use the cancel action to discard it.'}
       accessibilityLabel={mode === 'locked' ? 'Send voice note' : mode === 'recording' ? `Recording voice note, ${formatDuration(voice.durationMs)}` : 'Record a voice note'}
-      accessibilityState={{ disabled: hasFailedSubmission }}
+      accessibilityState={{ disabled: hasFailedSubmission || voiceActivationBlocked }}
       accessibilityRole="button"
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'cancel') void voice.cancel();
+        if (event.nativeEvent.actionName === 'cancel') cancelVoiceWithTransitionLock();
         else if (mode === 'idle') void voice.start(true);
-        else void voice.finish();
+        else finishVoiceWithTransitionLock();
       }}
       onAccessibilityTap={() => {
         if (mode === 'idle') void voice.start(true);
-        else void voice.finish();
+        else finishVoiceWithTransitionLock();
       }}
       style={[styles.voiceButton, Platform.OS === 'ios' && micPressStyle]}>
       <PlatformIcon
@@ -436,7 +474,11 @@ function ComposerImpl({
         inputExpanded && styles.expandedSurface,
         Platform.OS === 'ios' && styles.iosSurface,
         {
-          backgroundColor: theme.background === '#1b1917' ? 'rgba(27,25,23,0.16)' : 'rgba(250,249,247,0.1)',
+          backgroundColor: composerSurfaceBackgroundColor(
+            Platform.OS,
+            theme.background,
+            theme.background === '#1b1917' ? 'rgba(27,25,23,0.16)' : 'rgba(250,249,247,0.1)',
+          ),
         },
       ]}>
       <MentionSuggestions
@@ -550,7 +592,7 @@ function ComposerImpl({
                 accessibilityLabel="Discard voice note"
                 accessibilityRole="button"
                 hitSlop={10}
-                onPress={() => void voice.cancel()}
+                onPress={cancelVoiceWithTransitionLock}
                 style={styles.recordAction}>
                 <ThemedText themeColor="danger" type="captionBold">Cancel</ThemedText>
               </Pressable>
@@ -649,17 +691,15 @@ function ComposerImpl({
                 selectionColor={theme.accent}
                 selectionHandleColor={theme.accent}
                 scrollEnabled
-                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, styles.inputWithVoiceControl, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight }]}
+                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight, paddingRight: 0 }]}
                 value={draftValue}
               />
               <View pointerEvents="box-none" style={styles.inputContentOverlay}>
                 {draftValue.length === 0 && !inputFocused ? <View pointerEvents="none" style={[styles.placeholderContainer, inputExpanded && styles.expandedPlaceholderContainer]}>
                   <ThemedText accessible={false} numberOfLines={1} style={styles.placeholderText} themeColor="textTertiary" type="small">Message or ask @Track</ThemedText>
                 </View> : null}
-                <View pointerEvents="box-none" style={inputMultiline ? styles.multilineVoiceOverlay : styles.voiceOverlay}>
-                  {voiceControl}
-                </View>
               </View>
+              {voiceControl}
             </Animated.View>
           </Animated.View>
         )}
@@ -781,7 +821,7 @@ const styles = StyleSheet.create({
   androidInputPill: { backgroundColor: 'transparent', borderRadius: 0, borderWidth: 0 },
   androidMessageField: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: Spacing.one },
   androidMultilineMessageField: { borderRadius: Radius.large },
-  multilineInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
+  multilineInput: { flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
   multilineInputMaterial: { borderRadius: Radius.large },
   multilineInputPill: { borderRadius: Radius.large, justifyContent: 'flex-start', paddingVertical: Spacing.two },
   multilineMessageField: { alignItems: 'flex-end' },
@@ -797,9 +837,8 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     textAlignVertical: 'center',
   },
-  inputWithVoiceControl: { paddingRight: TouchTarget + Spacing.two },
   inputContentOverlay: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0, zIndex: 2 },
-  iosCenteredInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
+  iosCenteredInput: { flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
   placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: TouchTarget + Spacing.two, top: 0 },
   expandedPlaceholderContainer: { justifyContent: 'flex-start', paddingTop: Spacing.three },
   placeholderText: { ...Typography.message },
@@ -809,8 +848,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.two,
     justifyContent: 'center',
     minHeight: 56,
+    minWidth: 0,
     overflow: 'hidden',
   },
   inputPillFallback: { borderRadius: Radius.pill },
@@ -826,16 +868,17 @@ const styles = StyleSheet.create({
   iosGlassMaterial: { borderRadius: Radius.pill },
   iosInlineAttach: { height: TouchTarget - Spacing.two, width: TouchTarget - Spacing.two },
   iosMessageField: { borderRadius: 0, paddingHorizontal: 0 },
-  multilineVoiceOverlay: { alignItems: 'center', bottom: Spacing.one, height: TouchTarget, justifyContent: 'center', position: 'absolute', right: Spacing.one, width: TouchTarget },
   inlineAttach: { alignItems: 'center', borderRadius: Radius.pill, height: 40, justifyContent: 'center', width: 40 },
   messageField: {
     alignItems: 'center',
     borderCurve: 'continuous',
     borderRadius: Radius.xlarge,
     flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     gap: Spacing.two,
     minHeight: TouchTarget,
+    minWidth: 0,
     paddingLeft: Spacing.one,
     paddingRight: Spacing.one,
   },
@@ -875,7 +918,7 @@ const styles = StyleSheet.create({
   replyBody: { flex: 1, gap: 1 },
   replyLabelRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one, minWidth: 0 },
   row: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
@@ -885,7 +928,6 @@ const styles = StyleSheet.create({
   surface: { gap: Spacing.two, paddingVertical: Spacing.two },
   iosSurface: { borderTopWidth: 0 },
   timer: { minWidth: 34 },
-  voiceButton: { alignItems: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget },
-  voiceOverlay: { alignItems: 'center', bottom: 0, justifyContent: 'center', position: 'absolute', right: Spacing.one, top: 0, width: TouchTarget },
+  voiceButton: { alignItems: 'center', alignSelf: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget, zIndex: 3 },
   wave: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 3 },
 });
