@@ -4,7 +4,7 @@ import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import type { DetailedMessage } from '../components/chat/types';
 import { isImageAttachment } from '../lib/attachment-presentation';
 import { rememberChatImageDimensions } from '../lib/chat-image-layout';
-import { reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '../lib/pending-messages';
+import { correlatePendingMessageIds, reconcilePendingMessages, receivedMessageAttachmentStates, type PendingMessage } from '../lib/pending-messages';
 
 /** Keep local thumbnails visible while the confirmed image enters the memory cache. */
 export function usePendingMessageReconciliation(
@@ -21,13 +21,14 @@ export function usePendingMessageReconciliation(
     if (!messages) return;
     const receivedIds = new Set(messages.map(({ message }) => String(message._id)));
     const states = receivedMessageAttachmentStates(messages);
-    const remaining = reconcilePendingMessages(pendingMessages, receivedIds, states);
+    const correlatedPendingMessages = correlatePendingMessageIds(pendingMessages, messages);
+    const remaining = reconcilePendingMessages(correlatedPendingMessages, receivedIds, states);
     const remainingIds = new Set(remaining.map(({ id }) => id));
-    const handoffIds = new Set(pendingMessages.filter(({ id }) => !remainingIds.has(id)).map(({ messageId }) => messageId));
+    const handoffIds = new Set(correlatedPendingMessages.filter(({ id }) => !remainingIds.has(id)).map(({ messageId }) => messageId));
     const urls = messages.filter(({ message }) => handoffIds.has(String(message._id)))
       .flatMap(({ attachments, message }) => attachments.flatMap((entry, index) => {
         if (!isImageAttachment(entry.attachment.contentType)) return [];
-        const localAttachments = pendingMessages.find(({ messageId }) => messageId === String(message._id))?.attachments;
+        const localAttachments = correlatedPendingMessages.find(({ messageId }) => messageId === String(message._id))?.attachments;
         const local = localAttachments?.[index];
         // Initial sends preserve attachment order. Do not infer geometry for a
         // partial/retried list whose positions or file identity no longer match.
@@ -38,7 +39,11 @@ export function usePendingMessageReconciliation(
         const url = ('previewUrl' in entry ? entry.previewUrl : null) ?? entry.url;
         return url ? [url] : [];
       }));
-    const reconcile = () => setPendingMessages((current) => reconcilePendingMessages(current, receivedIds, states));
+    const reconcile = () => setPendingMessages((current) => reconcilePendingMessages(
+      correlatePendingMessageIds(current, messages),
+      receivedIds,
+      states,
+    ));
     if (!urls.length) {
       reconcile();
       return;

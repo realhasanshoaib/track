@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, reconcilePendingMessages, type PendingMessage } from './pending-messages';
+import { correlatePendingMessageIds, pendingMessageAcknowledgementKey, pendingMessageGroupStarts, pendingMessageIdempotencyKey, pendingMessageLayoutKey, reconcilePendingMessages, type PendingMessage } from './pending-messages';
 
 describe('reconcilePendingMessages', () => {
   it('keeps a pending row when an older message has the same body', () => {
@@ -51,6 +51,64 @@ describe('pendingMessageAcknowledgementKey', () => {
     const acknowledged = { ...pending, messageId: 'message-1' };
 
     expect(pendingMessageAcknowledgementKey([acknowledged])).not.toBe(pendingMessageAcknowledgementKey([pending]));
+  });
+});
+
+describe('pendingMessageIdempotencyKey', () => {
+  it('stays stable through upload progress and identifies the optimistic send', () => {
+    const pending: PendingMessage = {
+      at: 20,
+      attachments: [{ contentType: 'image/jpeg', filename: 'photo.jpg', id: 'file-1', progress: 0.2, uri: 'file://photo.jpg' }],
+      body: '',
+      id: 'pending-1',
+      idempotencyKey: 'send-key',
+    };
+    const progressed = {
+      ...pending,
+      attachments: pending.attachments?.map((file) => ({ ...file, progress: 0.8 })),
+    };
+
+    expect(pendingMessageIdempotencyKey([pending])).toBe('send-key');
+    expect(pendingMessageIdempotencyKey([progressed])).toBe('send-key');
+  });
+});
+
+describe('pendingMessageLayoutKey', () => {
+  it('changes for optimistic insertion and server handoff, but ignores upload progress', () => {
+    const pending: PendingMessage = {
+      at: 20,
+      attachments: [{ contentType: 'image/jpeg', filename: 'photo.jpg', id: 'file-1', progress: 0.2, uri: 'file://photo.jpg' }],
+      body: '',
+      id: 'pending-1',
+    };
+    const progressed = {
+      ...pending,
+      attachments: pending.attachments?.map((file) => ({ ...file, progress: 0.8 })),
+    };
+    const acknowledged = { ...pending, messageId: 'message-1' };
+
+    expect(pendingMessageLayoutKey([])).not.toBe(pendingMessageLayoutKey([pending]));
+    expect(pendingMessageLayoutKey([progressed])).toBe(pendingMessageLayoutKey([pending]));
+    expect(pendingMessageLayoutKey([acknowledged])).not.toBe(pendingMessageLayoutKey([pending]));
+    expect(pendingMessageLayoutKey([])).not.toBe(pendingMessageLayoutKey([acknowledged]));
+  });
+});
+
+describe('correlatePendingMessageIds', () => {
+  it('links a live query row before the send mutation returns its ID', () => {
+    const pending: PendingMessage[] = [{
+      at: 20,
+      body: 'Sent optimistically',
+      id: 'pending-send-key',
+      idempotencyKey: 'send-key',
+    }];
+    const messages = [{ message: { _id: 'messages:confirmed', idempotencyKey: 'send-key' } }];
+
+    expect(correlatePendingMessageIds(pending, messages)).toEqual([{
+      ...pending[0],
+      messageId: 'messages:confirmed',
+    }]);
+    expect(correlatePendingMessageIds(pending, [{ message: { _id: 'messages:other', idempotencyKey: 'other-key' } }])).toBe(pending);
   });
 });
 

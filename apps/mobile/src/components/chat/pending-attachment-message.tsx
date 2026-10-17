@@ -1,13 +1,13 @@
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
-import { useReducedMotion } from 'react-native-reanimated';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MessageBubbleFrame } from '@/components/chat/message-bubble';
 import { MESSAGE_MAX_WIDTH_RATIO } from '@/components/chat/message-layout';
 import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
-import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
+import { ChatImagePlaceholder, ChatImageTransition, PendingImageEntering } from '@/components/chat/message-motion';
 import { MessageText } from '@/components/chat/message-text';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -79,18 +79,20 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
                     const tileSize = row.length === 1 ? maxWidth : tileWidth;
                     return (
                       <View key={file.id} style={[styles.gridTile, { height: tileSize, width: tileSize }]}>
-                        <Image
-                          accessibilityLabel="Image attachment, sending"
-                          accessible
-                          cachePolicy="memory-disk"
-                          contentFit="cover"
-                          placeholder={ChatImagePlaceholder}
-                          placeholderContentFit="cover"
-                          transition={reducedMotion ? 0 : ChatImageTransition}
-                          recyclingKey={file.id}
-                          source={{ uri: file.uri }}
-                          style={styles.fill}
-                        />
+                        <Animated.View entering={reducedMotion ? undefined : PendingImageEntering} style={styles.imageMotion}>
+                          <Image
+                            accessibilityLabel="Image attachment, sending"
+                            accessible
+                            cachePolicy="memory-disk"
+                            contentFit="cover"
+                            placeholder={ChatImagePlaceholder}
+                            placeholderContentFit="cover"
+                            transition={reducedMotion ? 0 : ChatImageTransition}
+                            recyclingKey={file.id}
+                            source={{ uri: file.uri }}
+                            style={styles.fill}
+                          />
+                        </Animated.View>
                         {tileOverflow ? <View style={[styles.overflow, { backgroundColor: theme.overlay }]}><ThemedText style={styles.overflowText} type="subtitle">+{tileOverflow}</ThemedText></View> : null}
                       </View>
                     );
@@ -129,18 +131,20 @@ function PendingImage({ deliveryMeta, file, offline, width }: {
 
   return (
     <View style={[styles.singleImage, { aspectRatio: ratio, backgroundColor: theme.skeleton, width }]}>
-      <Image
-        accessibilityLabel="Image attachment, sending"
-        accessible
-        cachePolicy="memory-disk"
-        contentFit={file.width && file.height ? 'cover' : 'contain'}
-        placeholder={ChatImagePlaceholder}
-        placeholderContentFit="cover"
-        transition={reducedMotion ? 0 : ChatImageTransition}
-        recyclingKey={file.id}
-        source={{ uri: file.uri }}
-        style={styles.fill}
-      />
+      <Animated.View entering={reducedMotion ? undefined : PendingImageEntering} style={styles.imageMotion}>
+        <Image
+          accessibilityLabel="Image attachment, sending"
+          accessible
+          cachePolicy="memory-disk"
+          contentFit={file.width && file.height ? 'cover' : 'contain'}
+          placeholder={ChatImagePlaceholder}
+          placeholderContentFit="cover"
+          transition={reducedMotion ? 0 : ChatImageTransition}
+          recyclingKey={file.id}
+          source={{ uri: file.uri }}
+          style={styles.fill}
+        />
+      </Animated.View>
       <PendingImageOverlay imageCount={1} offline={offline} progress={file.progress} />
       {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
     </View>
@@ -255,6 +259,7 @@ const styles = StyleSheet.create({
   gridRow: { flexDirection: 'row', gap: GAP },
   gridTile: { borderCurve: 'continuous', borderRadius: Radius.medium, overflow: 'hidden' },
   imageOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  imageMotion: { ...StyleSheet.absoluteFill },
   imageStatus: { alignItems: 'center', backgroundColor: Colors.dark.overlay, borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.two, justifyContent: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   imageStatusText: { color: Colors.dark.text, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { height: 1, width: 0 }, textShadowRadius: 2 },
   overflow: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },

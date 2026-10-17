@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { groupThreadTimeline } from './grouped-thread-items';
 
 type Message = {
-  message: { _id: string; createdAt: number };
+  message: { _id: string; createdAt: number; idempotencyKey?: string };
   author: { _id: string } | null;
 };
 
@@ -42,6 +42,22 @@ describe('groupThreadTimeline', () => {
       'message:later',
     ]);
     expect(timeline[0]).toMatchObject({ label: 'Today' });
+  });
+
+  it('keeps the optimistic copy as the only row while a send result races the live query', () => {
+    const confirmed = message('confirmed', at(14, 10));
+    confirmed.message.idempotencyKey = 'send-key';
+    const timeline = groupThreadTimeline({
+      messages: [
+        confirmed,
+        message('other', at(14, 10, 1)),
+      ],
+      missingAuthorKey: 'anon',
+      pendingMessageIdempotencyKeys: new Set(['send-key']),
+      today: new Date(2026, 9, 14, 12),
+    });
+
+    expect(timeline.filter((item) => item.kind === 'message').map(({ key }) => key)).toEqual(['other']);
   });
 
   it('starts groups after a date, author, long pause, assistant, or card row', () => {

@@ -8,6 +8,7 @@ export type PendingMessage = {
   attachments?: PendingMessageAttachment[];
   body: string;
   id: string;
+  idempotencyKey?: string;
   messageId?: string;
 };
 
@@ -47,6 +48,34 @@ export function pendingMessageGroupStarts(
 /** Stable across upload-progress changes so screens can keep confirmed list data memoized. */
 export function pendingMessageAcknowledgementKey(pending: readonly PendingMessage[]): string {
   return pending.flatMap(({ messageId }) => messageId ? [messageId] : []).join('\0');
+}
+
+/** Changes only when optimistic rows change or hand off to their server ID. */
+export function pendingMessageLayoutKey(pending: readonly PendingMessage[]): string {
+  return JSON.stringify(pending.map(({ id, messageId }) => [id, messageId ?? null]));
+}
+
+/** Keep a confirmed message hidden until its optimistic row is ready to hand off. */
+export function pendingMessageIdempotencyKey(pending: readonly PendingMessage[]): string {
+  return pending.flatMap(({ idempotencyKey }) => idempotencyKey ? [idempotencyKey] : []).join('\0');
+}
+
+/** Resolve a live query row if it arrives before the mutation promise returns. */
+export function correlatePendingMessageIds<
+  Message extends { message: { _id: string; idempotencyKey?: string } },
+>(pending: PendingMessage[], messages: readonly Message[]): PendingMessage[] {
+  const messageIdsByKey = new Map(messages.flatMap(({ message }) => (
+    message.idempotencyKey ? [[message.idempotencyKey, message._id] as const] : []
+  )));
+  let changed = false;
+  const next = pending.map((candidate) => {
+    if (candidate.messageId || !candidate.idempotencyKey) return candidate;
+    const messageId = messageIdsByKey.get(candidate.idempotencyKey);
+    if (!messageId) return candidate;
+    changed = true;
+    return { ...candidate, messageId };
+  });
+  return changed ? next : pending;
 }
 
 export type ReceivedMessageAttachmentState = {

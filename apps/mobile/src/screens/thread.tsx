@@ -5,6 +5,7 @@ import { useBottomTabBarInset } from '@/hooks/use-bottom-tab-inset';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, FlatList, Platform, Pressable, StyleSheet, View, type FlatListProps, type ListRenderItem } from 'react-native';
+import { File as ExpoFile, UploadType } from 'expo-file-system';
 import { KeyboardEvents, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
@@ -44,7 +45,7 @@ import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
-import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, pendingMessageIdempotencyKey, type PendingMessage } from '@/lib/pending-messages';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfigState } from '@/lib/release-config';
@@ -59,7 +60,7 @@ import { shouldShowJumpToLatest } from '@/lib/thread-list';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { archivePresentation } from '@/lib/archive-presentation';
-import { createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+import { androidKeyboardInsetForViewport, createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldFollowLatestAfterContentResize, shouldFollowPendingSendAfterContentLayout, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
 import { groupThreadTimeline } from '@/lib/grouped-thread-items';
 
 function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
@@ -73,6 +74,10 @@ export default function ThreadScreen() {
   const composerClosedOffset = useBottomTabBarInset();
   const keyboardHeight = useKeyboardState((state) => state.height);
   const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
+  const composerKeyboardOffset = useMemo(() => ({
+    closed: Platform.OS === 'ios' ? -composerClosedOffset : 0,
+    opened: Platform.OS === 'android' ? Math.max(0, keyboardHeight - androidKeyboardInset) : 0,
+  }), [androidKeyboardInset, composerClosedOffset, keyboardHeight]);
   const safeAreaInsets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { showToast } = useAppToast();
@@ -157,7 +162,9 @@ export default function ThreadScreen() {
   const atBottomRef = useRef(true);
   const followingLatestRef = useRef(!targetMessageId);
   const pinToLatestAfterSendRef = useRef(false);
+  const pendingSendFollowRef = useRef(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
+  const lastThreadContentHeightRef = useRef(0);
   const viewportHeightBeforeKeyboardRef = useRef<number | null>(null);
   const knownMessageIdsRef = useRef<Set<Id<'messages'>> | null>(null);
   const knownAssistantStreamsRef = useRef<Map<Id<'assistantStreams'>, string> | null>(null);
@@ -280,16 +287,13 @@ export default function ThreadScreen() {
   const scheduleCoalescedScroll = useMemo(() => createCoalescedChatScrollScheduler(), []);
   const pinToLatest = useCallback(() => {
     if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-    scheduleCoalescedScroll(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-      scrollListToLatest(listRef.current, scrollMetricsRef.current);
-    });
-  }, [scheduleCoalescedScroll]);
+      scrollListToLatest(listRef.current, scrollMetricsRef.current, true);
+    }));
+  }, []);
   useEffect(() => {
-    const subscriptions = [
-      KeyboardEvents.addListener('keyboardWillShow', pinToLatest),
-      KeyboardEvents.addListener('keyboardDidShow', pinToLatest),
-    ];
+    const subscriptions = [KeyboardEvents.addListener('keyboardDidShow', pinToLatest)];
     return () => {
       for (const subscription of subscriptions) subscription.remove();
     };
@@ -319,11 +323,12 @@ export default function ThreadScreen() {
       setAndroidKeyboardInset(0);
       return;
     }
-    setAndroidKeyboardInset(shouldCompensateAndroidKeyboardInset(
+    const keyboardInset = androidKeyboardInsetForViewport(
       keyboardHeight,
       scrollMetricsRef.current.viewportHeight,
       viewportHeightBeforeKeyboardRef.current,
-    ) ? keyboardHeight : 0);
+    );
+    setAndroidKeyboardInset((current) => current === keyboardInset ? current : keyboardInset);
   }, [keyboardHeight]);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
@@ -390,13 +395,19 @@ export default function ThreadScreen() {
     () => new Set(pendingMessageIdsSignature ? pendingMessageIdsSignature.split('\0') : []),
     [pendingMessageIdsSignature],
   );
+  const pendingMessageIdempotencySignature = pendingMessageIdempotencyKey(pendingMessages);
+  const pendingMessageIdempotencyKeys = useMemo(
+    () => new Set(pendingMessageIdempotencySignature ? pendingMessageIdempotencySignature.split('\0') : []),
+    [pendingMessageIdempotencySignature],
+  );
 
   const threadItems = useMemo<GroupedThreadItem[]>(() => groupThreadTimeline({
     assistantStreams: (assistantStreams ?? []) as Doc<'assistantStreams'>[],
     messages: (messages ?? []) as DetailedMessage[],
     missingAuthorKey: 'unknown',
+    pendingMessageIdempotencyKeys,
     pendingMessageIds,
-  }), [assistantStreams, messages, pendingMessageIds]);
+  }), [assistantStreams, messages, pendingMessageIdempotencyKeys, pendingMessageIds]);
   const selectedMessages = useMemo(
     () => threadItems.filter((item): item is Extract<GroupedThreadItem, { kind: 'message' }> =>
       item.kind === 'message' && selectedMessageIds.has(item.item.message._id),
@@ -451,14 +462,6 @@ export default function ThreadScreen() {
   }, [assistantStreams, messages, trackUserId]);
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
-  const newestFeedItemKey = threadItems.at(-1)?.key;
-  useEffect(() => {
-    if (pendingBulkDeleteScrollRef.current) return;
-    if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)
-      && (followingLatestRef.current || atBottomRef.current)) {
-      scrollToLatest();
-    }
-  }, [newestFeedItemKey, scrollToLatest, targetMessageId]);
   useEffect(() => {
     const pending = pendingBulkDeleteScrollRef.current;
     if (!pending || pending.restorationScheduled) return;
@@ -574,12 +577,13 @@ export default function ThreadScreen() {
     atBottomRef.current = true;
     followingLatestRef.current = true;
     pinToLatestAfterSendRef.current = true;
+    pendingSendFollowRef.current = Boolean(pendingId);
     if (pendingId) {
       setNewReplyCount(0);
       setShowJumpToLatest(false);
       setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
         ? pending
-        : [...pending, { attachments: payload.attachments, id: pendingId, body, at: Date.now() }]);
+        : [...pending, { attachments: payload.attachments, id: pendingId, idempotencyKey: sendKey.current!, body, at: Date.now() }]);
     }
     setBusy(true);
     setError(null);
@@ -607,6 +611,36 @@ export default function ThreadScreen() {
         },
         replyToMessageId,
         target: {
+          getFileSize: (file) => {
+            const size = new ExpoFile(file.uri).size;
+            return size > 0 ? size : file.size ?? size;
+          },
+          uploadFile: async ({ contentType, file, onProgress, url }) => {
+            const nativeFile = new ExpoFile(file.uri);
+            const abortController = new AbortController();
+            const timeout = setTimeout(() => abortController.abort(), 120_000);
+            const upload = nativeFile.createUploadTask(url, {
+              headers: { 'Content-Type': contentType },
+              httpMethod: 'POST',
+              onProgress: ({ bytesSent, totalBytes }) => {
+                onProgress(totalBytes > 0 ? bytesSent / totalBytes : 0);
+              },
+              signal: abortController.signal,
+              uploadType: UploadType.BINARY_CONTENT,
+            });
+            try {
+              const response = await upload.uploadAsync();
+              if (response.status < 200 || response.status >= 300) throw new Error('upload_failed');
+              const result: unknown = JSON.parse(response.body);
+              if (typeof result !== 'object' || result === null || !('storageId' in result) || typeof result.storageId !== 'string' || result.storageId.length === 0) {
+                throw new Error('upload_failed');
+              }
+              return result.storageId;
+            } finally {
+              clearTimeout(timeout);
+              upload.release();
+            }
+          },
           attachFile: (input) => attachFile({
             projectId: pid, groupId: gid, userId: trackUserId,
             actingCompanyId: cid, projectMemberId: pmid,
@@ -673,6 +707,7 @@ export default function ThreadScreen() {
       }
       return result;
     } catch (sendError) {
+      pendingSendFollowRef.current = false;
       pinToLatestAfterSendRef.current = false;
       if (pendingId) {
         setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
@@ -994,6 +1029,7 @@ export default function ThreadScreen() {
       <ThreadRow
         highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
         contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
+        interactionVersion={renderItem}
         isFirstInGroup={item.isFirstInGroup}
         isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
         item={item}
@@ -1027,7 +1063,7 @@ export default function ThreadScreen() {
         readOnly={readOnly}
       /> : null}
     </View>;
-  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
+  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pid, readOnly, readReceipts, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -1298,11 +1334,12 @@ export default function ThreadScreen() {
               if (keyboardHeight <= 0) {
                 viewportHeightBeforeKeyboardRef.current = nativeEvent.layout.height;
               } else {
-                setAndroidKeyboardInset(shouldCompensateAndroidKeyboardInset(
+                const keyboardInset = androidKeyboardInsetForViewport(
                   keyboardHeight,
                   nativeEvent.layout.height,
                   viewportHeightBeforeKeyboardRef.current,
-                ) ? keyboardHeight : 0);
+                );
+                setAndroidKeyboardInset((current) => current === keyboardInset ? current : keyboardInset);
               }
             }
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
@@ -1338,6 +1375,7 @@ export default function ThreadScreen() {
               atBottomRef.current = false;
               followingLatestRef.current = false;
               pinToLatestAfterSendRef.current = false;
+              pendingSendFollowRef.current = false;
             }
           }}
           onMomentumScrollEnd={({ nativeEvent }) => {
@@ -1356,11 +1394,26 @@ export default function ThreadScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           onContentSizeChange={(_width, height) => {
             const wasAtBottom = atBottomRef.current;
+            const previousHeight = lastThreadContentHeightRef.current;
+            lastThreadContentHeightRef.current = height;
             scrollMetricsRef.current.contentHeight = height;
             if (pendingBulkDeleteScrollRef.current) return;
             updateJumpToLatest();
-            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)
-              && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
+            if (shouldFollowPendingSendAfterContentLayout(pendingSendFollowRef.current, {
+              followingLatest: followingLatestRef.current,
+              pinAfterSend: pinToLatestAfterSendRef.current,
+              wasAtBottom,
+            })) {
+              pendingSendFollowRef.current = false;
+              requestAnimationFrame(() => scrollToLatest(true));
+              return;
+            }
+            pendingSendFollowRef.current = false;
+            if (shouldFollowLatestAfterContentResize(previousHeight, height, {
+              followingLatest: followingLatestRef.current,
+              pinAfterSend: pinToLatestAfterSendRef.current,
+              wasAtBottom,
+            }) && (!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)) {
               scrollToLatest();
             }
           }}
@@ -1385,9 +1438,8 @@ export default function ThreadScreen() {
         {newReplyCount ? <ThemedText style={[styles.jumpToLatestCount, { color: theme.text }]} type="captionBold">{newReplyCount > 99 ? '99+' : newReplyCount}</ThemedText> : null}
       </AnimatedPressable> : null}
       {!readOnly ? <KeyboardStickyView
-        enabled={Platform.OS === 'ios'}
-        offset={{ closed: Platform.OS === 'ios' ? -composerClosedOffset : 0, opened: 0 }}
-        style={[styles.composerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
+        offset={composerKeyboardOffset}
+        style={styles.composerOverlay}>
         <View
           onLayout={({ nativeEvent }) => {
             const height = Math.ceil(nativeEvent.layout.height);

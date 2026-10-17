@@ -45,6 +45,23 @@ describe('pending image handoff', () => {
     expect(update.mock.calls[0][0](pending)).toEqual([]);
   });
 
+  it('correlates a live query row before the send mutation returns its message ID', () => {
+    const optimistic: PendingMessage = {
+      at: 2,
+      body: 'Optimistic text',
+      id: 'pending-send-key',
+      idempotencyKey: 'send-key',
+    };
+    const received = [{ message: { _id: 'message-1', idempotencyKey: 'send-key' }, attachments: [] }] as unknown as DetailedMessage[];
+    const update = vi.fn();
+
+    usePendingMessageReconciliation(received, [optimistic], update);
+    harness.effect?.();
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0][0]([optimistic])).toEqual([]);
+  });
+
   it.each([false, true])('finishes the handoff after a cache result of %s', async (result) => {
     harness.prefetch.mockResolvedValue(result);
     const update = vi.fn();

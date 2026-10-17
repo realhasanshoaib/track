@@ -19,6 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { messageSwipeCancelIntent, messageSwipeIntent } from '@/lib/message-swipe';
 import { hapticLight } from '@/lib/haptics';
 import { hasPlayableAudioAttachment } from '@/lib/attachment-presentation';
+import { areThreadRowRenderStatesEqual } from '@/lib/thread-row-render';
 
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 
@@ -41,9 +42,11 @@ const SWIPE_ACTION_WIDTH = TouchTarget;
 const SWIPE_ACTION_GAP = Spacing.one;
 const SWIPE_ACTION_ENTER_OFFSET = 24;
 
-type Props = {
+export type ThreadRowProps = {
   highlighted?: boolean;
   item: Exclude<GroupedThreadItem, { kind: 'date-sep' }>;
+  /** Changes only when handlers created by the screen capture new behavior. */
+  interactionVersion?: unknown;
   isFirstInGroup: boolean;
   isOwnMessage?: boolean;
   contextActions?: MessageAction[];
@@ -82,7 +85,7 @@ export const ThreadRow = memo(function ThreadRow({
   selectionMode = false,
   onPressMessage,
   variant = 'conversation',
-}: Props) {
+}: ThreadRowProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const [actionsExposed, setActionsExposed] = useState(false);
@@ -246,17 +249,30 @@ export const ThreadRow = memo(function ThreadRow({
   );
 }, areThreadRowPropsEqual);
 
-function areThreadRowPropsEqual(previous: Props, next: Props) {
-  if (!previous.selectionMode || !next.selectionMode) return false;
-  return previous.item === next.item
-    && previous.highlighted === next.highlighted
-    && previous.isFirstInGroup === next.isFirstInGroup
-    && previous.isOwnMessage === next.isOwnMessage
-    && previous.readReceipts === next.readReceipts
-    && previous.selected === next.selected
-    && previous.selectionMode === next.selectionMode
-    && previous.onPressMessage === next.onPressMessage
-    && previous.variant === next.variant;
+export function areThreadRowPropsEqual(previous: ThreadRowProps, next: ThreadRowProps) {
+  const renderState = (props: ThreadRowProps) => ({
+    actionSignature: props.contextActions?.map(({ destructive, icon, label }) => `${label}|${icon}|${destructive ? '1' : '0'}`).join('\0') ?? '',
+    highlighted: props.highlighted ?? false,
+    interactionAvailability: [
+      props.onLongPress,
+      props.onOpenForwardSource,
+      props.onOpenThread,
+      props.onPressMessage,
+      props.onPressReply,
+      props.onSwipeForward,
+      props.onSwipeReply,
+      props.onSwipeReport,
+    ].map((handler) => handler ? '1' : '0').join(''),
+    interactionVersion: props.interactionVersion,
+    isFirstInGroup: props.isFirstInGroup,
+    isOwnMessage: Boolean(props.isOwnMessage),
+    item: props.item.kind === 'message' ? props.item.item : props.item.stream,
+    readReceipts: props.readReceipts,
+    selected: props.selected ?? false,
+    selectionMode: props.selectionMode ?? false,
+    variant: props.variant ?? 'conversation',
+  });
+  return areThreadRowRenderStatesEqual(renderState(previous), renderState(next));
 }
 
 export function DateSeparator({ label }: { label: string }) {

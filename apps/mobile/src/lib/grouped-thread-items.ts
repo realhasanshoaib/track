@@ -1,5 +1,5 @@
 type TimelineMessage = {
-  message: { _id: string; createdAt: number };
+  message: { _id: string; createdAt: number; idempotencyKey?: string };
   author: { _id: string } | null;
 };
 
@@ -19,6 +19,7 @@ type GroupThreadTimelineOptions<
   deduplicateAssistantStreams?: boolean;
   messages?: readonly Message[];
   missingAuthorKey: string;
+  pendingMessageIdempotencyKeys?: ReadonlySet<string>;
   pendingMessageIds?: ReadonlySet<string>;
   today?: Date;
 };
@@ -46,12 +47,14 @@ export function groupThreadTimeline<
   deduplicateAssistantStreams = false,
   messages = [],
   missingAuthorKey,
+  pendingMessageIdempotencyKeys = new Set(),
   pendingMessageIds = new Set(),
   today = new Date(),
 }: GroupThreadTimelineOptions<Message, AssistantStream>): GroupedTimelineItem<Message, AssistantStream>[] {
   const uniqueMessages = [...new Map(
     messages
-      .filter((item) => !pendingMessageIds.has(item.message._id))
+      .filter((item) => !pendingMessageIds.has(item.message._id) &&
+        !(item.message.idempotencyKey && pendingMessageIdempotencyKeys.has(item.message.idempotencyKey)))
       .map((item) => [item.message._id, item] as const),
   ).values()];
   // Reverse a fresh copy to preserve the query's established display ordering.

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '../../../../convex/_generated/api';
@@ -40,7 +40,7 @@ type Props = {
   readOnly?: boolean;
 };
 
-export function TaskInlineCards({
+export const TaskInlineCards = memo(function TaskInlineCards({
   assistantStreamId,
   identity,
   isOwnMessage,
@@ -205,7 +205,7 @@ export function TaskInlineCards({
       </OptionsSheet>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

@@ -57,11 +57,14 @@ import { setActivePushContext } from '@/lib/push-presentation';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
-import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, type PendingMessage, type PendingMessageGroupAnchor } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, pendingMessageIdempotencyKey, type PendingMessage, type PendingMessageGroupAnchor } from '@/lib/pending-messages';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
-import { createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+import { androidKeyboardInsetForViewport, createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldFollowLatestAfterContentResize, shouldFollowPendingSendAfterContentLayout, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+
+const groupedThreadItemKeyExtractor = (item: GroupedThreadItem) => item.key;
+const groupedThreadMaintainVisiblePosition = { minIndexForVisible: 1 };
 
 export default function ConversationScreen() {
   const theme = useTheme();
@@ -208,10 +211,16 @@ export default function ConversationScreen() {
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const pinToLatestAfterSendRef = useRef(false);
+  const pendingSendFollowRef = useRef(false);
   const animateSendFollowUntilRef = useRef(0);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
+  const lastThreadContentHeightRef = useRef(0);
+  const composerKeyboardOffset = useMemo(() => ({
+    closed: Platform.OS === 'ios' ? -composerClosedOffset : 0,
+    opened: Platform.OS === 'android' ? Math.max(0, keyboardHeight - androidKeyboardInset) : 0,
+  }), [androidKeyboardInset, composerClosedOffset, keyboardHeight]);
   const viewportHeightBeforeKeyboardRef = useRef<number | null>(null);
   const knownMessageIdsRef = useRef<Set<Id<'messages'>> | null>(null);
   const knownAssistantStreamsRef = useRef<Map<Id<'assistantStreams'>, string> | null>(null);
@@ -338,6 +347,11 @@ export default function ConversationScreen() {
     () => new Set(pendingMessageIdsSignature ? pendingMessageIdsSignature.split('\0') : []),
     [pendingMessageIdsSignature],
   );
+  const pendingMessageIdempotencySignature = pendingMessageIdempotencyKey(pendingMessages);
+  const pendingMessageIdempotencyKeys = useMemo(
+    () => new Set(pendingMessageIdempotencySignature ? pendingMessageIdempotencySignature.split('\0') : []),
+    [pendingMessageIdempotencySignature],
+  );
 
   const threadItems = useMemo<GroupedThreadItem[]>(() => groupThreadTimeline({
     assistantStreams: (assistantStreams ?? []) as Doc<'assistantStreams'>[],
@@ -345,8 +359,11 @@ export default function ConversationScreen() {
     deduplicateAssistantStreams: true,
     messages: (messages ?? []) as DetailedMessage[],
     missingAuthorKey: 'anon',
+    pendingMessageIdempotencyKeys,
     pendingMessageIds,
-  }), [assistantStreams, cardRowIds, messages, pendingMessageIds]);
+  }), [assistantStreams, cardRowIds, messages, pendingMessageIdempotencyKeys, pendingMessageIds]);
+  const taskLinkMessageIds = useMemo(() => threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []), [threadItems]);
+  const taskLinkAssistantStreamIds = useMemo(() => threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []), [threadItems]);
   const lastTimelineAnchor = useMemo<PendingMessageGroupAnchor | null>(() => {
     for (let index = threadItems.length - 1; index >= 0; index--) {
       const item = threadItems[index];
@@ -414,11 +431,11 @@ export default function ConversationScreen() {
   /** The composer grows over the list when the keyboard opens; follow it down. */
   const pinToLatest = useCallback(() => {
     if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-    scheduleCoalescedScroll(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-      scrollListToLatest(listRef.current, scrollMetricsRef.current);
-    });
-  }, [scheduleCoalescedScroll]);
+      scrollListToLatest(listRef.current, scrollMetricsRef.current, true);
+    }));
+  }, []);
   const scrollToLatest = useCallback((animated = false) => {
     atBottomRef.current = true;
     followingLatestRef.current = true;
@@ -444,12 +461,12 @@ export default function ConversationScreen() {
       setAndroidKeyboardInset(0);
       return;
     }
-    const shouldCompensate = shouldCompensateAndroidKeyboardInset(
+    const keyboardInset = androidKeyboardInsetForViewport(
       keyboardHeight,
       scrollMetricsRef.current.viewportHeight,
       viewportHeightBeforeKeyboardRef.current,
     );
-    setAndroidKeyboardInset(shouldCompensate ? keyboardHeight : 0);
+    setAndroidKeyboardInset((current) => current === keyboardInset ? current : keyboardInset);
   }, [keyboardHeight]);
   const updateJumpToLatest = useCallback(() => {
     const { contentHeight, offsetY, viewportHeight } = scrollMetricsRef.current;
@@ -458,20 +475,102 @@ export default function ConversationScreen() {
     if (atBottomRef.current) setNewMessageCount(0);
     setShowJumpToLatest(shouldShowJumpToLatest(distanceFromBottom));
   }, []);
+  const handleThreadLayout = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onLayout']>>(({ nativeEvent }) => {
+    const wasAtBottom = atBottomRef.current;
+    if (Platform.OS === 'android') {
+      if (keyboardHeight <= 0) {
+        viewportHeightBeforeKeyboardRef.current = nativeEvent.layout.height;
+      } else {
+        const keyboardInset = androidKeyboardInsetForViewport(
+          keyboardHeight,
+          nativeEvent.layout.height,
+          viewportHeightBeforeKeyboardRef.current,
+        );
+        setAndroidKeyboardInset((current) => current === keyboardInset ? current : keyboardInset);
+      }
+    }
+    scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
+    if (!pendingBulkDeleteScrollRef.current) {
+      updateJumpToLatest();
+      followLatestAfterViewportLayout({
+        followingLatest: followingLatestRef.current,
+        pinAfterSend: pinToLatestAfterSendRef.current,
+        wasAtBottom,
+      }, scrollToLatest);
+    }
+  }, [keyboardHeight, scrollToLatest, updateJumpToLatest]);
+  const handleThreadScroll = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onScroll']>>(({ nativeEvent }) => {
+    scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
+    scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
+    scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
+    const pending = pendingBulkDeleteScrollRef.current;
+    if (pending?.userScrolled) {
+      pending.offsetY = nativeEvent.contentOffset.y;
+      pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
+    } else if (!pending) {
+      updateJumpToLatest();
+    }
+  }, [updateJumpToLatest]);
+  const handleThreadScrollBeginDrag = useCallback(() => {
+    const pending = pendingBulkDeleteScrollRef.current;
+    if (pending) {
+      pending.userScrolled = true;
+      pending.wasAtBottom = false;
+      pending.followingLatest = false;
+      pending.pinAfterSend = false;
+    } else {
+      atBottomRef.current = false;
+      followingLatestRef.current = false;
+      pinToLatestAfterSendRef.current = false;
+      pendingSendFollowRef.current = false;
+    }
+  }, []);
+  const handleThreadContentSizeChange = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onContentSizeChange']>>((_width, height) => {
+    const wasAtBottom = atBottomRef.current;
+    const previousHeight = lastThreadContentHeightRef.current;
+    lastThreadContentHeightRef.current = height;
+    scrollMetricsRef.current.contentHeight = height;
+    if (pendingBulkDeleteScrollRef.current) return;
+    updateJumpToLatest();
+    if (shouldFollowPendingSendAfterContentLayout(pendingSendFollowRef.current, {
+      followingLatest: followingLatestRef.current,
+      pinAfterSend: pinToLatestAfterSendRef.current,
+      wasAtBottom,
+    })) {
+      pendingSendFollowRef.current = false;
+      const animateSend = Date.now() <= animateSendFollowUntilRef.current;
+      if (animateSend) animateSendFollowUntilRef.current = 0;
+      // This callback receives the committed FlatList content height, including
+      // the optimistic footer. Scroll on the next frame after native layout.
+      requestAnimationFrame(() => scrollToLatest(animateSend));
+      return;
+    }
+    pendingSendFollowRef.current = false;
+    if (shouldFollowLatestAfterContentResize(previousHeight, height, {
+      followingLatest: followingLatestRef.current,
+      pinAfterSend: pinToLatestAfterSendRef.current,
+      wasAtBottom,
+    }) && (!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)) {
+      const animateSend = Date.now() <= animateSendFollowUntilRef.current;
+      if (animateSend) animateSendFollowUntilRef.current = 0;
+      scrollToLatest(animateSend);
+    }
+  }, [scrollToLatest, targetMessageId, updateJumpToLatest]);
+  const handleThreadScrollToIndexFailed = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onScrollToIndexFailed']>>(({ averageItemLength, index }) => requestAnimationFrame(() => {
+    if (index >= threadItems.length - 1) {
+      listRef.current?.scrollToOffset({ animated: false, offset: averageItemLength * index });
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+      return;
+    }
+    listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 });
+  }), [threadItems.length]);
   useEffect(() => () => {
     if (pendingDeleteScrollRestoreFrameRef.current !== null) {
       cancelAnimationFrame(pendingDeleteScrollRestoreFrameRef.current);
     }
   }, []);
-  const stopFollowingAfterUserScroll = useCallback(() => {
-    atBottomRef.current = false;
-    followingLatestRef.current = false;
-    pinToLatestAfterSendRef.current = false;
-  }, []);
-
   useEffect(() => {
     const subscriptions = [
-      KeyboardEvents.addListener('keyboardWillShow', pinToLatest),
       KeyboardEvents.addListener('keyboardDidShow', pinToLatest),
     ];
     return () => {
@@ -911,6 +1010,7 @@ export default function ConversationScreen() {
     atBottomRef.current = true;
     followingLatestRef.current = true;
     pinToLatestAfterSendRef.current = true;
+    pendingSendFollowRef.current = Boolean(pendingId);
     animateSendFollowUntilRef.current = Date.now() + 450;
     if (pendingId) {
       setNewMessageCount(0);
@@ -920,6 +1020,7 @@ export default function ConversationScreen() {
         at: Date.now(),
         body,
         id: pendingId,
+        idempotencyKey: sendKey.current!,
       }]);
     }
     setBusy('send');
@@ -1038,6 +1139,7 @@ export default function ConversationScreen() {
     } catch (failure) {
       animateSendFollowUntilRef.current = 0;
       pinToLatestAfterSendRef.current = false;
+      pendingSendFollowRef.current = false;
       if (pendingId) {
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
       }
@@ -1146,6 +1248,7 @@ export default function ConversationScreen() {
         <ThreadRow
           highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
           contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
+          interactionVersion={renderItem}
           item={item}
           isFirstInGroup={item.isFirstInGroup}
           isOwnMessage={isOwnMessage}
@@ -1194,16 +1297,50 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToMessage, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
+  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, pid, pmid, readOnly, readReceipts, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToMessage, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
+  const threadContentContainerStyle = useMemo(() => [styles.thread, {
+    paddingBottom: composerOverlayHeight + (Platform.OS === 'ios' ? keyboardHeight : androidKeyboardInset) + Spacing.two,
+  }], [androidKeyboardInset, composerOverlayHeight, keyboardHeight]);
+  const threadListHeader = useMemo(() => hasMoreMessages ? (
+    <Pressable
+      accessibilityRole="button"
+      disabled={loadingOlderMessages}
+      onPress={loadOlderMessages}
+      style={styles.loadMore}
+    >
+      <ThemedText type="smallBold">{loadingOlderMessages ? 'Loading older messages…' : 'Load older messages'}</ThemedText>
+    </Pressable>
+  ) : null, [hasMoreMessages, loadOlderMessages, loadingOlderMessages]);
+  const threadListEmpty = useMemo(() => messages !== undefined ? (
+    <View style={styles.empty}>
+      <ThemedText style={{ color: theme.textSecondary }} type="small">Start the conversation</ThemedText>
+    </View>
+  ) : null, [messages, theme.textSecondary]);
+  const threadListFooter = useMemo(() => pendingMessages.length > 0 ? (
+    <View>
+      {pendingMessages.map((message) => (
+        <Animated.View
+          entering={reducedMotion ? undefined : PendingMessageEntering}
+          key={message.id}
+        >
+          <PendingMessageBubble
+            at={message.at}
+            attachments={message.attachments}
+            body={message.body}
+            isFirstInGroup={pendingGroupStarts.get(message.id) ?? true}
+            offline={isOffline}
+          />
+        </Animated.View>
+      ))}
+    </View>
+  ) : null, [isOffline, pendingGroupStarts, pendingMessages, reducedMotion]);
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
   if (isOffline && messages === undefined) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable offline</ThemedText><ThemedText style={{ color: theme.textSecondary }}>Connect to the internet to load this Channel.</ThemedText><Pressable accessibilityRole="button" onPress={() => pid && gid && router.replace(channelHref(pid, gid, channelContext))} style={[styles.retry, { backgroundColor: theme.accent }]}><ThemedText style={{ color: theme.accentInk }} type="smallBold">Try again</ThemedText></Pressable></View></ThemedView>;
   const initialConversationDataLoading = messages === undefined || (!isOffline && (assistantStreams === undefined || groups === undefined));
   if (navigation === undefined || (navigation.available && initialConversationDataLoading)) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Conversation' }} /><ConversationLoading label={`Loading ${activeGroup?.name ?? 'conversation'}`} /></ThemedView>;
 
-  const taskLinkMessageIds = threadItems.flatMap((entry) => entry.kind === 'message' ? [entry.item.message._id] : []);
-  const taskLinkAssistantStreamIds = threadItems.flatMap((entry) => entry.kind === 'assistant' ? [entry.stream._id] : []);
   const headerSelectionActions = selectedMessages.length === 1
     ? messageActions.filter((action) => ['Reply', 'Forward'].includes(action.label))
     : [];
@@ -1449,7 +1586,7 @@ export default function ConversationScreen() {
       <FlatList
           ref={listRef}
           extraData={selectedMessageIds}
-          contentContainerStyle={[styles.thread, { paddingBottom: composerOverlayHeight + (Platform.OS === 'ios' ? keyboardHeight : androidKeyboardInset) + Spacing.two }]}
+          contentContainerStyle={threadContentContainerStyle}
           contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator={false}
           data={threadItems}
@@ -1458,131 +1595,26 @@ export default function ConversationScreen() {
           // Keep native anchoring stable through optimistic-to-confirmed swaps.
           // Appending at the latest edge leaves the current visible anchor intact;
           // explicit scroll-follow below handles new content at the bottom.
-          maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
-          onScrollToIndexFailed={({ averageItemLength, index }) => requestAnimationFrame(() => {
-            if (index >= threadItems.length - 1) {
-              listRef.current?.scrollToOffset({ animated: false, offset: averageItemLength * index });
-              requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
-              return;
-            }
-            listRef.current?.scrollToIndex({ animated: false, index, viewPosition: 0.5 });
-          })}
+          maintainVisibleContentPosition={groupedThreadMaintainVisiblePosition}
+          onScrollToIndexFailed={handleThreadScrollToIndexFailed}
           initialNumToRender={24}
-          keyExtractor={(item) => item.key}
+          keyExtractor={groupedThreadItemKeyExtractor}
           maxToRenderPerBatch={16}
-          onLayout={({ nativeEvent }) => {
-            const wasAtBottom = atBottomRef.current;
-            if (Platform.OS === 'android') {
-              if (keyboardHeight <= 0) {
-                viewportHeightBeforeKeyboardRef.current = nativeEvent.layout.height;
-              } else {
-                setAndroidKeyboardInset(shouldCompensateAndroidKeyboardInset(
-                  keyboardHeight,
-                  nativeEvent.layout.height,
-                  viewportHeightBeforeKeyboardRef.current,
-                ) ? keyboardHeight : 0);
-              }
-            }
-            scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
-            if (!pendingBulkDeleteScrollRef.current) {
-              updateJumpToLatest();
-              followLatestAfterViewportLayout({
-                followingLatest: followingLatestRef.current,
-                pinAfterSend: pinToLatestAfterSendRef.current,
-                wasAtBottom,
-              }, scrollToLatest);
-            }
-          }}
-          onScrollBeginDrag={() => {
-            const pending = pendingBulkDeleteScrollRef.current;
-            if (pending) {
-              pending.userScrolled = true;
-              pending.wasAtBottom = false;
-              pending.followingLatest = false;
-              pending.pinAfterSend = false;
-            } else {
-              stopFollowingAfterUserScroll();
-            }
-          }}
-          onScroll={({ nativeEvent }) => {
-            scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
-            scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
-            scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            const pending = pendingBulkDeleteScrollRef.current;
-            if (pending?.userScrolled) {
-              pending.offsetY = nativeEvent.contentOffset.y;
-              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
-            } else if (!pending) {
-              updateJumpToLatest();
-            }
-          }}
-          onMomentumScrollEnd={({ nativeEvent }) => {
-            scrollMetricsRef.current.offsetY = nativeEvent.contentOffset.y;
-            scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
-            scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
-            const pending = pendingBulkDeleteScrollRef.current;
-            if (pending?.userScrolled) {
-              pending.offsetY = nativeEvent.contentOffset.y;
-              pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
-            } else if (!pending) {
-              updateJumpToLatest();
-            }
-          }}
+          onLayout={handleThreadLayout}
+          onScrollBeginDrag={handleThreadScrollBeginDrag}
+          onScroll={handleThreadScroll}
+          onMomentumScrollEnd={handleThreadScroll}
           onViewableItemsChanged={onViewableItemsChanged}
           scrollEventThrottle={16}
-          onContentSizeChange={(_width, height) => {
-            const wasAtBottom = atBottomRef.current;
-            scrollMetricsRef.current.contentHeight = height;
-            if (pendingBulkDeleteScrollRef.current) return;
-            updateJumpToLatest();
-            if ((!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId) && (followingLatestRef.current || wasAtBottom || pinToLatestAfterSendRef.current)) {
-              const animateSend = Date.now() <= animateSendFollowUntilRef.current;
-              if (animateSend) animateSendFollowUntilRef.current = 0;
-              scrollToLatest(animateSend);
-            }
-          }}
+          onContentSizeChange={handleThreadContentSizeChange}
           removeClippedSubviews={false}
           renderItem={renderItem}
           viewabilityConfig={viewabilityConfig}
           style={styles.flex}
           windowSize={9}
-          ListEmptyComponent={
-            messages !== undefined ? (
-              <View style={styles.empty}>
-                <ThemedText style={{ color: theme.textSecondary }} type="small">Start the conversation</ThemedText>
-              </View>
-            ) : null
-          }
-          ListHeaderComponent={hasMoreMessages ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={loadingOlderMessages}
-              onPress={loadOlderMessages}
-              style={styles.loadMore}
-            >
-              <ThemedText type="smallBold">{loadingOlderMessages ? 'Loading older messages…' : 'Load older messages'}</ThemedText>
-            </Pressable>
-          ) : null}
-          ListFooterComponent={
-            pendingMessages.length > 0 ? (
-              <View>
-                {pendingMessages.map((m) => (
-                  <Animated.View
-                    entering={reducedMotion ? undefined : PendingMessageEntering}
-                    key={m.id}
-                  >
-                  <PendingMessageBubble
-                    at={m.at}
-                    attachments={m.attachments}
-                    body={m.body}
-                    isFirstInGroup={pendingGroupStarts.get(m.id) ?? true}
-                    offline={isOffline}
-                  />
-                  </Animated.View>
-                ))}
-              </View>
-            ) : null
-          }
+          ListEmptyComponent={threadListEmpty}
+          ListHeaderComponent={threadListHeader}
+          ListFooterComponent={threadListFooter}
         />
       </TaskLinkBatchProvider>
       </Animated.View>
@@ -1607,9 +1639,8 @@ export default function ConversationScreen() {
       </View>
 
       {archiveBanner ? <View style={[styles.archiveBanner, { backgroundColor: theme.backgroundElement }]}><ThemedText style={styles.archiveTitle} type="smallBold">{archiveBanner.title}</ThemedText><ThemedText style={styles.archiveDescription} themeColor="textSecondary" type="small">{archiveBanner.description}</ThemedText></View> : <KeyboardStickyView
-        enabled={Platform.OS === 'ios'}
-        offset={{ closed: Platform.OS === 'ios' ? -composerClosedOffset : 0, opened: 0 }}
-        style={[styles.composerOverlay, Platform.OS === 'android' && styles.androidComposerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
+        offset={composerKeyboardOffset}
+        style={[styles.composerOverlay, Platform.OS === 'android' && styles.androidComposerOverlay]}>
         <View
           onLayout={({ nativeEvent }) => {
             if (composerExpanded) return;

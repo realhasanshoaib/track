@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createCoalescedChatScrollScheduler,
+  androidKeyboardInsetForViewport,
   followLatestAfterViewportLayout,
   restoreChatScrollAfterDeletion,
   scrollListToLatest,
-  shouldCompensateAndroidKeyboardInset,
+  shouldFollowLatestAfterContentResize,
+  shouldFollowPendingSendAfterContentLayout,
 } from './chat-scroll-follow';
 
 describe('createCoalescedChatScrollScheduler', () => {
@@ -43,8 +45,68 @@ describe('createCoalescedChatScrollScheduler', () => {
   });
 });
 
+describe('shouldFollowLatestAfterContentResize', () => {
+  it('follows new content while the reader is pinned to the latest message', () => {
+    expect(shouldFollowLatestAfterContentResize(1_000, 1_240, {
+      followingLatest: true,
+      pinAfterSend: false,
+      wasAtBottom: false,
+    })).toBe(true);
+  });
+
+  it('does not issue a second scroll when the composer inset shrinks after send', () => {
+    expect(shouldFollowLatestAfterContentResize(1_240, 1_000, {
+      followingLatest: true,
+      pinAfterSend: true,
+      wasAtBottom: true,
+    })).toBe(false);
+  });
+
+  it('does not issue another scroll when an optimistic row hands off at the same height', () => {
+    expect(shouldFollowLatestAfterContentResize(1_240, 1_240, {
+      followingLatest: true,
+      pinAfterSend: true,
+      wasAtBottom: true,
+    })).toBe(false);
+  });
+
+  it('does not pull a reader away from history for an unrelated resize', () => {
+    expect(shouldFollowLatestAfterContentResize(1_000, 1_240, {
+      followingLatest: false,
+      pinAfterSend: false,
+      wasAtBottom: false,
+    })).toBe(false);
+  });
+});
+
+describe('shouldFollowPendingSendAfterContentLayout', () => {
+  it('waits for the pending send layout and follows when the reader is pinned', () => {
+    expect(shouldFollowPendingSendAfterContentLayout(true, {
+      followingLatest: true,
+      pinAfterSend: true,
+      wasAtBottom: true,
+    })).toBe(true);
+  });
+
+  it('does not follow after the reader starts browsing history', () => {
+    expect(shouldFollowPendingSendAfterContentLayout(true, {
+      followingLatest: false,
+      pinAfterSend: false,
+      wasAtBottom: false,
+    })).toBe(false);
+  });
+
+  it('does not issue a stale send follow after the pending send is cleared', () => {
+    expect(shouldFollowPendingSendAfterContentLayout(false, {
+      followingLatest: true,
+      pinAfterSend: true,
+      wasAtBottom: true,
+    })).toBe(false);
+  });
+});
+
 describe('scrollListToLatest', () => {
-  it('scrolls through the fixed composer padding after an insert', () => {
+  it('scrolls through the full content including the pending footer', () => {
     const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
 
     scrollListToLatest(list, { contentHeight: 3_484, viewportHeight: 651 });
@@ -53,7 +115,7 @@ describe('scrollListToLatest', () => {
     expect(list.scrollToEnd).not.toHaveBeenCalled();
   });
 
-  it('keeps native animation choice when moving to the latest row', () => {
+  it('keeps the requested animation when moving to the latest row', () => {
     const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
 
     scrollListToLatest(list, { contentHeight: 3_484, viewportHeight: 651 }, true);
@@ -106,18 +168,19 @@ describe('restoreChatScrollAfterDeletion', () => {
   });
 });
 
-describe('shouldCompensateAndroidKeyboardInset', () => {
-  it('adds an IME-sized inset when the keyboard overlays an unchanged viewport', () => {
-    expect(shouldCompensateAndroidKeyboardInset(300, 731, 731)).toBe(true);
+describe('androidKeyboardInsetForViewport', () => {
+  it('uses the full keyboard height when the window overlays the IME', () => {
+    expect(androidKeyboardInsetForViewport(300, 731, 731)).toBe(300);
   });
 
-  it('does not add a second IME inset when Android resized the list viewport', () => {
-    expect(shouldCompensateAndroidKeyboardInset(300, 431, 731)).toBe(false);
+  it('subtracts the resize already applied by Android', () => {
+    expect(androidKeyboardInsetForViewport(300, 431, 731)).toBe(0);
   });
 
-  it('does not compensate before a baseline viewport or after the keyboard closes', () => {
-    expect(shouldCompensateAndroidKeyboardInset(300, 731, null)).toBe(false);
-    expect(shouldCompensateAndroidKeyboardInset(0, 731, 731)).toBe(false);
+  it('accounts for a partial native resize and handles a missing baseline safely', () => {
+    expect(androidKeyboardInsetForViewport(300, 581, 731)).toBe(150);
+    expect(androidKeyboardInsetForViewport(300, 731, null)).toBe(300);
+    expect(androidKeyboardInsetForViewport(0, 731, 731)).toBe(0);
   });
 });
 

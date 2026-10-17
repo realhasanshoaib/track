@@ -58,27 +58,23 @@ export function scrollListToLatest(
   animated = false,
 ): void {
   if (!list) return;
-  if (metrics.contentHeight <= 0 || metrics.viewportHeight <= 0) {
-    list.scrollToEnd({ animated });
-    return;
-  }
-  // The list ends under a fixed composer. Include its measured bottom padding
-  // when targeting the viewport end so the newest row clears the overlay.
-  list.scrollToOffset({
-    animated,
-    offset: Math.max(0, metrics.contentHeight - metrics.viewportHeight),
-  });
+  // Pending messages render in ListFooterComponent. FlatList.scrollToEnd can
+  // stop at the final data row before that footer, leaving the newest bubble
+  // under the keyboard. Use the measured full content end so footer rows count.
+  const offset = Math.max(0, Math.ceil(metrics.contentHeight - metrics.viewportHeight));
+  list.scrollToOffset({ animated, offset });
 }
 
-/** Android needs IME padding only when the native viewport did not resize. */
-export function shouldCompensateAndroidKeyboardInset(
+/** Return only the keyboard overlap the native viewport did not already remove. */
+export function androidKeyboardInsetForViewport(
   keyboardHeight: number,
   viewportHeight: number,
   viewportHeightBeforeKeyboard: number | null,
-): boolean {
-  if (keyboardHeight <= 0 || viewportHeightBeforeKeyboard === null) return false;
-  const resizeThreshold = Math.max(80, keyboardHeight * 0.5);
-  return viewportHeight >= viewportHeightBeforeKeyboard - resizeThreshold;
+): number {
+  if (keyboardHeight <= 0) return 0;
+  if (viewportHeightBeforeKeyboard === null || viewportHeight <= 0) return keyboardHeight;
+  const viewportReduction = Math.max(0, viewportHeightBeforeKeyboard - viewportHeight);
+  return Math.max(0, keyboardHeight - viewportReduction);
 }
 
 /** Request the latest position after a viewport resize, such as Android IME resize. */
@@ -88,4 +84,23 @@ export function followLatestAfterViewportLayout(
 ): void {
   if (!state.wasAtBottom && !state.followingLatest && !state.pinAfterSend) return;
   scrollToLatest();
+}
+
+/** A shrinking composer inset is clamped by the native list; re-scrolling it jumps the conversation. */
+export function shouldFollowLatestAfterContentResize(
+  previousHeight: number,
+  nextHeight: number,
+  state: ViewportLayoutFollowState,
+): boolean {
+  return nextHeight > previousHeight &&
+    (state.followingLatest || state.wasAtBottom || state.pinAfterSend);
+}
+
+/** Wait for a measured content layout before following a newly inserted optimistic message. */
+export function shouldFollowPendingSendAfterContentLayout(
+  pendingSendFollow: boolean,
+  state: ViewportLayoutFollowState,
+): boolean {
+  return pendingSendFollow &&
+    (state.followingLatest || state.wasAtBottom || state.pinAfterSend);
 }

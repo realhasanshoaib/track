@@ -157,11 +157,14 @@ function ComposerImpl({
   const theme = useTheme();
   const { fontScale } = useWindowDimensions();
   const isIOS = Platform.OS === 'ios';
+  const reducedMotion = useReducedMotion();
+  const composerLayoutTransition = isIOS && !reducedMotion
+    ? ComposerLayoutTransition
+    : undefined;
   const hasLiquidGlass = isIOS && safeGlassAvailable();
   const maxComposerTextHeight = composerTextMaxHeight(Typography.message.lineHeight, fontScale, MaxFontScale);
   const maxComposerHeight = maxComposerTextHeight + ComposerVerticalChrome;
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
   const submissionGate = useRef(createSubmissionGate());
   const sendingRef = useRef(false);
@@ -553,7 +556,7 @@ function ComposerImpl({
       {inputExpanded ? <Animated.View
         entering={reducedMotion ? undefined : ComposerPartEntering}
         exiting={reducedMotion ? undefined : ComposerPartExiting}
-        layout={reducedMotion ? undefined : ComposerLayoutTransition}
+        layout={composerLayoutTransition}
         style={styles.expandedHeader}
       >
         <View style={styles.expandedHeaderCopy}>
@@ -566,7 +569,7 @@ function ComposerImpl({
       </Animated.View> : null}
 
       <Animated.View
-        layout={reducedMotion ? undefined : ComposerLayoutTransition}
+        layout={composerLayoutTransition}
         style={[styles.row, inputExpanded && styles.expandedRow, Platform.OS === 'ios' && styles.iosComposerShell, inputMultiline && styles.multilineRow]}
       >
         {mode !== 'idle' ? (
@@ -576,7 +579,7 @@ function ComposerImpl({
             accessible
             entering={reducedMotion ? undefined : ComposerPartEntering}
             exiting={reducedMotion ? undefined : ComposerPartExiting}
-            layout={reducedMotion ? undefined : ComposerLayoutTransition}
+            layout={composerLayoutTransition}
             style={[styles.recordBar, { backgroundColor: theme.backgroundElement }]}>
             <RecordingDot color={theme.danger} />
             <ThemedText style={styles.timer} themeColor="danger" type="captionBold">
@@ -605,7 +608,7 @@ function ComposerImpl({
           </Animated.View>
         ) : (
           <Animated.View
-            layout={reducedMotion ? undefined : ComposerLayoutTransition}
+            layout={composerLayoutTransition}
             style={[
               styles.messageField,
               !isIOS && !inputExpanded && [styles.androidMessageField, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }],
@@ -627,7 +630,7 @@ function ComposerImpl({
                 {hasLiquidGlass ? <GlassView colorScheme={theme.background === '#1b1917' ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive={false} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosGlassMaterial]} tintColor={theme.backgroundElement} /> : <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.iosFallbackMaterial, { backgroundColor: theme.backgroundSelected }]} />}
                 <PlatformIcon color={theme.textSecondary} name="plus" size={19} />
               </Pressable>
-            </IOSGlassContainer> : <Animated.View layout={reducedMotion ? undefined : ComposerLayoutTransition} style={inputExpanded && styles.expandedActionButton}>
+            </IOSGlassContainer> : <Animated.View layout={composerLayoutTransition} style={inputExpanded && styles.expandedActionButton}>
               <Pressable
                 accessibilityLabel="Add a photo or document"
                 accessibilityRole="button"
@@ -641,7 +644,7 @@ function ComposerImpl({
               </Pressable>
             </Animated.View>}
             <Animated.View
-              layout={reducedMotion ? undefined : ComposerLayoutTransition}
+              layout={composerLayoutTransition}
               style={[styles.inputPill, { maxHeight: maxComposerHeight }, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
             >
               {isIOS && hasLiquidGlass ? (
@@ -691,7 +694,7 @@ function ComposerImpl({
                 selectionColor={theme.accent}
                 selectionHandleColor={theme.accent}
                 scrollEnabled
-                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight, paddingRight: 0 }]}
+                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight }]}
                 value={draftValue}
               />
               <View pointerEvents="box-none" style={styles.inputContentOverlay}>
@@ -828,6 +831,8 @@ const styles = StyleSheet.create({
   multilineRow: { alignItems: 'flex-end' },
   input: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     position: 'relative',
     ...Typography.message,
     minHeight: 48,
@@ -838,7 +843,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   inputContentOverlay: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0, zIndex: 2 },
-  iosCenteredInput: { flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
+  iosCenteredInput: { alignSelf: 'center', flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
   placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: TouchTarget + Spacing.two, top: 0 },
   expandedPlaceholderContainer: { justifyContent: 'flex-start', paddingTop: Spacing.three },
   placeholderText: { ...Typography.message },
@@ -928,6 +933,6 @@ const styles = StyleSheet.create({
   surface: { gap: Spacing.two, paddingVertical: Spacing.two },
   iosSurface: { borderTopWidth: 0 },
   timer: { minWidth: 34 },
-  voiceButton: { alignItems: 'center', alignSelf: 'center', height: TouchTarget, justifyContent: 'center', width: TouchTarget, zIndex: 3 },
+  voiceButton: { alignItems: 'center', alignSelf: 'center', flexShrink: 0, height: TouchTarget, justifyContent: 'center', width: TouchTarget, zIndex: 3 },
   wave: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: 3 },
 });
