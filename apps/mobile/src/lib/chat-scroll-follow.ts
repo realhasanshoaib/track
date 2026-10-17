@@ -14,6 +14,26 @@ export interface ChatListScrollTarget {
   scrollToOffset(options: { animated: boolean; offset: number }): void;
 }
 
+/** Collapse same-frame layout events into one scroll using the latest measurements. */
+export function createCoalescedChatScrollScheduler(
+  scheduleFrame: (callback: () => void) => unknown = (callback) => requestAnimationFrame(callback),
+): (scroll: () => void) => void {
+  let frameScheduled = false;
+  let latestScroll: (() => void) | null = null;
+
+  return (scroll) => {
+    latestScroll = scroll;
+    if (frameScheduled) return;
+    frameScheduled = true;
+    scheduleFrame(() => {
+      frameScheduled = false;
+      const nextScroll = latestScroll;
+      latestScroll = null;
+      nextScroll?.();
+    });
+  };
+}
+
 export interface ChatDeleteScrollSnapshot extends ViewportLayoutFollowState {
   offsetY: number;
 }
@@ -59,12 +79,11 @@ export function shouldCompensateAndroidKeyboardInset(
   return viewportHeight >= viewportHeightBeforeKeyboard - resizeThreshold;
 }
 
-/** Reapply the latest position after a viewport resize, such as Android IME resize. */
-export function scheduleLatestScrollAfterViewportLayout(
+/** Request the latest position after a viewport resize, such as Android IME resize. */
+export function followLatestAfterViewportLayout(
   state: ViewportLayoutFollowState,
   scrollToLatest: () => void,
-  scheduleFrame: (callback: () => void) => unknown = (callback) => requestAnimationFrame(callback),
 ): void {
   if (!state.wasAtBottom && !state.followingLatest && !state.pinAfterSend) return;
-  scheduleFrame(() => scrollToLatest());
+  scrollToLatest();
 }

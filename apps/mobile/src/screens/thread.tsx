@@ -59,7 +59,7 @@ import { shouldShowJumpToLatest } from '@/lib/thread-list';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { archivePresentation } from '@/lib/archive-presentation';
-import { restoreChatScrollAfterDeletion, scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+import { createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
 import { groupThreadTimeline } from '@/lib/grouped-thread-items';
 
 function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
@@ -259,7 +259,6 @@ export default function ThreadScreen() {
     userScrolled: boolean;
   } | null>(null);
   const pendingDeleteScrollRestoreFrameRef = useRef<number | null>(null);
-  const scrollAfterSendMessageIdRef = useRef<string | null>(null);
   const screenActiveRef = useRef(false);
   const lastViewedSequenceRef = useRef(0);
   const lastAcknowledgedSequenceRef = useRef(0);
@@ -278,12 +277,14 @@ export default function ThreadScreen() {
     api.channelThreads.readReceiptSequences,
     queryArgs && !readOnly ? queryArgs : 'skip',
   );
+  const scheduleCoalescedScroll = useMemo(() => createCoalescedChatScrollScheduler(), []);
   const pinToLatest = useCallback(() => {
     if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current);
-    pin();
-    requestAnimationFrame(pin);
-  }, []);
+    scheduleCoalescedScroll(() => {
+      if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+      scrollListToLatest(listRef.current, scrollMetricsRef.current);
+    });
+  }, [scheduleCoalescedScroll]);
   useEffect(() => {
     const subscriptions = [
       KeyboardEvents.addListener('keyboardWillShow', pinToLatest),
@@ -298,12 +299,11 @@ export default function ThreadScreen() {
     followingLatestRef.current = true;
     setNewReplyCount(0);
     if (!animated) setShowJumpToLatest(false);
-    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current, animated);
-    pin();
-    if (!animated) {
-      requestAnimationFrame(pin);
-    }
-  }, []);
+    scheduleCoalescedScroll(() => {
+      if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+      scrollListToLatest(listRef.current, scrollMetricsRef.current, animated);
+    });
+  }, [scheduleCoalescedScroll]);
   const focusComposerAtLatest = useCallback(() => {
     // Opening the composer means composing from the newest reply. Keep the
     // list pinned through keyboard-driven viewport changes; user drag cancels it.
@@ -451,29 +451,6 @@ export default function ThreadScreen() {
   }, [assistantStreams, messages, trackUserId]);
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
-  const newestPendingMessageId = pendingMessages.at(-1)?.id;
-  useEffect(() => {
-    const pendingId = scrollAfterSendMessageIdRef.current;
-    if (!newestPendingMessageId || pendingId !== newestPendingMessageId) return;
-
-    // Wait until React Native has committed the optimistic footer row before
-    // measuring the list's new end. Repeat on the next frame because a keyboard
-    // resize and a row layout can land in separate native layout passes.
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scrollAfterSendMessageIdRef.current === pendingId) scrollToLatest();
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [newestPendingMessageId, scrollToLatest]);
-
-  useEffect(() => {
-    const pendingId = scrollAfterSendMessageIdRef.current;
-    if (!pendingId || pendingMessages.some(({ id }) => id === pendingId)) return;
-    scrollAfterSendMessageIdRef.current = null;
-    scrollToLatest();
-  }, [pendingMessages, scrollToLatest]);
-
   const newestFeedItemKey = threadItems.at(-1)?.key;
   useEffect(() => {
     if (pendingBulkDeleteScrollRef.current) return;
@@ -600,7 +577,6 @@ export default function ThreadScreen() {
     if (pendingId) {
       setNewReplyCount(0);
       setShowJumpToLatest(false);
-      scrollAfterSendMessageIdRef.current = pendingId;
       setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
         ? pending
         : [...pending, { attachments: payload.attachments, id: pendingId, body, at: Date.now() }]);
@@ -699,7 +675,6 @@ export default function ThreadScreen() {
     } catch (sendError) {
       pinToLatestAfterSendRef.current = false;
       if (pendingId) {
-        if (scrollAfterSendMessageIdRef.current === pendingId) scrollAfterSendMessageIdRef.current = null;
         setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
       }
       throw sendError;
@@ -1015,10 +990,7 @@ export default function ThreadScreen() {
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
-    return <View onLayout={() => {
-      if (item.key !== newestFeedItemKey || (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current)) return;
-      requestAnimationFrame(() => scrollToLatest());
-    }}>
+    return <View>
       <ThreadRow
         highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
         contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
@@ -1055,7 +1027,7 @@ export default function ThreadScreen() {
         readOnly={readOnly}
       /> : null}
     </View>;
-  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, newestFeedItemKey, pid, readOnly, releaseConfig.tasks, scrollToLatest, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
+  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -1306,10 +1278,6 @@ export default function ThreadScreen() {
                 <Animated.View
                   entering={reducedMotion ? undefined : PendingMessageEntering}
                   key={message.id}
-                  onLayout={() => {
-                    if (scrollAfterSendMessageIdRef.current !== message.id) return;
-                    scrollToLatest();
-                  }}
                 >
                   <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} offline={network.isConnected === false || network.isInternetReachable === false} />
                 </Animated.View>
@@ -1340,7 +1308,7 @@ export default function ThreadScreen() {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
             if (!pendingBulkDeleteScrollRef.current) {
               updateJumpToLatest();
-              scheduleLatestScrollAfterViewportLayout({
+              followLatestAfterViewportLayout({
                 followingLatest: followingLatestRef.current,
                 pinAfterSend: pinToLatestAfterSendRef.current,
                 wasAtBottom,
@@ -1370,7 +1338,6 @@ export default function ThreadScreen() {
               atBottomRef.current = false;
               followingLatestRef.current = false;
               pinToLatestAfterSendRef.current = false;
-              scrollAfterSendMessageIdRef.current = null;
             }
           }}
           onMomentumScrollEnd={({ nativeEvent }) => {

@@ -60,7 +60,7 @@ import { pendingMessageAcknowledgementKey, type PendingMessage } from '@/lib/pen
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
-import { restoreChatScrollAfterDeletion, scheduleLatestScrollAfterViewportLayout, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+import { createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldCompensateAndroidKeyboardInset, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
 
 export default function ConversationScreen() {
   const theme = useTheme();
@@ -206,7 +206,6 @@ export default function ConversationScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
   const positionedTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
-  const scrollAfterSendMessageIdRef = useRef<string | null>(null);
   const pinToLatestAfterSendRef = useRef(false);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
   const [composerExpanded, setComposerExpanded] = useState(false);
@@ -392,24 +391,25 @@ export default function ConversationScreen() {
     if (projectMembersPage.status === 'CanLoadMore') projectMembersPage.loadMore(100);
   }, [projectMembersPage.loadMore, projectMembersPage.status]);
 
+  const scheduleCoalescedScroll = useMemo(() => createCoalescedChatScrollScheduler(), []);
   /** The composer grows over the list when the keyboard opens; follow it down. */
   const pinToLatest = useCallback(() => {
     if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
-    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current);
-    pin();
-    requestAnimationFrame(pin);
-  }, []);
+    scheduleCoalescedScroll(() => {
+      if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+      scrollListToLatest(listRef.current, scrollMetricsRef.current);
+    });
+  }, [scheduleCoalescedScroll]);
   const scrollToLatest = useCallback((animated = false) => {
     atBottomRef.current = true;
     followingLatestRef.current = true;
     setNewMessageCount(0);
     if (!animated) setShowJumpToLatest(false);
-    const pin = () => scrollListToLatest(listRef.current, scrollMetricsRef.current, animated);
-    pin();
-    if (!animated) {
-      requestAnimationFrame(pin);
-    }
-  }, []);
+    scheduleCoalescedScroll(() => {
+      if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
+      scrollListToLatest(listRef.current, scrollMetricsRef.current, animated);
+    });
+  }, [scheduleCoalescedScroll]);
   const focusComposerAtLatest = useCallback(() => {
     // Opening the composer means composing from the newest message. Keep the
     // list pinned through keyboard-driven viewport changes; user drag cancels it.
@@ -448,7 +448,6 @@ export default function ConversationScreen() {
     atBottomRef.current = false;
     followingLatestRef.current = false;
     pinToLatestAfterSendRef.current = false;
-    scrollAfterSendMessageIdRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -742,29 +741,6 @@ export default function ConversationScreen() {
 
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
-  const newestPendingMessageId = pendingMessages.at(-1)?.id;
-  useEffect(() => {
-    const pendingId = scrollAfterSendMessageIdRef.current;
-    if (!newestPendingMessageId || pendingId !== newestPendingMessageId) return;
-
-    // Wait until React Native has committed the optimistic footer row before
-    // measuring the list's new end. Repeat on the next frame because a keyboard
-    // resize and a row layout can land in separate native layout passes.
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scrollAfterSendMessageIdRef.current === pendingId) scrollToLatest();
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [newestPendingMessageId, scrollToLatest]);
-
-  useEffect(() => {
-    const pendingId = scrollAfterSendMessageIdRef.current;
-    if (!pendingId || pendingMessages.some(({ id }) => id === pendingId)) return;
-    scrollAfterSendMessageIdRef.current = null;
-    scrollToLatest();
-  }, [pendingMessages, scrollToLatest]);
-
   const newestFeedItemKey = threadItems.at(-1)?.key;
   useEffect(() => {
     if (pendingBulkDeleteScrollRef.current) return;
@@ -924,7 +900,6 @@ export default function ConversationScreen() {
     if (pendingId) {
       setNewMessageCount(0);
       setShowJumpToLatest(false);
-      scrollAfterSendMessageIdRef.current = pendingId;
       setPendingMessages((prev) => [...prev, {
         attachments: payload.attachments,
         at: Date.now(),
@@ -1018,9 +993,6 @@ export default function ConversationScreen() {
     } catch (failure) {
       pinToLatestAfterSendRef.current = false;
       if (pendingId) {
-        if (scrollAfterSendMessageIdRef.current === pendingId) {
-          scrollAfterSendMessageIdRef.current = null;
-        }
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
       }
       throw failure;
@@ -1124,10 +1096,7 @@ export default function ConversationScreen() {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
     const isOwnMessage = item.kind === 'message' && item.item.author?._id === trackUserId;
     return (
-      <View onLayout={() => {
-        if (item.key !== newestFeedItemKey || (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current)) return;
-        requestAnimationFrame(() => scrollToLatest());
-      }}>
+      <View>
         <ThreadRow
           highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
           contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
@@ -1179,7 +1148,7 @@ export default function ConversationScreen() {
         /> : null}
       </View>
     );
-  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, newestFeedItemKey, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToLatest, scrollToMessage, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
+  }, [archiveContext, beginMessageSelection, buildMessageActions, channelContext, cid, gid, highlightedMessageId, messageSelectionMode, pid, pmid, readOnly, releaseConfig.tasks, releaseConfig.threads, releaseConfigLoading, router, scrollToMessage, setReplyTo, taskIdentity, toggleMessageSelection, trackCardRow, trackUserId]);
 
   const isOffline = network.isConnected === false || network.isInternetReachable === false;
   if (navigation && !navigation.available) return <ThemedView style={styles.screen}><Stack.Screen options={{ title: 'Channel unavailable' }} /><View style={styles.empty}><ThemedText type="subtitle">Channel unavailable</ThemedText><ThemedText style={{ color: theme.textSecondary }}>{navigationUnavailableCopy(Boolean(cid))}</ThemedText></View></ThemedView>;
@@ -1468,7 +1437,7 @@ export default function ConversationScreen() {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
             if (!pendingBulkDeleteScrollRef.current) {
               updateJumpToLatest();
-              scheduleLatestScrollAfterViewportLayout({
+              followLatestAfterViewportLayout({
                 followingLatest: followingLatestRef.current,
                 pinAfterSend: pinToLatestAfterSendRef.current,
                 wasAtBottom,
@@ -1550,10 +1519,6 @@ export default function ConversationScreen() {
                   <Animated.View
                     entering={reducedMotion ? undefined : PendingMessageEntering}
                     key={m.id}
-                    onLayout={() => {
-                      if (scrollAfterSendMessageIdRef.current !== m.id) return;
-                      scrollToLatest();
-                    }}
                   >
                   <PendingMessageBubble at={m.at} attachments={m.attachments} body={m.body} offline={isOffline} />
                   </Animated.View>

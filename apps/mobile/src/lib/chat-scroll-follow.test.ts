@@ -1,11 +1,47 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createCoalescedChatScrollScheduler,
+  followLatestAfterViewportLayout,
   restoreChatScrollAfterDeletion,
-  scheduleLatestScrollAfterViewportLayout,
   scrollListToLatest,
   shouldCompensateAndroidKeyboardInset,
 } from './chat-scroll-follow';
+
+describe('createCoalescedChatScrollScheduler', () => {
+  it('runs only the latest requested scroll once per frame', () => {
+    const frames: Array<() => void> = [];
+    const schedule = createCoalescedChatScrollScheduler((callback) => frames.push(callback));
+    const firstScroll = vi.fn();
+    const latestScroll = vi.fn();
+
+    schedule(firstScroll);
+    schedule(latestScroll);
+
+    expect(frames).toHaveLength(1);
+    expect(firstScroll).not.toHaveBeenCalled();
+    expect(latestScroll).not.toHaveBeenCalled();
+
+    frames[0]?.();
+
+    expect(firstScroll).not.toHaveBeenCalled();
+    expect(latestScroll).toHaveBeenCalledOnce();
+  });
+
+  it('schedules later layout changes on the next frame', () => {
+    const frames: Array<() => void> = [];
+    const schedule = createCoalescedChatScrollScheduler((callback) => frames.push(callback));
+    const scroll = vi.fn();
+
+    schedule(scroll);
+    frames[0]?.();
+    schedule(scroll);
+
+    expect(frames).toHaveLength(2);
+    frames[1]?.();
+    expect(scroll).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('scrollListToLatest', () => {
   it('scrolls to the measured bottom after keyboard padding expands content', () => {
@@ -85,56 +121,47 @@ describe('shouldCompensateAndroidKeyboardInset', () => {
   });
 });
 
-describe('scheduleLatestScrollAfterViewportLayout', () => {
-  it('re-pins after the keyboard changes the list viewport while following latest', () => {
-    const frames: Array<() => void> = [];
+describe('followLatestAfterViewportLayout', () => {
+  it('requests a re-pin after the keyboard changes the list viewport while following latest', () => {
     const scrollToLatest = vi.fn();
 
-    scheduleLatestScrollAfterViewportLayout(
+    followLatestAfterViewportLayout(
       { wasAtBottom: false, followingLatest: true, pinAfterSend: false },
       scrollToLatest,
-      (callback) => frames.push(callback),
     );
 
-    expect(scrollToLatest).not.toHaveBeenCalled();
-    expect(frames).toHaveLength(1);
-    frames[0]?.();
     expect(scrollToLatest).toHaveBeenCalledOnce();
   });
 
   it('keeps the latest message visible when the viewport shrinks from the bottom', () => {
-    const frames: Array<() => void> = [];
-
-    scheduleLatestScrollAfterViewportLayout(
+    const scrollToLatest = vi.fn();
+    followLatestAfterViewportLayout(
       { wasAtBottom: true, followingLatest: false, pinAfterSend: false },
-      vi.fn(),
-      (callback) => frames.push(callback),
+      scrollToLatest,
     );
 
-    expect(frames).toHaveLength(1);
+    expect(scrollToLatest).toHaveBeenCalledOnce();
   });
 
   it('does not pull the reader down after they scroll away from the latest message', () => {
-    const frames: Array<() => void> = [];
+    const scrollToLatest = vi.fn();
 
-    scheduleLatestScrollAfterViewportLayout(
+    followLatestAfterViewportLayout(
       { wasAtBottom: false, followingLatest: false, pinAfterSend: false },
-      vi.fn(),
-      (callback) => frames.push(callback),
+      scrollToLatest,
     );
 
-    expect(frames).toHaveLength(0);
+    expect(scrollToLatest).not.toHaveBeenCalled();
   });
 
   it('re-pins the latest pending message after a viewport change', () => {
-    const frames: Array<() => void> = [];
+    const scrollToLatest = vi.fn();
 
-    scheduleLatestScrollAfterViewportLayout(
+    followLatestAfterViewportLayout(
       { wasAtBottom: false, followingLatest: false, pinAfterSend: true },
-      vi.fn(),
-      (callback) => frames.push(callback),
+      scrollToLatest,
     );
 
-    expect(frames).toHaveLength(1);
+    expect(scrollToLatest).toHaveBeenCalledOnce();
   });
 });
