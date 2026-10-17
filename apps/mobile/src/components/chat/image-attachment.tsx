@@ -254,7 +254,8 @@ function imageButtonLabel(image: ViewableImage, deliveryAccessibilityLabel?: str
 const styles = StyleSheet.create({
   broken: {
     alignItems: 'center',
-    borderRadius: Radius.medium,
+    borderCurve: 'continuous',
+    borderRadius: Radius.large,
     gap: Spacing.one,
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
@@ -277,7 +278,8 @@ const styles = StyleSheet.create({
     color: Colors.dark.text,
   },
   tile: {
-    borderRadius: Radius.medium,
+    borderCurve: 'continuous',
+    borderRadius: Radius.large,
     overflow: 'hidden',
   },
   tileImage: {

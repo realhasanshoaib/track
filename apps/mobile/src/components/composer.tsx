@@ -1,9 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Linking,
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type NativeSyntheticEvent,
   type TextInput,
@@ -40,6 +42,7 @@ import type { DetailedMessage } from '@/components/thread-row';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/attachment-presentation';
+import { composerTextMaxHeight } from '@/lib/composer-layout';
 import { createSubmissionGate } from '@/lib/submission-state';
 import type {
   ComposerSubmission,
@@ -90,11 +93,8 @@ export type ComposerProps = {
 
 const HoldDelay = 220;
 const BarFactors = [0.5, 0.85, 1, 0.7, 0.45];
-const MaxComposerVisibleLines = 4;
 const ComposerExpandHeight = Typography.message.lineHeight * 2 + Spacing.four;
-const MaxComposerTextHeight = Math.ceil(Typography.message.lineHeight * MaxComposerVisibleLines * MaxFontScale);
 const ComposerVerticalChrome = Spacing.four + StyleSheet.hairlineWidth * 2;
-const MaxComposerHeight = MaxComposerTextHeight + ComposerVerticalChrome;
 const ComposerLayoutTransition = PendingMessageLayout;
 const ComposerPartEntering = ChatPartEntering;
 const ComposerPartExiting = ChatPartExiting;
@@ -154,8 +154,11 @@ function ComposerImpl({
   value,
 }: ComposerProps) {
   const theme = useTheme();
+  const { fontScale } = useWindowDimensions();
   const isIOS = Platform.OS === 'ios';
   const hasLiquidGlass = isIOS && safeGlassAvailable();
+  const maxComposerTextHeight = composerTextMaxHeight(Typography.message.lineHeight, fontScale, MaxFontScale);
+  const maxComposerHeight = maxComposerTextHeight + ComposerVerticalChrome;
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
@@ -184,9 +187,9 @@ function ComposerImpl({
   // make UIKit drop focus before the person can type.
   const inputExpanded = expandOnKeyboard && !isIOS && keyboardReady;
   const inputMultiline = measuredInputHeight > ComposerExpandHeight;
-  const inputContentHeight = Math.min(MaxComposerTextHeight, Math.max(Typography.message.lineHeight, measuredInputHeight));
+  const inputContentHeight = Math.min(maxComposerTextHeight, Math.max(Typography.message.lineHeight, measuredInputHeight));
   const iosInputHeight = inputContentHeight;
-  const iosPillHeight = Math.min(MaxComposerHeight, Math.max(56, inputContentHeight + ComposerVerticalChrome));
+  const iosPillHeight = Math.min(maxComposerHeight, Math.max(56, inputContentHeight + ComposerVerticalChrome));
 
   useEffect(() => {
     setDraftValue(value);
@@ -210,6 +213,7 @@ function ComposerImpl({
 
   const hasContent = Boolean(draftValue.trim()) || attachments.length > 0;
   const canSend = hasContent && !sending && !busy && !failedSubmission;
+  const sendPending = sending || busy;
   const hasFailedSubmission = Boolean(failedSubmission);
   const attachmentsLocked = sending || Boolean(failedSubmission) || Boolean(retryMessageId);
   /** Keep the recording control mounted until the hold gesture has ended. */
@@ -566,6 +570,7 @@ function ComposerImpl({
               inputExpanded && styles.expandedMessageField,
               isIOS && styles.iosMessageField,
               inputMultiline && styles.multilineMessageField,
+              !isIOS && inputMultiline && styles.androidMultilineMessageField,
             ]}
           >
             {Platform.OS === 'ios' ? <IOSGlassContainer spacing={Spacing.two} style={[styles.iosActionGroup, inputExpanded && styles.expandedActionGroup]}>
@@ -595,7 +600,7 @@ function ComposerImpl({
             </Animated.View>}
             <Animated.View
               layout={reducedMotion ? undefined : ComposerLayoutTransition}
-              style={[styles.inputPill, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
+              style={[styles.inputPill, { maxHeight: maxComposerHeight }, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
             >
               {isIOS && hasLiquidGlass ? (
                 <GlassView
@@ -624,7 +629,7 @@ function ComposerImpl({
                 editable={!retryMessageId}
                 showSoftInputOnFocus
                 onContentSizeChange={({ nativeEvent }) => {
-                  const nextHeight = Math.min(MaxComposerTextHeight, Math.ceil(nativeEvent.contentSize.height));
+                  const nextHeight = Math.min(maxComposerTextHeight, Math.ceil(nativeEvent.contentSize.height));
                   setMeasuredInputHeight((current) => current === nextHeight ? current : nextHeight);
                 }}
                 onChangeText={(next) => {
@@ -644,14 +649,14 @@ function ComposerImpl({
                 selectionColor={theme.accent}
                 selectionHandleColor={theme.accent}
                 scrollEnabled
-                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, styles.inputWithVoiceControl, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text }]}
+                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, styles.inputWithVoiceControl, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight }]}
                 value={draftValue}
               />
               <View pointerEvents="box-none" style={styles.inputContentOverlay}>
                 {draftValue.length === 0 && !inputFocused ? <View pointerEvents="none" style={[styles.placeholderContainer, inputExpanded && styles.expandedPlaceholderContainer]}>
                   <ThemedText accessible={false} numberOfLines={1} style={styles.placeholderText} themeColor="textTertiary" type="small">Message or ask @Track</ThemedText>
                 </View> : null}
-                <View pointerEvents="box-none" style={[styles.voiceOverlay, inputMultiline && styles.multilineVoiceOverlay]}>
+                <View pointerEvents="box-none" style={inputMultiline ? styles.multilineVoiceOverlay : styles.voiceOverlay}>
                   {voiceControl}
                 </View>
               </View>
@@ -663,9 +668,9 @@ function ComposerImpl({
           <View style={styles.actionSlot}>
             <View style={styles.actionLayer}>
               <Pressable
-                accessibilityLabel={sending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
+                accessibilityLabel={sendPending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !canSend, busy: sending }}
+                accessibilityState={{ disabled: !canSend, busy: sendPending }}
                 android_ripple={{ borderless: true, color: theme.backgroundSelected }}
                 disabled={!canSend}
                 hitSlop={6}
@@ -675,7 +680,17 @@ function ComposerImpl({
                   : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : 1 }]}
               >
                 <Animated.View style={styles.sendState}>
-                  <PlatformIcon color={theme.accentInk} name="send" size={19} />
+                  {sendPending ? (
+                    <ActivityIndicator
+                      accessibilityLabel="Sending message"
+                      accessibilityRole="progressbar"
+                      color={theme.accentInk}
+                      size="small"
+                      testID="composer-send-progress"
+                    />
+                  ) : (
+                    <PlatformIcon color={theme.accentInk} name="send" size={19} />
+                  )}
                 </Animated.View>
               </Pressable>
             </View>
@@ -764,17 +779,17 @@ const styles = StyleSheet.create({
   expandedRow: { alignItems: 'flex-end', flex: 1 },
   expandedSurface: { flex: 1 },
   androidInputPill: { backgroundColor: 'transparent', borderRadius: 0, borderWidth: 0 },
-  androidMessageField: { borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: Spacing.one },
-  multilineInput: { flex: 0, maxHeight: MaxComposerTextHeight, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
+  androidMessageField: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: Spacing.one },
+  androidMultilineMessageField: { borderRadius: Radius.large },
+  multilineInput: { flex: 0, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
   multilineInputMaterial: { borderRadius: Radius.large },
-  multilineInputPill: { borderRadius: Radius.large, justifyContent: 'flex-start', maxHeight: MaxComposerHeight, paddingVertical: Spacing.two },
+  multilineInputPill: { borderRadius: Radius.large, justifyContent: 'flex-start', paddingVertical: Spacing.two },
   multilineMessageField: { alignItems: 'flex-end' },
   multilineRow: { alignItems: 'flex-end' },
   input: {
     flex: 1,
     position: 'relative',
     ...Typography.message,
-    maxHeight: MaxComposerHeight,
     minHeight: 48,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.one,
@@ -795,7 +810,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     flex: 1,
     justifyContent: 'center',
-    maxHeight: MaxComposerHeight,
     minHeight: 56,
     overflow: 'hidden',
   },
@@ -812,7 +826,7 @@ const styles = StyleSheet.create({
   iosGlassMaterial: { borderRadius: Radius.pill },
   iosInlineAttach: { height: TouchTarget - Spacing.two, width: TouchTarget - Spacing.two },
   iosMessageField: { borderRadius: 0, paddingHorizontal: 0 },
-  multilineVoiceOverlay: { bottom: Spacing.one, height: TouchTarget, top: undefined },
+  multilineVoiceOverlay: { alignItems: 'center', bottom: Spacing.one, height: TouchTarget, justifyContent: 'center', position: 'absolute', right: Spacing.one, width: TouchTarget },
   inlineAttach: { alignItems: 'center', borderRadius: Radius.pill, height: 40, justifyContent: 'center', width: 40 },
   messageField: {
     alignItems: 'center',

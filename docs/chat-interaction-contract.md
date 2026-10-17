@@ -237,6 +237,10 @@ is allowed. Record device, OS, refresh rate, and trace with release evidence.
   its visual indicator occupies a leading column outside the bubble, and the full
   row toggles it. Media, links, playback, and swipe actions do not intercept a
   selection tap. Web keyboard users can toggle the focused row with Space or Enter.
+- Entering selection mode and toggling a checkbox preserve message row heights,
+  bubble alignment, and the offsets between neighboring rows. The checkbox is an
+  overlay in the leading gutter; selection state must not add row padding or force
+  short and deleted messages to expand.
 - The selected-message count appears inside the delete control. When the selected
   messages cannot be deleted, the control stays disabled and retains the count;
   the existing server permission checks remain authoritative.

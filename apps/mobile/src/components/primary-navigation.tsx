@@ -122,7 +122,7 @@ function FloatingNavigation({ activeKey, createDisabled, hidden, items, onCreate
   const { fontScale } = useWindowDimensions();
   const isIOS = Platform.OS === 'ios';
   const isAndroid = Platform.OS === 'android';
-  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, Spacing.one);
+  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, isAndroid ? 0 : Spacing.one);
   const [reduceTransparency, setReduceTransparency] = useState(false);
   const navigationHeight = isAndroid
     ? primaryNavigationHeight(fontScale, AndroidBottomTabHeight)

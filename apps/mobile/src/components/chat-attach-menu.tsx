@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
-import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { OptionsSheet, SheetRow, SheetSection } from '@/components/options-sheet';
@@ -10,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { attachmentIcon, formatFileSize, isImageAttachment } from '@/lib/attachment-presentation';
+import { hapticLight } from '@/lib/haptics';
 import type { UploadableFile } from '@/lib/attachment-upload';
 import { capturePhoto, pickDocuments, pickImages } from '@/lib/media-capture';
 
@@ -91,9 +92,20 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
         showsHorizontalScrollIndicator={false}
         style={{ height: TileSize + Spacing.one * 2, flexGrow: 0 }}>
         {items.map((item) => {
-          return isImageAttachment(item.contentType)
-            ? <ImageAttachmentTile disabled={disabled} item={item} key={`${item.id}:${item.uri}`} onRemove={onRemove} />
-            : <FileAttachmentTile disabled={disabled} item={item} key={item.id} onRemove={onRemove} />;
+          const isImage = isImageAttachment(item.contentType);
+          const key = isImage ? `${item.id}:${item.uri}` : item.id;
+          return (
+            <Animated.View
+              entering={reducedMotion ? undefined : AttachmentEnter}
+              exiting={reducedMotion ? undefined : AttachmentExit}
+              key={key}
+              layout={reducedMotion ? undefined : AttachmentReflow}
+            >
+              {isImage
+                ? <ImageAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />
+                : <FileAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />}
+            </Animated.View>
+          );
         })}
       </ScrollView>
     </Animated.View>
@@ -177,7 +189,10 @@ function RemoveAttachmentButton({ disabled, item, onRemove }: {
       accessibilityState={{ disabled }}
       disabled={disabled}
       hitSlop={11}
-      onPress={() => onRemove(item.id)}
+      onPress={() => {
+        hapticLight();
+        onRemove(item.id);
+      }}
       style={[
         styles.remove,
         isImageAttachment(item.contentType) && styles.imageRemove,
@@ -209,6 +224,9 @@ function AttachmentProgress({ item }: { item: PendingAttachment }) {
 
 const TileSize = 76;
 const FileTileWidth = 184;
+const AttachmentEnter = FadeIn.duration(150).easing(ChatMotionEasing);
+const AttachmentExit = FadeOut.duration(120).easing(ChatMotionEasing);
+const AttachmentReflow = LinearTransition.duration(170).easing(ChatMotionEasing);
 
 const styles = StyleSheet.create({
   stripClip: { overflow: 'hidden', flexShrink: 0 },

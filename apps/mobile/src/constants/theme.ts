@@ -306,7 +306,7 @@ export const IconSize = {
  * stable content reserve so the last row never hides behind the bar.
  */
 export const BottomTabInset = 70;
-export const AndroidBottomTabHeight = 56;
+export const AndroidBottomTabHeight = 72;
 export const PrimaryCreateActionSize = 56;
 export const PrimaryCreateActionClearance = Spacing.three;
 export const MaxContentWidth = 800;

@@ -91,10 +91,10 @@ export const ThreadRow = memo(function ThreadRow({
   const trayOpenAtStart = useSharedValue(false);
   useEffect(() => {
     if (!selectionMode) return;
-    actionWidth.value = 0;
-    replyProgress.value = 0;
-    setActionsExposed(false);
-  }, [actionWidth, replyProgress, selectionMode]);
+    if (actionWidth.value !== 0) actionWidth.value = 0;
+    if (replyProgress.value !== 0) replyProgress.value = 0;
+    if (actionsExposed) setActionsExposed(false);
+  }, [actionWidth, actionsExposed, replyProgress, selectionMode]);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
   const inlinePlayback = item.kind === 'message' && !item.item.message.deletedAt
     && hasPlayableAudioAttachment(item.item.attachments);

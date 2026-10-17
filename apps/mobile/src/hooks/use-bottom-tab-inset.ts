@@ -13,7 +13,7 @@ export function useBottomTabBarInset() {
   if (!primaryNavigationVisibleForPath(pathname)) return 0;
   const isAndroid = Platform.OS === 'android';
   const navigationHeight = primaryNavigationHeight(fontScale, isAndroid ? AndroidBottomTabHeight : BottomTabInset);
-  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, Spacing.one);
+  const safeAreaBottom = primaryNavigationSafeAreaInset(insets.bottom, isAndroid ? 0 : Spacing.two, isAndroid ? 0 : Spacing.one);
   return navigationHeight + Spacing.two + safeAreaBottom;
 }
 

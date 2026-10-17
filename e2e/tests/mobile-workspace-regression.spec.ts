@@ -28,33 +28,103 @@ for (const width of [320, 390, 834]) {
         expect(bubble && receipt && text).toBeTruthy()
         expect(receipt!.x + receipt!.width).toBeLessThanOrEqual(bubble!.x + bubble!.width)
         expect(bubble!.x + bubble!.width - receipt!.x - receipt!.width).toBeLessThanOrEqual(12)
-        if (id === 'own-short') expect(text!.x + text!.width).toBeGreaterThan(bubble!.x + bubble!.width / 2)
+        const sharedLineHeight = Math.min(text!.y + text!.height, receipt!.y + receipt!.height)
+          - Math.max(text!.y, receipt!.y)
+        expect(sharedLineHeight).toBeGreaterThan(0)
+        if (id === 'own-short') {
+          expect(bubble!.x + bubble!.width).toBeGreaterThan(width * 0.75)
+          expect(text!.x + text!.width).toBeLessThanOrEqual(receipt!.x)
+        }
         else expect(text!.x).toBeLessThan(bubble!.x + bubble!.width / 2)
       }
 
       async function assertImageFits(id: string) {
         const sample = page.getByTestId(`chat-layout-${id}`)
-        const { bubble, image } = await sample.evaluate((root) => {
+        const { bubble, image, tail, tailBorderLeftWidth, tailBorderRightWidth } = await sample.evaluate((root) => {
           const bubble = root.querySelector('[data-testid="message-bubble"]')!
-          const image = bubble.querySelectorAll('img')
-          return { bubble: bubble.getBoundingClientRect().toJSON(), image: image[image.length - 1].getBoundingClientRect().toJSON() }
+          const images = bubble.querySelectorAll('img')
+          const image = images[images.length - 1]
+          const tail = bubble.querySelector('[data-testid="message-media-tail"]')
+          const tailStyle = tail ? getComputedStyle(tail) : null
+          return {
+            bubble: bubble.getBoundingClientRect().toJSON(),
+            image: image.getBoundingClientRect().toJSON(),
+            tail: tail?.getBoundingClientRect().toJSON() ?? null,
+            tailBorderLeftWidth: Number.parseFloat(tailStyle?.borderLeftWidth ?? '0'),
+            tailBorderRightWidth: Number.parseFloat(tailStyle?.borderRightWidth ?? '0'),
+          }
         })
-        expect(bubble && image).toBeTruthy()
+        expect(bubble && image && tail).toBeTruthy()
         expect(Math.abs(bubble!.y - image!.y)).toBeLessThanOrEqual(1)
         expect(Math.abs(bubble!.y + bubble!.height - image!.y - image!.height)).toBeLessThanOrEqual(1)
         expect(image!.x).toBeGreaterThanOrEqual(0)
         expect(image!.x + image!.width).toBeLessThanOrEqual(width + 1)
+        if (id === 'own-portrait') {
+          expect(tail!.x).toBeGreaterThanOrEqual(image!.x + image!.width - 6)
+          expect(tail!.x + tail!.width).toBeGreaterThanOrEqual(image!.x + image!.width + 3)
+        }
+        else {
+          expect(tail!.x + tail!.width).toBeLessThanOrEqual(image!.x + 6)
+          expect(tail!.x).toBeLessThanOrEqual(image!.x - 3)
+        }
+        expect(tail!.width).toBeGreaterThanOrEqual(10)
+        expect(tail!.height).toBeGreaterThanOrEqual(16)
+        if (id === 'own-portrait') {
+          expect(tailBorderLeftWidth).toBeGreaterThanOrEqual(10)
+          expect(tailBorderRightWidth).toBe(0)
+          expect(image!.height).toBeGreaterThan(image!.width)
+        }
+        else {
+          expect(tailBorderLeftWidth).toBe(0)
+          expect(tailBorderRightWidth).toBeGreaterThanOrEqual(10)
+        }
       }
       for (const id of ['own-portrait', 'other-landscape']) await assertImageFits(id)
+      const selectionGeometryBefore = await fixture.evaluate((root) => {
+        const samples = [...root.querySelectorAll('[data-testid^="chat-layout-"]')]
+          .filter((sample) => sample.dataset.testid !== 'chat-layout-preview')
+        const anchorTop = samples[0]?.querySelector('[data-testid="message-row"]')?.getBoundingClientRect().top ?? 0
+        return Object.fromEntries(samples.map((sample) => {
+          const row = sample.querySelector('[data-testid="message-row"]')!.getBoundingClientRect()
+          const bubble = sample.querySelector('[data-testid="message-bubble"]')!.getBoundingClientRect()
+          return [sample.dataset.testid!.replace('chat-layout-', ''), {
+            bubbleLeft: bubble.left,
+            bubbleTopWithinRow: bubble.top - row.top,
+            rowHeight: row.height,
+            rowOffset: row.top - anchorTop,
+          }]
+        }))
+      })
 
       await fixture.getByRole('button', { name: 'Enter selection mode', exact: true }).click()
+      const selectionGeometryAfter = await fixture.evaluate((root) => {
+        const samples = [...root.querySelectorAll('[data-testid^="chat-layout-"]')]
+          .filter((sample) => sample.dataset.testid !== 'chat-layout-preview')
+        const anchorTop = samples[0]?.querySelector('[data-testid="message-row"]')?.getBoundingClientRect().top ?? 0
+        return Object.fromEntries(samples.map((sample) => {
+          const row = sample.querySelector('[data-testid="message-row"]')!.getBoundingClientRect()
+          const bubble = sample.querySelector('[data-testid="message-bubble"]')!.getBoundingClientRect()
+          return [sample.dataset.testid!.replace('chat-layout-', ''), {
+            bubbleLeft: bubble.left,
+            bubbleTopWithinRow: bubble.top - row.top,
+            rowHeight: row.height,
+            rowOffset: row.top - anchorTop,
+          }]
+        }))
+      })
+      for (const [id, before] of Object.entries(selectionGeometryBefore)) {
+        const after = selectionGeometryAfter[id]
+        expect(after.rowHeight, `${id} row height`).toBeCloseTo(before.rowHeight, 0)
+        expect(after.rowOffset, `${id} row position`).toBeCloseTo(before.rowOffset, 0)
+        expect(after.bubbleTopWithinRow, `${id} bubble position`).toBeCloseTo(before.bubbleTopWithinRow, 0)
+        expect(after.bubbleLeft, `${id} bubble alignment`).toBeCloseTo(before.bubbleLeft, 0)
+      }
       const deletePill = fixture.getByRole('button', { name: /^Delete \d+ selected fixture messages$/ })
       await expect(deletePill).toBeDisabled()
       await expect(deletePill.getByText('0', { exact: true })).toBeVisible()
       const ownRow = page.getByTestId('chat-layout-own-short').getByRole('checkbox')
       const ownBounds = await ownRow.boundingBox()
       expect(ownBounds).not.toBeNull()
-      expect(ownBounds!.height).toBeGreaterThanOrEqual(44)
       // The far right gutter is outside the bubble and checkbox visual.
       await ownRow.click({ position: { x: ownBounds!.width - 2, y: ownBounds!.height / 2 } })
       await expect(ownRow).toBeChecked()
@@ -139,6 +209,76 @@ test.beforeEach(async ({ page }) => {
 async function assertNoPageOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 }
+
+test('message selection preserves short and deleted bubble spacing', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openFixture(page, 'attachment-preview?data=worst')
+  const fixture = page.getByTestId('chat-layout-preview')
+  const ids = ['own-short', 'other-short', 'deleted']
+
+  async function geometry() {
+    return fixture.evaluate((root) => {
+      const samples = [...root.querySelectorAll('[data-testid^="chat-layout-"]')]
+        .filter((sample) => sample.dataset.testid !== 'chat-layout-preview')
+      const anchorTop = samples[0]?.querySelector('[data-testid="message-row"]')?.getBoundingClientRect().top ?? 0
+      return Object.fromEntries(samples.map((sample) => {
+        const row = sample.querySelector('[data-testid="message-row"]')!.getBoundingClientRect()
+        const bubble = sample.querySelector('[data-testid="message-bubble"]')!.getBoundingClientRect()
+        return [sample.dataset.testid!.replace('chat-layout-', ''), {
+          bubbleLeft: bubble.left,
+          bubbleTopWithinRow: bubble.top - row.top,
+          rowHeight: row.height,
+          rowOffset: row.top - anchorTop,
+        }]
+      }))
+    })
+  }
+
+  async function expectGeometryUnchanged(before: Awaited<ReturnType<typeof geometry>>) {
+    const after = await geometry()
+    for (const id of ids) {
+      const expected = before[id]
+      const actual = after[id]
+      expect(actual.rowHeight, `${id} row height`).toBeCloseTo(expected.rowHeight, 0)
+      expect(actual.rowOffset, `${id} row position`).toBeCloseTo(expected.rowOffset, 0)
+      expect(actual.bubbleTopWithinRow, `${id} bubble position`).toBeCloseTo(expected.bubbleTopWithinRow, 0)
+      expect(actual.bubbleLeft, `${id} bubble alignment`).toBeCloseTo(expected.bubbleLeft, 0)
+    }
+  }
+
+  const before = await geometry()
+  await fixture.getByRole('button', { name: 'Enter selection mode', exact: true }).click()
+  await expect(fixture.getByRole('checkbox')).toHaveCount(8)
+  await expectGeometryUnchanged(before)
+
+  for (const id of ids) {
+    const row = page.getByTestId(`chat-layout-${id}`).getByRole('checkbox')
+    await row.click()
+    await expect(row).toBeChecked()
+    await expectGeometryUnchanged(before)
+    await row.click()
+    await expect(row).not.toBeChecked()
+    await expectGeometryUnchanged(before)
+  }
+})
+
+test('removing a selected image animates the strip and keeps pending upload feedback accurate', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openFixture(page, 'attachment-preview?data=worst')
+  const removeButtons = page.getByRole('button', { name: 'Remove selected image', exact: true })
+  await expect(removeButtons).toHaveCount(6)
+
+  const firstPosition = (await removeButtons.nth(0).boundingBox())!.x
+  await removeButtons.nth(0).click()
+  await expect(removeButtons).toHaveCount(5)
+  const remainingPosition = (await removeButtons.nth(0).boundingBox())!.x
+  expect(Math.abs(remainingPosition - firstPosition)).toBeLessThanOrEqual(1)
+
+  const progress = page.getByRole('progressbar', { name: 'Sending 5 images · 45%', exact: true })
+  await progress.scrollIntoViewIfNeeded()
+  await expect(progress).toBeVisible()
+  await assertNoPageOverflow(page)
+})
 
 test('route lag capture detects a JS stall and preserves the mounted screen when toggled', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 })

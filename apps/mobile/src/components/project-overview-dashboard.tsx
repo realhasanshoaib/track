@@ -44,48 +44,46 @@ export function ProjectMetrics({ channels, people, tasks, tasksEnabled, unread }
   </View>;
 }
 
-export function ProjectProgress({ completed, total }: { completed: number; total: number }) {
-  const theme = useTheme();
-  const percent = total ? Math.round((completed / total) * 100) : 0;
-  return <View style={[styles.progress, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }]}>
-    <View style={styles.progressHeading}>
-      <View>
-        <ThemedText type="title">Project progress</ThemedText>
-        <ThemedText themeColor="textSecondary" type="caption">{completed} of {total} tasks complete</ThemedText>
-      </View>
-      <ThemedText style={styles.progressValue} type="subtitle">{percent}%</ThemedText>
-    </View>
-    <View accessibilityLabel={`${percent} percent complete`} accessibilityRole="progressbar" accessibilityValue={{ max: 100, min: 0, now: percent }} style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected }]}>
-      <View style={[styles.progressFill, { backgroundColor: theme.accent, width: `${percent}%` }]} />
-    </View>
-  </View>;
-}
-
 function Metric({ detail, emphasis, label, value }: { detail: string; emphasis?: boolean; label: string; value: number | string }) {
   const theme = useTheme();
   return <View style={[styles.metric, { backgroundColor: theme.homeSurface }]}><ThemedText style={styles.metricLabel} themeColor="textSecondary" type="captionBold">{label}</ThemedText><View style={styles.metricResult}><ThemedText style={styles.metricValue}>{value}</ThemedText><ThemedText numberOfLines={1} themeColor={emphasis ? 'accentStrong' : 'textSecondary'} type="caption">{detail}</ThemedText></View></View>;
 }
 
-export function ProjectWorkHub({ channelCount, dueSoonCount, onBoard, onChannels, onTasks, openTaskCount, tasksEnabled, unreadCount }: { channelCount: number; dueSoonCount: number; onBoard: () => void; onChannels: () => void; onTasks: () => void; openTaskCount: number; tasksEnabled: boolean; unreadCount: number }) {
+export function ProjectWorkHub({ channelCount, completedTaskCount, dueSoonCount, onBoard, onChannels, onTasks, openTaskCount, tasksEnabled, totalTaskCount, unreadCount }: { channelCount: number; completedTaskCount: number; dueSoonCount: number; onBoard: () => void; onChannels: () => void; onTasks: () => void; openTaskCount: number; tasksEnabled: boolean; totalTaskCount: number; unreadCount: number }) {
+  const theme = useTheme();
   const largeText = useWindowDimensions().fontScale > 1.2;
+  const percent = totalTaskCount ? Math.round((completedTaskCount / totalTaskCount) * 100) : 0;
   return <View style={styles.workSection}>
     <SectionHeading title="Project workspace" />
+    {tasksEnabled ? <View style={[styles.progress, styles.progressCompact, { backgroundColor: theme.statAccentSoft, borderColor: theme.homeBorder }]}>
+      <View style={styles.progressHeading}>
+        <View style={styles.progressCopy}>
+          <ThemedText themeColor="textSecondary" type="captionBold">PROJECT PROGRESS</ThemedText>
+          <ThemedText numberOfLines={largeText ? undefined : 1} type="title">{completedTaskCount} of {totalTaskCount} tasks complete</ThemedText>
+        </View>
+        <ThemedText style={[styles.progressValue, { color: theme.accentStrong }]} type="titleLarge">{percent}%</ThemedText>
+      </View>
+      <View accessibilityLabel={`${percent} percent complete`} accessibilityRole="progressbar" accessibilityValue={{ max: 100, min: 0, now: percent }} style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected }]}>
+        <View style={[styles.progressFill, { backgroundColor: theme.accent, width: `${percent}%` }]} />
+      </View>
+    </View> : null}
     <View style={styles.workGrid}>
-      <HubRow detail={`${channelCount} ${channelCount === 1 ? 'Channel' : 'Channels'}${unreadCount ? ` \u00b7 ${unreadCount} unread` : ''}`} icon="channel" label="Channels" onPress={onChannels} wide />
+      <HubRow detail={`${channelCount} ${channelCount === 1 ? 'channel' : 'channels'}`} icon="channel" label="Channels" onPress={onChannels} trailing={unreadCount ? `${unreadCount} unread` : undefined} wide />
       {tasksEnabled ? <View style={[styles.workPair, largeText && styles.workPairLarge]}>
-        <HubRow detail={`${openTaskCount} open${dueSoonCount ? ` · ${dueSoonCount} due soon` : ''}`} icon="task" label="Tasks" onPress={onTasks} />
+        <HubRow detail={`${openTaskCount} open`} icon="task" label="Tasks" onPress={onTasks} trailing={dueSoonCount ? `${dueSoonCount} due soon` : undefined} />
         <HubRow detail="View work by status" icon="view-board" label="Board" onPress={onBoard} />
       </View> : null}
     </View>
   </View>;
 }
 
-function HubRow({ detail, icon, label, onPress, wide = false }: { detail: string; icon: IconName; label: string; onPress: () => void; wide?: boolean }) {
+function HubRow({ detail, icon, label, onPress, trailing, wide = false }: { detail: string; icon: IconName; label: string; onPress: () => void; trailing?: string; wide?: boolean }) {
   const theme = useTheme();
   const { animatedStyle, onPressIn, onPressOut } = usePressFeedback({ pressedScale: 0.985 });
-  return <AnimatedPressable accessibilityLabel={`${label}. ${detail}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} style={[styles.hubRow, wide ? styles.hubRowWide : styles.hubRowTile, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }, animatedStyle]}>
+  return <AnimatedPressable accessibilityLabel={`${label}. ${detail}${trailing ? `. ${trailing}` : ''}`} accessibilityRole="button" android_ripple={{ color: theme.backgroundSelected }} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut} style={[styles.hubRow, wide ? styles.hubRowWide : styles.hubRowTile, { backgroundColor: theme.homeSurface, borderColor: theme.homeBorder }, animatedStyle]}>
     <View style={[styles.hubIcon, { backgroundColor: theme.backgroundElement }]}><PlatformIcon color={theme.text} name={icon} size={17} /></View>
     <View style={styles.flex}><ThemedText type="title">{label}</ThemedText><ThemedText numberOfLines={2} themeColor="textSecondary" type="caption">{detail}</ThemedText></View>
+    {trailing ? <View style={[styles.unreadBadge, { backgroundColor: theme.accentSoft }]}><ThemedText numberOfLines={1} themeColor="accentStrong" type="captionBold">{trailing}</ThemedText></View> : null}
     <View style={wide ? undefined : styles.hubTileArrow}><PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} /></View>
   </AnimatedPressable>;
 }
@@ -148,11 +146,11 @@ const styles = StyleSheet.create({
   heroName: { flex: 1, minWidth: 0 },
   heroTopline: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
   heroToplineLarge: { alignItems: 'flex-start', flexDirection: 'column' },
-  hubIcon: { alignItems: 'center', borderRadius: Radius.medium, height: 40, justifyContent: 'center', width: 40 },
+  hubIcon: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, height: 40, justifyContent: 'center', width: 40 },
   hubRow: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.two, overflow: 'hidden', padding: Spacing.three },
-  hubRowTile: { flex: 1, minHeight: 132 },
-  hubRowWide: { alignItems: 'center', flexDirection: 'row', minHeight: 80 },
-  hubTileArrow: { alignSelf: 'flex-end' },
+  hubRowTile: { flex: 1, minHeight: 112 },
+  hubRowWide: { alignItems: 'center', flexDirection: 'row', minHeight: 76 },
+  hubTileArrow: { alignSelf: 'flex-end', marginTop: 'auto' },
   inlineAction: { borderRadius: Radius.small, minHeight: 30, paddingHorizontal: Spacing.two, paddingVertical: 7 },
   metric: { borderCurve: 'continuous', borderRadius: Radius.medium, flex: 1, gap: 2, minWidth: 0, padding: Spacing.three },
   metricLabel: Typography.captionBold,
@@ -160,15 +158,18 @@ const styles = StyleSheet.create({
   metrics: { flexDirection: 'row', gap: Spacing.three },
   metricsLarge: { flexDirection: 'column' },
   metricValue: { fontSize: 16, fontVariant: ['tabular-nums'], fontWeight: '700', lineHeight: 22 },
-  progress: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.three, padding: Spacing.four },
+  progress: { borderCurve: 'continuous', borderRadius: Radius.large, borderWidth: StyleSheet.hairlineWidth, gap: Spacing.two, padding: Spacing.three },
+  progressCopy: { flex: 1, gap: Spacing.one, minWidth: 0 },
   progressFill: { borderRadius: Radius.pill, bottom: 0, left: 0, position: 'absolute', top: 0 },
-  progressHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  progressTrack: { borderRadius: Radius.pill, height: 8, overflow: 'hidden' },
+  progressHeading: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, justifyContent: 'space-between' },
+  progressCompact: { minHeight: 104 },
+  progressTrack: { borderRadius: Radius.pill, height: 7, overflow: 'hidden' },
   progressValue: { fontVariant: ['tabular-nums'] },
   sectionHeading: { marginBottom: Spacing.one, marginTop: Spacing.two },
   sectionTitle: { letterSpacing: -0.15 },
   statusDot: { borderRadius: Radius.pill, height: 7, width: 7 },
   statusLine: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  unreadBadge: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, justifyContent: 'center', maxWidth: 90, minHeight: 30, paddingHorizontal: Spacing.two },
   workGrid: { gap: Spacing.two },
   workPair: { flexDirection: 'row', gap: Spacing.two },
   workPairLarge: { flexDirection: 'column' },

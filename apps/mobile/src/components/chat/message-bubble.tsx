@@ -8,10 +8,10 @@ import { MessageContextMenu } from '@/components/chat/message-context-menu';
 import {
   MESSAGE_MAX_WIDTH_RATIO,
   MESSAGE_SELECTION_INDICATOR_SIZE,
-  MESSAGE_WIDE_TEXT_MIN_LENGTH,
 } from '@/components/chat/message-layout';
 import { MessageText } from '@/components/chat/message-text';
 import { hasReadyAttachmentPreview } from '@/components/chat/types';
+import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
 import type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 import { ColoredAvatar } from '@/components/colored-avatar';
 import { IOSGlassMaterial } from '@/components/ios-glass-material';
@@ -26,6 +26,7 @@ import { displayText } from '@/lib/display-text';
 import { messageDeliveryAccessibilityLabel } from '@/lib/message-receipt';
 
 const AVATAR_SIZE = 32;
+const SELECTION_HIT_SLOP = Platform.OS === 'android' ? 8 : 6;
 /** Text beside media uses a small inset while images meet the bubble edge. */
 const MEDIA_PAD = Spacing.two;
 
@@ -37,7 +38,6 @@ type BubbleFrameProps = PropsWithChildren<{
   highlighted?: boolean;
   selectionLabel?: string;
   isOwnMessage: boolean;
-  wideText?: boolean;
   selected?: boolean;
   selectionMode?: boolean;
   onLongPress?: () => void;
@@ -54,7 +54,6 @@ export function MessageBubbleFrame({
   highlighted = false,
   isOwnMessage,
   selectionLabel,
-  wideText = false,
   onLongPress,
   onPress,
   selectionMode = false,
@@ -98,7 +97,6 @@ export function MessageBubbleFrame({
           borderWidth: transparentBareMedia ? 0 : StyleSheet.hairlineWidth,
           boxShadow: 'none',
           maxWidth,
-          width: wideText ? maxWidth : undefined,
         },
         transparentBareMedia && styles.bubbleBare,
         isOwnMessage ? styles.tailOwn : styles.tailOther,
@@ -232,10 +230,11 @@ export function MessageBubble({
       <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} />
     </View>
   ) : null;
-  const afterContent = threadControl || timeMeta ? (
+  const inlineTextMeta = !isDeleted && Boolean(body) && !hasMedia && !message.replyTo && !message.forwardedFrom && !threadControl;
+  const afterContent = threadControl || (timeMeta && !inlineTextMeta) ? (
     <View style={styles.bubbleAfterContent}>
       {threadControl}
-      {timeMeta}
+      {inlineTextMeta ? null : timeMeta}
     </View>
   ) : null;
   return (
@@ -248,7 +247,7 @@ export function MessageBubble({
       accessibilityState={selectionMode ? { checked: selected } : undefined}
       aria-checked={selectionMode ? selected : undefined}
       focusable={selectionMode}
-      hitSlop={selectionMode ? { bottom: Spacing.one, top: Spacing.one } : undefined}
+      hitSlop={selectionMode ? { bottom: SELECTION_HIT_SLOP, top: SELECTION_HIT_SLOP } : undefined}
       onPress={selectionMode ? onPressSelection : undefined}
       style={[
       styles.row,
@@ -261,7 +260,9 @@ export function MessageBubble({
         pointerEvents={selectionMode ? 'none' : 'box-none'}
         style={[styles.rowContent, isOwnMessage ? styles.rowOwn : styles.rowOther]}
       >
-      {selectionMode || isOwnMessage ? null : hasVoiceNote ? (
+      {isOwnMessage ? null : selectionMode ? (
+        <View style={styles.avatarSpacer} />
+      ) : hasVoiceNote ? (
         <View style={styles.avatarSpacer} />
       ) : isFirstInGroup ? (
         <ColoredAvatar label={name} seed={authorId} size={AVATAR_SIZE} />
@@ -280,7 +281,6 @@ export function MessageBubble({
           highlighted={highlighted}
           isOwnMessage={isOwnMessage}
           selectionLabel={selectionLabel}
-          wideText={!isDeleted && body.length >= MESSAGE_WIDE_TEXT_MIN_LENGTH}
           onLongPress={selectionMode ? undefined : bubbleLongPress}
           selected={selected}
           selectionMode={selectionMode}
@@ -358,8 +358,21 @@ export function MessageBubble({
           ) : null}
 
           {body ? (
-            <View style={[hasMedia && styles.inset, hasImage && styles.bodyWithImage, !hasMedia && (isOwnMessage ? styles.textBodyOwn : styles.textBodyOther)]}>
-              <MessageText body={body} />
+            <View style={[
+              hasMedia && styles.inset,
+              hasImage && styles.bodyWithImage,
+              !hasMedia && (isOwnMessage ? styles.textBodyOwn : styles.textBodyOther),
+              inlineTextMeta && styles.inlineTextRow,
+            ]}>
+              <MessageText body={body} style={inlineTextMeta ? styles.inlineText : undefined} />
+              {inlineTextMeta ? (
+                <MessageDeliveryMeta
+                  isDeleted={isDeleted}
+                  isOwnMessage={isOwnMessage}
+                  readReceipt={readReceipt}
+                  timeLabel={timeLabel}
+                />
+              ) : null}
             </View>
           ) : null}
         </>}
@@ -573,12 +586,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: Spacing.two,
+    paddingVertical: MESSAGE_ROW_VERTICAL_PADDING,
     paddingHorizontal: Spacing.three,
     width: '100%',
   },
   rowContent: { alignItems: 'flex-start', flex: 1, flexDirection: 'row', minWidth: 0 },
   messageColumn: { flexShrink: 1, maxWidth: '100%', minWidth: 0 },
   imageAuthor: { marginBottom: Spacing.one, marginHorizontal: MEDIA_PAD },
+  inlineText: { flexShrink: 1, minWidth: 0 },
+  inlineTextRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },
   textBodyOwn: { alignSelf: 'flex-end', maxWidth: '100%', paddingRight: Spacing.half },
   textBodyOther: { alignSelf: 'flex-start', maxWidth: '100%', paddingLeft: Spacing.half },
   selectionIndicator: {
@@ -589,7 +605,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     height: MESSAGE_SELECTION_INDICATOR_SIZE,
     justifyContent: 'center',
+    left: Spacing.three,
     overflow: 'hidden',
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -MESSAGE_SELECTION_INDICATOR_SIZE / 2 }],
     width: MESSAGE_SELECTION_INDICATOR_SIZE,
   },
   rowOther: {
@@ -600,7 +620,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     justifyContent: 'flex-end',
   },
-  rowSelection: { alignItems: 'center', minHeight: TouchTarget - Spacing.two },
+  rowSelection: { alignItems: 'flex-start', position: 'relative' },
   selectionMaterial: { borderCurve: 'continuous', borderRadius: Radius.pill },
   tailOther: {
     borderBottomLeftRadius: 0,

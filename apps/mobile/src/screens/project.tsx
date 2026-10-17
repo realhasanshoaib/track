@@ -12,7 +12,6 @@ import { OptionsSheet, SheetRow, SheetSection } from '@/components/options-sheet
 import {
   ProjectAttention,
   ProjectHero,
-  ProjectProgress,
   ProjectWorkHub,
 } from '@/components/project-overview-dashboard';
 import { ScreenEntrance } from '@/components/screen-entrance';
@@ -71,7 +70,7 @@ export default function ProjectOverviewScreen() {
   sevenDaysFromNow.setDate(today.getDate() + 7);
   const todayDate = localDateKey(today);
   const dueSoonDate = localDateKey(sevenDaysFromNow);
-  const dueSoonCount = tasks?.filter((item) => item.task.dueDate && item.task.dueDate >= todayDate && item.task.dueDate <= dueSoonDate).length ?? 0;
+  const dueSoonCount = tasks?.filter((item) => item.state?.category !== 'completed' && item.state?.category !== 'canceled' && item.task.dueDate && item.task.dueDate >= todayDate && item.task.dueDate <= dueSoonDate).length ?? 0;
   const projectCompany = project?.membership.companyDisplayNameSnapshot ?? 'Independent Project';
   const projectRole = projectRoleLabel(project?.membership.role);
   const memberCount = `${members.results.length}${members.status === 'CanLoadMore' ? '+' : ''}`;
@@ -125,8 +124,7 @@ export default function ProjectOverviewScreen() {
       <ScreenEntrance style={styles.screenContent}><ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomContentInset }]} contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false}>
         <ProjectHero archived={navigation.archived} colorKey={project.project.markColorKey} company={project.project.clientLabel ?? projectCompany} description={project.project.description} iconKey={project.project.markIconKey} memberCount={memberCount} name={projectName} projectId={String(projectId)} role={projectRole} />
         <ProjectAttention items={projectAttention} onOpen={openAttention} loading={attentionPages.status === 'LoadingFirstPage'} loadingMore={attentionPages.status === 'LoadingMore'} onLoadMore={attentionPages.status === 'CanLoadMore' ? () => attentionPages.loadMore(10) : undefined} />
-        <ProjectWorkHub channelCount={channelCount} dueSoonCount={dueSoonCount} onBoard={openBoard} onChannels={openChannels} onTasks={openTasks} openTaskCount={openTaskCount} tasksEnabled={release.tasks} unreadCount={unreadCount} />
-        {release.tasks ? <ProjectProgress completed={completedTaskCount} total={totalTaskCount} /> : null}
+        <ProjectWorkHub channelCount={channelCount} completedTaskCount={completedTaskCount} dueSoonCount={dueSoonCount} onBoard={openBoard} onChannels={openChannels} onTasks={openTasks} openTaskCount={openTaskCount} tasksEnabled={release.tasks} totalTaskCount={totalTaskCount} unreadCount={unreadCount} />
       </ScrollView></ScreenEntrance>
     ) : <View style={styles.centered}><EmptyState body="Open a Project to see its Channels, tasks, and recent work." icon="project" title="Choose a Project" /></View>}
     <OptionsSheet onClose={() => setOptionsOpen(false)} title="Project options" visible={optionsOpen}>

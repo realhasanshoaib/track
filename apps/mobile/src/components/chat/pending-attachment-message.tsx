@@ -4,8 +4,8 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MessageBubbleFrame } from '@/components/chat/message-bubble';
+import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
-import { MESSAGE_WIDE_TEXT_MIN_LENGTH } from '@/components/chat/message-layout';
 import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
 import { MessageText } from '@/components/chat/message-text';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -31,12 +31,16 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
   const body = attachments.length && isAutoAttachmentBody(rawBody, attachments.map(({ filename }) => filename)) ? '' : rawBody;
   const images = attachments.filter((file) => isImageAttachment(file.contentType));
   const files = attachments.filter((file) => !isImageAttachment(file.contentType));
+  const imageProgress = images.some((file) => file.progress !== undefined)
+    ? images.reduce((total, file) => total + clampProgress(file.progress), 0) / Math.max(images.length, 1)
+    : undefined;
   const maxWidth = Math.min(width * 0.72, 320);
   const fileListWidth = Math.min(maxWidth, Math.max(208, Math.min(width * 0.58, 260)));
   const visibleImages = images.slice(0, MAX_TILES);
   const overflow = images.length - visibleImages.length;
   const hasImages = visibleImages.length > 0;
   const deliveryState = attachments.length ? (offline ? 'waiting' : 'sending') : undefined;
+  const inlineTextMeta = attachments.length === 0 && Boolean(body);
   const deliveryMeta = hasImages ? (
     <MessageDeliveryMeta
       deliveryState={deliveryState}
@@ -51,10 +55,15 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
     : Array.from({ length: Math.ceil(visibleImages.length / 2) }, (_, index) => visibleImages.slice(index * 2, index * 2 + 2));
 
   return (
-    <View style={styles.row}>
-      <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage wideText={body.length >= MESSAGE_WIDE_TEXT_MIN_LENGTH}>
+    <View testID="pending-message-row" style={styles.row}>
+      <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage>
         {attachments.length === 0 ? (
-          body ? <MessageText body={body} /> : null
+          inlineTextMeta ? (
+            <View style={styles.inlineTextRow}>
+              <MessageText body={body} style={styles.inlineText} />
+              <MessageDeliveryMeta deliveryState={deliveryState} isOwnMessage timeLabel={formatPendingTime(at)} />
+            </View>
+          ) : null
         ) : <>
           {visibleImages.length === 1 ? (
             <PendingImage deliveryMeta={deliveryMeta} file={visibleImages[0]} offline={offline} width={maxWidth} />
@@ -85,7 +94,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
                   })}
                 </View>
               ))}
-              <PendingImageOverlay imageCount={images.length} offline={offline} />
+              <PendingImageOverlay imageCount={images.length} offline={offline} progress={imageProgress} />
               {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
             </View>
           ) : null}
@@ -94,7 +103,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, offl
           </View> : null}
           {body ? <View style={styles.body}><MessageText body={body} /></View> : null}
         </>}
-        {!hasImages ? (
+        {!hasImages && !inlineTextMeta ? (
           <View style={styles.textMeta}>
             <MessageDeliveryMeta deliveryState={deliveryState} isOwnMessage timeLabel={formatPendingTime(at)} />
           </View>
@@ -128,20 +137,29 @@ function PendingImage({ deliveryMeta, file, offline, width }: {
         source={{ uri: file.uri }}
         style={styles.fill}
       />
-      <PendingImageOverlay imageCount={1} offline={offline} />
+      <PendingImageOverlay imageCount={1} offline={offline} progress={file.progress} />
       {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
     </View>
   );
 }
 
-function PendingImageOverlay({ imageCount, offline }: { imageCount: number; offline: boolean }) {
-  const label = offline ? 'Waiting for connection' : imageCount === 1 ? 'Sending image' : `Sending ${imageCount} images`;
+function PendingImageOverlay({ imageCount, offline, progress }: { imageCount: number; offline: boolean; progress?: number }) {
+  const noun = imageCount === 1 ? 'image' : `${imageCount} images`;
+  const percent = progress === undefined ? null : Math.round(clampProgress(progress) * 100);
+  const label = offline
+    ? 'Waiting for connection'
+    : percent === null || percent === 0
+      ? `Preparing ${noun}`
+      : percent >= 100
+        ? `Finishing ${noun}`
+        : `Sending ${noun} · ${percent}%`;
   return (
     <View
       accessibilityLabel={label}
       accessibilityLiveRegion="polite"
       accessibilityRole="progressbar"
       accessibilityState={{ busy: true }}
+      accessibilityValue={percent === null ? undefined : { max: 100, min: 0, now: percent }}
       accessible
       pointerEvents="none"
       style={styles.imageOverlay}
@@ -238,7 +256,11 @@ const styles = StyleSheet.create({
   overflowText: { color: '#fff' },
   progressFill: { borderRadius: Radius.pill, height: '100%' },
   progressTrack: { borderRadius: Radius.pill, height: 3, overflow: 'hidden' },
-  row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
-  singleImage: { borderCurve: 'continuous', borderRadius: Radius.medium, marginTop: Spacing.one, overflow: 'hidden' },
+  // Match confirmed message rows exactly so reconciliation cannot collapse
+  // the optimistic row's extra top/bottom gutter after a slow upload.
+  row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: MESSAGE_ROW_VERTICAL_PADDING },
+  singleImage: { borderCurve: 'continuous', borderRadius: Radius.large, marginTop: Spacing.one, overflow: 'hidden' },
   textMeta: { alignItems: 'center', alignSelf: 'flex-end', flexDirection: 'row', marginTop: Spacing.half },
+  inlineText: { flexShrink: 1, minWidth: 0 },
+  inlineTextRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },
 });

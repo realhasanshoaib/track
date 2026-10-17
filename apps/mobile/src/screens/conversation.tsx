@@ -1165,11 +1165,12 @@ export default function ConversationScreen() {
     : [];
 
   return (
-    <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface }]}>
+    <ThemedView style={[styles.screen, { backgroundColor: theme.homeSurface, paddingTop: Platform.OS === 'android' ? insets.top + 56 : 0 }]}>
       <Stack.Screen
         options={{
           contentStyle: { backgroundColor: theme.homeSurface },
           headerShown: Platform.OS !== 'ios',
+          headerTitleAlign: 'center',
           headerTransparent: true,
           headerBackVisible: false,
           headerBackTitle: '',

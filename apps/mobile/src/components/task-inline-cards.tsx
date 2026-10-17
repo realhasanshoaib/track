@@ -8,6 +8,7 @@ import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { TaskAction, TaskStatusPill } from '@/components/task-ui';
 import { OptionsSheet, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
+import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -138,6 +139,10 @@ export function TaskInlineCards({
           const status = item.state?.name ?? 'Unknown status';
           return (
             <View key={item.task._id} style={[styles.card, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline }]}>
+              <View style={styles.sourceLabel}>
+                <PlatformIcon color={theme.accentStrong} name="link" size={13} />
+                <ThemedText numberOfLines={1} style={styles.sourceLabelText} themeColor="accentStrong" type="captionBold">Created from this message</ThemedText>
+              </View>
               <View style={styles.header}>
                 <Pressable
                   accessibilityHint="Opens the task"
@@ -165,7 +170,8 @@ export function TaskInlineCards({
                   router.push(taskDetailHref(projectId, item.task.publicKey, identity));
                 }}
                 style={styles.openTask}>
-                <ThemedText numberOfLines={2} type="small">{item.task.title}</ThemedText>
+                <ThemedText numberOfLines={2} style={styles.taskTitle} type="small">{item.task.title}</ThemedText>
+                <PlatformIcon color={theme.textTertiary} name="chevron-right" size={15} />
               </Pressable>
             </View>
           );
@@ -203,9 +209,10 @@ export function TaskInlineCards({
 
 const styles = StyleSheet.create({
   card: {
+    borderCurve: 'continuous',
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.one,
+    gap: Spacing.two,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
   },
@@ -219,7 +226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minWidth: 0,
   },
-  openTask: { flex: 1, minWidth: 0 },
+  openTask: { alignItems: 'center', flexDirection: 'row', flex: 1, gap: Spacing.two, minHeight: 36, minWidth: 0 },
   key: {
     flexShrink: 1,
     minWidth: 0,
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingBottom: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
+    paddingTop: Spacing.one,
   },
   rowOther: {
     justifyContent: 'flex-start',
@@ -241,4 +248,7 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     maxWidth: '84%',
   },
+  sourceLabel: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
+  sourceLabelText: { flexShrink: 1 },
+  taskTitle: { flex: 1, minWidth: 0 },
 });

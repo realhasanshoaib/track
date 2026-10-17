@@ -183,10 +183,12 @@ export default function AttachmentPreviewScreen() {
   const theme = useTheme();
   const router = useRouter();
   const releaseConfig = useReleaseConfigState();
-  const { data } = useLocalSearchParams<{ data?: string }>();
+  const { data, slowSend } = useLocalSearchParams<{ data?: string; slowSend?: string }>();
   const state = selectedState(data);
+  const holdSendOpen = slowSend === '1';
   const canOpenThread = canOpenExistingThread(releaseConfig.isLoading, releaseConfig.config.threads);
   const attachments = useMemo(() => fixtureAttachments(state, previewUri), [state]);
+  const [previewAttachments, setPreviewAttachments] = useState(attachments);
   const [composerDraft, setComposerDraft] = useState(state === 'worst' ? worstComposerDraft : '');
   const [threadRouteStatus, setThreadRouteStatus] = useState('Tap the conversation thread chip to check navigation.');
   const [voiceActionCount, setVoiceActionCount] = useState(0);
@@ -198,6 +200,10 @@ export default function AttachmentPreviewScreen() {
     setComposerDraft(state === 'worst' ? worstComposerDraft : '');
   }, [state]);
 
+  useEffect(() => {
+    setPreviewAttachments(attachments);
+  }, [attachments]);
+
   if (!__DEV__) return <Redirect href="/" />;
 
   return (
@@ -208,18 +214,37 @@ export default function AttachmentPreviewScreen() {
         <ThemedText themeColor="textSecondary" type="small">Development-only states for the message image flow.</ThemedText>
         <NativeAudioCheck />
         <ThemedText style={styles.sectionLabel} type="captionBold">Composer preview</ThemedText>
-        <PendingAttachmentStrip disabled items={attachments} onRemove={() => undefined} />
+        <PendingAttachmentStrip
+          items={previewAttachments}
+          onRemove={(id) => setPreviewAttachments((current) => current.filter((item) => item.id !== id))}
+        />
         <Composer
           activeGroupName="Leadership"
           busy={false}
           onCancelReply={() => undefined}
           onChangeText={setComposerDraft}
-          onSendMessage={async () => ({ failedIds: [], messageId: 'messages:attachment-preview' as Id<'messages'> })}
+          onSendMessage={async () => {
+            if (holdSendOpen) await new Promise((resolve) => setTimeout(resolve, 5_000));
+            return { failedIds: [], messageId: 'messages:attachment-preview' as Id<'messages'> };
+          }}
           replyTo={null}
           value={composerDraft}
         />
         <ThemedText style={styles.sectionLabel} type="captionBold">Sending in conversation</ThemedText>
-        {attachments.length ? <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={attachments} body={body} offline={state === 'offline'} /> : (
+        {holdSendOpen ? (
+          <View testID="slow-send-message-spacing">
+            <View testID="confirmed-spacing-row">
+              <MessageBubble
+                contextActions={[]}
+                isFirstInGroup
+                isOwnMessage
+                message={previewTextMessage('You', 'messages:spacing-before-pending', 'Previous message')}
+                timeLabel="16:14"
+              />
+            </View>
+            <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={[]} body="Pending message" />
+          </View>
+        ) : previewAttachments.length ? <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={previewAttachments} body={body} offline={state === 'offline'} /> : (
           <View style={[styles.empty, { borderColor: theme.homeBorder }]}>
             <ThemedText themeColor="textSecondary" type="small">No image selected.</ThemedText>
           </View>
@@ -492,7 +517,7 @@ function SelectionLayoutPreview({ worst }: { worst: boolean }) {
   const samples = [
     { id: 'own-short', own: true, message: previewTextMessage('You', 'messages:layout-own-short', 'Hi') },
     { id: 'other-short', own: false, message: previewTextMessage('Jo', 'messages:layout-other-short', 'OK') },
-    { id: 'own-portrait', own: true, message: previewAttachmentMessage('You', 'messages:layout-own-portrait', '', [{ attachment: { ...previewImageEntry.attachment, previewStatus: undefined, width: 900, height: 1600 }, url: previewUri }]) },
+    { id: 'own-portrait', own: true, message: previewAttachmentMessage('You', 'messages:layout-own-portrait', '', [{ attachment: { ...previewImageEntry.attachment, previewStatus: undefined, width: undefined, height: undefined }, url: previewUri }]) },
     { id: 'other-landscape', own: false, message: previewAttachmentMessage(worst ? 'Aleksandra Wiśniewska-Kowalczyk' : 'Mateo Chen', 'messages:layout-other-landscape', '', [{ attachment: { ...previewImageEntry.attachment, previewStatus: undefined, width: 1600, height: 900 }, url: previewUri }]) },
     { id: 'long-text', own: false, message: previewTextMessage(worst ? 'Aleksandra Wiśniewska-Kowalczyk' : 'Mateo Chen', 'messages:layout-long-text', worst ? worstComposerDraft : 'Please confirm the handoff before Friday.') },
     { id: 'voice', own: true, message: previewVoiceMessage('You', 'messages:layout-voice') },
