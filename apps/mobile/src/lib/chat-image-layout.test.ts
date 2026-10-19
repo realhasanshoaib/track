@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chatImageAspectRatio, prepareChatImageDimensions, rememberChatImageDimensions } from './chat-image-layout';
+import {
+  chatImageAspectRatio,
+  prepareChatImageDimensions,
+  prepareChatImageForUpload,
+  rememberChatImageDimensions,
+} from './chat-image-layout';
 
 describe('document-picked image dimensions', () => {
   const file = { contentType: 'image/png', filename: 'portrait.png', id: 'selected-photo', uri: 'file://portrait.png' };
@@ -26,6 +31,55 @@ describe('document-picked image dimensions', () => {
       await vi.advanceTimersByTimeAsync(1500);
       expect(await preparing).toBe(file);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('chat image upload preparation', () => {
+  it('caps a camera image before adding it to the composer and sending it', async () => {
+    const file = {
+      contentType: 'image/jpeg',
+      filename: 'IMG_4032.JPG',
+      height: 4032,
+      id: 'large-camera-photo',
+      size: 5_200_000,
+      uri: 'file:///IMG_4032.JPG',
+      width: 3024,
+    };
+    const transform = vi.fn(async (_uri: string, dimensions: { width: number; height: number }) => ({
+      contentType: 'image/jpeg',
+      filename: 'IMG_4032.jpg',
+      height: dimensions.height,
+      size: 640_000,
+      uri: 'file:///cache/IMG_4032.jpg',
+      width: dimensions.width,
+    }));
+
+    const prepared = await prepareChatImageForUpload(file, transform);
+
+    expect(transform).toHaveBeenCalledWith(file.uri, { width: 1200, height: 1600 });
+    expect(prepared).toMatchObject({
+      contentType: 'image/jpeg',
+      filename: 'IMG_4032.jpg',
+      height: 1600,
+      size: 640_000,
+      uri: 'file:///cache/IMG_4032.jpg',
+      width: 1200,
+    });
+  });
+
+  it('does not re-encode images that already fit the upload bound', async () => {
+    const file = { contentType: 'image/jpeg', filename: 'small.jpg', height: 900, id: 'small', uri: 'file:///small.jpg', width: 1200 };
+    const transform = vi.fn();
+
+    expect(await prepareChatImageForUpload(file, transform)).toBe(file);
+    expect(transform).not.toHaveBeenCalled();
+  });
+
+  it('keeps the original image sendable if native processing fails', async () => {
+    const file = { contentType: 'image/jpeg', filename: 'large.jpg', height: 4032, id: 'fallback', uri: 'file:///large.jpg', width: 3024 };
+
+    await expect(prepareChatImageForUpload(file, async () => { throw new Error('native processor unavailable'); }))
+      .resolves.toBe(file);
   });
 });
 

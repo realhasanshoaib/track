@@ -58,6 +58,7 @@ import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-e
 import { useComposerDraft } from '@/hooks/use-composer-draft';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, pendingMessageIdempotencyKey, type PendingMessage, type PendingMessageGroupAnchor } from '@/lib/pending-messages';
+import { clearPendingMessageProgress, reportPendingMessageProgress } from '@/lib/pending-message-progress';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { archivePresentation } from '@/lib/archive-presentation';
 import { isAutoAttachmentBody } from '@/lib/attachment-presentation';
@@ -214,6 +215,8 @@ export default function ConversationScreen() {
   const pendingSendFollowRef = useRef(false);
   const animateSendFollowUntilRef = useRef(0);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
+  const composerOverlayHeightRef = useRef(0);
+  const composerResizePendingRef = useRef(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
   const lastThreadContentHeightRef = useRef(0);
@@ -233,7 +236,6 @@ export default function ConversationScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [creatingTaskKey, setCreatingTaskKey] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
-  const pendingProgressStepRef = useRef(new Map<string, number>());
   const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
   const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -528,6 +530,8 @@ export default function ConversationScreen() {
   const handleThreadContentSizeChange = useCallback<NonNullable<FlatListProps<GroupedThreadItem>['onContentSizeChange']>>((_width, height) => {
     const wasAtBottom = atBottomRef.current;
     const previousHeight = lastThreadContentHeightRef.current;
+    const composerResized = composerResizePendingRef.current;
+    composerResizePendingRef.current = false;
     lastThreadContentHeightRef.current = height;
     scrollMetricsRef.current.contentHeight = height;
     if (pendingBulkDeleteScrollRef.current) return;
@@ -551,7 +555,7 @@ export default function ConversationScreen() {
       pinAfterSend: pinToLatestAfterSendRef.current,
       wasAtBottom,
     }) && (!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)) {
-      const animateSend = Date.now() <= animateSendFollowUntilRef.current;
+      const animateSend = composerResized || Date.now() <= animateSendFollowUntilRef.current;
       if (animateSend) animateSendFollowUntilRef.current = 0;
       scrollToLatest(animateSend);
     }
@@ -1038,13 +1042,7 @@ export default function ConversationScreen() {
         reportProgress: (attachmentId, progress) => {
           payload.reportProgress(attachmentId, progress);
           if (!pendingId) return;
-          const visibleStep = Math.round(progress * 10);
-          const lastStep = pendingProgressStepRef.current.get(attachmentId);
-          if (progress > 0 && progress < 1 && lastStep === visibleStep) return;
-          pendingProgressStepRef.current.set(attachmentId, visibleStep);
-          setPendingMessages((prev) => prev.map((pending) => pending.id === pendingId
-            ? { ...pending, attachments: pending.attachments?.map((file) => file.id === attachmentId ? { ...file, progress } : file) }
-            : pending));
+          reportPendingMessageProgress(pendingId, attachmentId, progress);
         },
         replyToMessageId,
         target: {
@@ -1141,12 +1139,13 @@ export default function ConversationScreen() {
       pinToLatestAfterSendRef.current = false;
       pendingSendFollowRef.current = false;
       if (pendingId) {
+        clearPendingMessageProgress(pendingId);
         setPendingMessages((prev) => prev.filter((p) => p.id !== pendingId));
       }
       throw failure;
     } finally {
+      if (pendingId) clearPendingMessageProgress(pendingId);
       if (!pendingId) pinToLatestAfterSendRef.current = false;
-      for (const attachment of payload.attachments) pendingProgressStepRef.current.delete(attachment.id);
       setBusy(null);
     }
   }
@@ -1331,6 +1330,8 @@ export default function ConversationScreen() {
             body={message.body}
             isFirstInGroup={pendingGroupStarts.get(message.id) ?? true}
             offline={isOffline}
+            pendingId={message.id}
+            sent={Boolean(message.messageId)}
           />
         </Animated.View>
       ))}
@@ -1645,6 +1646,10 @@ export default function ConversationScreen() {
           onLayout={({ nativeEvent }) => {
             if (composerExpanded) return;
             const height = Math.ceil(nativeEvent.layout.height);
+            if (composerOverlayHeightRef.current > 0 && composerOverlayHeightRef.current !== height) {
+              composerResizePendingRef.current = true;
+            }
+            composerOverlayHeightRef.current = height;
             setComposerOverlayHeight((current) => current === height ? current : height);
           }}
           style={[composerExpanded && { backgroundColor: theme.homeSurface }, composerExpanded && styles.composerExpandedOverlay]}>

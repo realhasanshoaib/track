@@ -47,20 +47,26 @@ const previewErrorCode = v.union(
 )
 const messageAttachment = v.object({
   uploadIntentId: v.id('messageUploadIntents'),
+  storageId: v.optional(v.id('_storage')),
   filename: v.string(),
   contentType: v.string(),
   size: v.number(),
   kind: v.optional(attachmentKind),
   durationMs: v.optional(v.number()),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
 })
 type MessageDetailCtx = QueryCtx | MutationCtx
 type MessageAttachmentInput = {
   uploadIntentId: Id<'messageUploadIntents'>
+  storageId?: Id<'_storage'>
   filename: string
   contentType: string
   size: number
   kind?: 'file' | 'voice_note'
   durationMs?: number
+  width?: number
+  height?: number
 }
 
 export async function hiddenMessageIdsForUser(
@@ -159,6 +165,8 @@ function validateUploadMetadata(input: {
   contentType: string
   size: number
   durationMs?: number
+  width?: number
+  height?: number
 }) {
   if (input.filename.trim().length === 0 || input.contentType.trim().length === 0) {
     throw new Error('attachment_metadata_invalid')
@@ -171,6 +179,19 @@ function validateUploadMetadata(input: {
   }
   if (input.durationMs !== undefined && (!Number.isInteger(input.durationMs) || input.durationMs < 0)) {
     throw new Error('attachment_metadata_invalid')
+  }
+  const hasImageDimensions = input.width !== undefined || input.height !== undefined
+  if (hasImageDimensions) {
+    const { height, width } = input
+    const maxDimension = 100_000
+    if (
+      !input.contentType.toLowerCase().startsWith('image/') ||
+      width === undefined || height === undefined ||
+      !Number.isInteger(width) || !Number.isInteger(height) ||
+      width < 1 || height < 1 || width > maxDimension || height > maxDimension
+    ) {
+      throw new Error('attachment_metadata_invalid')
+    }
   }
 }
 
@@ -250,6 +271,13 @@ async function resolveMessageAttachments(
       throw new Error('attachment_intent_duplicate')
     }
     seenIntentIds.add(String(attachment.uploadIntentId))
+    if (attachment.storageId) {
+      await markMessageUploadAsUploaded(ctx, {
+        intentId: attachment.uploadIntentId,
+        scope,
+        storageId: attachment.storageId,
+      })
+    }
     const intent = await resolveMessageUploadIntent(ctx, {
       intentId: attachment.uploadIntentId,
       scope,
@@ -410,13 +438,11 @@ export const commitMediaPreview = internalMutation({
 
     const previousPreviewStorageId = attachment.previewStorageId
     await ctx.db.patch(attachment._id, {
-      height: undefined,
       previewErrorCode: args.reason,
       previewHeight: undefined,
       previewStatus: 'failed',
       previewStorageId: undefined,
       previewWidth: undefined,
-      width: undefined,
     })
     if (previousPreviewStorageId) {
       await deleteStorageBestEffort(ctx, previousPreviewStorageId)
@@ -1045,6 +1071,8 @@ export const send = mutation({
         size: input.size,
         kind: input.kind,
         durationMs: input.durationMs,
+        width: input.width,
+        height: input.height,
         uploadedBy: args.authorId,
         uploadedByProjectMemberId: projectMember._id,
         actingCompanyId: access.companyAccess?.company._id,
@@ -1914,6 +1942,8 @@ export const attachFile = mutation({
     size: v.number(),
     kind: v.optional(attachmentKind),
     durationMs: v.optional(v.number()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const access = await authorizeScopedRequest(ctx, {
@@ -2041,6 +2071,8 @@ export const attachFile = mutation({
       size: args.size,
       kind: args.kind,
       durationMs: args.durationMs,
+      width: args.width,
+      height: args.height,
       uploadedBy: args.userId,
       uploadedByProjectMemberId: projectMember._id,
       actingCompanyId: representedCompanyId,

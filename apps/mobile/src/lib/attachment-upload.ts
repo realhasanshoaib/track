@@ -8,6 +8,7 @@
  */
 
 import type { Id } from '../../../../convex/_generated/dataModel';
+import { releasePreparedAttachment, resolvePreparedAttachment } from './attachment-preview-flow';
 import { withOperationTimeout } from './promise-timeout';
 
 export type AttachmentKind = 'file' | 'voice_note';
@@ -19,6 +20,8 @@ export type UploadableFile = {
   height?: number;
   id: string;
   kind?: AttachmentKind;
+  /** Keep the displayed local image stable while `uri` changes to its upload-optimized copy. */
+  previewUri?: string;
   size?: number;
   uri: string;
   width?: number;
@@ -35,6 +38,7 @@ export type AttachmentUploadTarget = {
     size: number;
     storageId: Id<'_storage'>;
   }) => Promise<unknown>;
+  /** Persist uploaded bytes if message attachment creation fails, enabling retry without re-upload. */
   claimUploadIntent: (input: { intentId: Id<'messageUploadIntents'>; storageId: string }) => Promise<{
     storageId: Id<'_storage'> | null;
   }>;
@@ -53,6 +57,7 @@ export type AttachmentUploadTarget = {
       filename: string;
       kind?: AttachmentKind;
       size: number;
+      storageId: Id<'_storage'>;
       uploadIntentId: Id<'messageUploadIntents'>;
     }>;
     body: string;
@@ -107,6 +112,7 @@ type PreparedAttachment = {
 const ProgressStep = 0.05;
 const UploadTimeoutMs = 120_000;
 const BackendMutationTimeoutMs = 30_000;
+const UploadRetryRecoveryTimeoutMs = 5_000;
 const MaxConcurrentUploads = 3;
 
 async function mapConcurrent<Result>(
@@ -187,31 +193,32 @@ async function uploadOne(input: {
   onProgress: (fraction: number) => void;
   target: AttachmentUploadTarget;
 }): Promise<PreparedAttachment> {
+  const file = await resolvePreparedAttachment(input.file);
   let blob: Blob | undefined;
   let size: number;
   if (input.target.uploadFile && input.target.getFileSize) {
-    size = await input.target.getFileSize(input.file);
+    size = await input.target.getFileSize(file);
   } else {
-    blob = await (await fetch(input.file.uri)).blob();
+    blob = await (await fetch(file.uri)).blob();
     size = blob.size;
   }
   if (!Number.isFinite(size) || size < 0) throw new Error('file_size_unavailable');
-  const contentType = input.file.contentType || blob?.type || 'application/octet-stream';
+  const contentType = file.contentType || blob?.type || 'application/octet-stream';
   const intent = await withOperationTimeout(input.target.generateUploadUrl({
     contentType,
-    durationMs: input.file.durationMs,
-    filename: input.file.filename,
+    durationMs: file.durationMs,
+    filename: file.filename,
     intentKey: input.intentKey,
-    kind: input.file.kind,
+    kind: file.kind,
     size,
   }), BackendMutationTimeoutMs, 'attachment_upload_intent');
-  let storageId = intent.storageId;
+  let storageId: Id<'_storage'> | null = intent.storageId;
   if (!storageId) {
     if (!intent.uploadUrl) throw new Error('upload_intent_unavailable');
     const uploadedStorageId = input.target.uploadFile
       ? await input.target.uploadFile({
           contentType,
-          file: input.file,
+          file,
           onProgress: input.onProgress,
           url: intent.uploadUrl,
         })
@@ -221,22 +228,35 @@ async function uploadOne(input: {
           onProgress: input.onProgress,
           url: intent.uploadUrl,
         });
-    const claimed = await withOperationTimeout(input.target.claimUploadIntent({
-      intentId: intent.intentId,
-      storageId: uploadedStorageId,
-    }), BackendMutationTimeoutMs, 'attachment_upload_claim');
-    if (!claimed.storageId) throw new Error('upload_intent_unavailable');
-    storageId = claimed.storageId;
+    // The send or retry mutation validates and claims this server-issued ID
+    // atomically, so the upload path does not need another network round trip.
+    storageId = uploadedStorageId as Id<'_storage'>;
   }
   return {
     contentType,
-    durationMs: input.file.durationMs,
-    file: input.file,
-    kind: input.file.kind ?? 'file',
+    durationMs: file.durationMs,
+    file,
+    kind: file.kind ?? 'file',
     size,
     storageId,
     uploadIntentId: intent.intentId,
   };
+}
+
+async function persistUploadedBytesForRetry(
+  attachments: PreparedAttachment[],
+  target: AttachmentUploadTarget,
+) {
+  await Promise.all(attachments.map(async ({ storageId, uploadIntentId }) => {
+    try {
+      await withOperationTimeout(target.claimUploadIntent({
+        intentId: uploadIntentId,
+        storageId,
+      }), UploadRetryRecoveryTimeoutMs, 'attachment_upload_retry_recovery');
+    } catch {
+      // Preserve the send failure. A later retry can safely upload the source again.
+    }
+  }));
 }
 
 /** Upload files first, then create one message with every successful upload. */
@@ -281,21 +301,30 @@ export async function sendComposerMessage(
 
   let messageId = input.messageId ?? null;
   if (!messageId && (body || prepared.length > 0)) {
-    messageId = await withOperationTimeout(target.sendMessage({
-      attachments: prepared.map(({ contentType, durationMs, file, kind, size, uploadIntentId }) => ({
-        contentType,
-        durationMs,
-        filename: file.filename,
-        kind,
-        size,
-        uploadIntentId,
-      })),
-      body: body || fallbackBody(prepared),
-      idempotencyKey: input.idempotencyKey,
-      replyToMessageId,
-    }), BackendMutationTimeoutMs, 'message_send');
+    try {
+      messageId = await withOperationTimeout(target.sendMessage({
+        attachments: prepared.map(({ contentType, durationMs, file, kind, size, storageId, uploadIntentId }) => ({
+          contentType,
+          durationMs,
+          filename: file.filename,
+          kind,
+          size,
+          storageId,
+          uploadIntentId,
+        })),
+        body: body || fallbackBody(prepared),
+        idempotencyKey: input.idempotencyKey,
+        replyToMessageId,
+      }), BackendMutationTimeoutMs, 'message_send');
+    } catch (error) {
+      await persistUploadedBytesForRetry(prepared, target);
+      throw error;
+    }
     input.onMessageCreated?.(messageId);
-    for (const attachment of prepared) reportProgress(attachment.file.id, 1);
+    for (const attachment of prepared) {
+      releasePreparedAttachment(attachment.file.id);
+      reportProgress(attachment.file.id, 1);
+    }
   } else if (messageId) {
     const retryMessageId = messageId;
     input.onMessageCreated?.(retryMessageId);
@@ -313,9 +342,11 @@ export async function sendComposerMessage(
           storageId: attachment.storageId,
           uploadIntentId: attachment.uploadIntentId,
         }), BackendMutationTimeoutMs, 'attachment_attach');
+        releasePreparedAttachment(attachment.file.id);
         reportProgress(attachment.file.id, 1);
         return null;
       } catch {
+        await persistUploadedBytesForRetry([attachment], target);
         reportProgress(attachment.file.id, 0);
         return attachment.file.id;
       }

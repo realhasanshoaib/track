@@ -135,14 +135,18 @@ export const generate = internalAction({
       if (!metadata.width || !metadata.height) {
         return await commitFailure('processor_failed')
       }
+      const swapsAxes = metadata.orientation !== undefined && [5, 6, 7, 8].includes(metadata.orientation)
+      const width = swapsAxes ? metadata.height : metadata.width
+      const height = swapsAxes ? metadata.width : metadata.height
       const dimensions = validateImageDimensions(
-        { height: metadata.height, width: metadata.width },
+        { height, width },
         { maxDimension: maxPreviewDimension, maxPixels: maxPreviewPixels },
       )
       if (!dimensions.ok) return await commitFailure('image_too_large')
 
-      const previewDimensions = calculatePreviewDimensions({ height: metadata.height, width: metadata.width })
+      const previewDimensions = calculatePreviewDimensions({ height, width })
       const output = await image
+        .rotate()
         .resize({
           fit: 'inside',
           height: previewDimensions.height,
@@ -158,13 +162,13 @@ export const generate = internalAction({
       const previewStorageId = await ctx.storage.store(new Blob([output], { type: 'image/webp' }))
       const result: Extract<MediaPreviewResult, { status: 'ready' }> = {
         attachmentId: args.attachmentId,
-        height: metadata.height,
+        height,
         previewHeight: previewDimensions.height,
         previewStorageId,
         previewWidth: previewDimensions.width,
         sourceStorageId: args.sourceStorageId,
         status: 'ready',
-        width: metadata.width,
+        width,
       }
       try {
         const commitArgs: PreviewCommitArgs = {

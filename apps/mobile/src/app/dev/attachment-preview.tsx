@@ -183,7 +183,7 @@ export default function AttachmentPreviewScreen() {
   const theme = useTheme();
   const router = useRouter();
   const releaseConfig = useReleaseConfigState();
-  const { data, slowSend } = useLocalSearchParams<{ data?: string; slowSend?: string }>();
+  const { data, sent, slowSend } = useLocalSearchParams<{ data?: string; sent?: string; slowSend?: string }>();
   const state = selectedState(data);
   const holdSendOpen = slowSend === '1';
   const canOpenThread = canOpenExistingThread(releaseConfig.isLoading, releaseConfig.config.threads);
@@ -242,9 +242,9 @@ export default function AttachmentPreviewScreen() {
                 timeLabel="16:14"
               />
             </View>
-            <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={[]} body="Pending message" />
+            <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={[]} body="Pending message" pendingId="dev-pending-message" />
           </View>
-        ) : previewAttachments.length ? <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={previewAttachments} body={body} offline={state === 'offline'} /> : (
+        ) : previewAttachments.length ? <PendingMessageBubble at={Date.UTC(2026, 8, 30, 23, 59)} attachments={previewAttachments} body={body} offline={state === 'offline'} pendingId="dev-pending-attachments" sent={sent === '1'} /> : (
           <View style={[styles.empty, { borderColor: theme.homeBorder }]}>
             <ThemedText themeColor="textSecondary" type="small">No image selected.</ThemedText>
           </View>

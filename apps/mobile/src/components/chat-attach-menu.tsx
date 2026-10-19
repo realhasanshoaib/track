@@ -10,9 +10,11 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { attachmentIcon, formatFileSize, isImageAttachment } from '@/lib/attachment-presentation';
+import { publishFilesBeforePreparation } from '@/lib/attachment-preview-flow';
+import { composerAttachmentStripLayout, composerAttachmentStripMetrics } from '@/lib/composer-layout';
 import { hapticLight } from '@/lib/haptics';
 import type { UploadableFile } from '@/lib/attachment-upload';
-import { capturePhoto, pickDocuments, pickImages } from '@/lib/media-capture';
+import { capturePhoto, pickDocuments, pickImages, prepareImageForUpload } from '@/lib/media-capture';
 
 export type PendingAttachment = UploadableFile & {
   failed?: boolean;
@@ -23,11 +25,18 @@ type MenuProps = {
   onClose: () => void;
   onError: (message: string) => void;
   onPicked: (files: UploadableFile[]) => void;
+  onPrepared: (file: UploadableFile) => void;
   visible: boolean;
 };
 
-export function ChatAttachMenu({ onClose, onError, onPicked, visible }: MenuProps) {
+export function ChatAttachMenu({ onClose, onError, onPicked, onPrepared, visible }: MenuProps) {
   const pendingPicker = useRef<{ run: () => Promise<UploadableFile[]>; failureMessage: string } | null>(null);
+  const preparationTasks = useRef(new Set<ReturnType<typeof publishFilesBeforePreparation>>());
+  useEffect(() => () => {
+    for (const task of preparationTasks.current) task.cancel();
+    preparationTasks.current.clear();
+  }, []);
+
   const choose = (run: () => Promise<UploadableFile[]>, failureMessage: string) => {
     pendingPicker.current = { run, failureMessage };
     onClose();
@@ -41,7 +50,11 @@ export function ChatAttachMenu({ onClose, onError, onPicked, visible }: MenuProp
         pendingPicker.current = null;
         if (!picker) return;
         void picker.run().then((files) => {
-          if (files.length) onPicked(files);
+          if (files.length) {
+            const task = publishFilesBeforePreparation(files, onPicked, prepareImageForUpload, onPrepared);
+            preparationTasks.current.add(task);
+            void task.done.then(() => preparationTasks.current.delete(task));
+          }
         }).catch(() => onError(picker.failureMessage));
       }}
       title="Add to message"
@@ -60,6 +73,7 @@ type StripProps = {
   disabled?: boolean;
   items: PendingAttachment[];
   onRemove: (id: string) => void;
+  reserveSpace?: boolean;
 };
 
 function describe(item: PendingAttachment) {
@@ -70,7 +84,7 @@ function describe(item: PendingAttachment) {
   return item.size ? `${item.filename}, ${formatFileSize(item.size)}` : item.filename;
 }
 
-export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, items, onRemove }: StripProps) {
+export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, items, onRemove, reserveSpace = false }: StripProps) {
   const reducedMotion = useReducedMotion();
   const visible = items.length > 0;
   const reveal = useSharedValue(visible ? 1 : 0);
@@ -78,27 +92,30 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
     reveal.value = withTiming(visible ? 1 : 0, { duration: reducedMotion ? 0 : ChatMotionDuration, easing: ChatMotionEasing });
   }, [reducedMotion, reveal, visible]);
   const revealStyle = useAnimatedStyle(() => ({
-    height: (TileSize + Spacing.one * 2) * reveal.value,
-    marginBottom: -collapseSpacing * (1 - reveal.value),
     opacity: reveal.value,
+    transform: [{ translateY: (1 - reveal.value) * -collapseSpacing }],
   }));
+  // Change the composer/list reservation once per add/remove. Animating this
+  // height made the screen update its bottom inset and re-scroll on every
+  // frame of the preview reveal.
+  const stripLayout = composerAttachmentStripLayout(TileSize, Spacing.one, 0);
+  const stripMetrics = composerAttachmentStripMetrics(visible, reserveSpace, stripLayout.height, collapseSpacing);
 
   return (
-    <Animated.View accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'} pointerEvents={visible ? 'auto' : 'none'} testID="composer-pending-attachments" style={[styles.stripClip, revealStyle]}>
+    <Animated.View accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'} pointerEvents={visible ? 'auto' : 'none'} testID="composer-pending-attachments" style={[styles.stripClip, stripMetrics, revealStyle]}>
       <ScrollView
-        contentContainerStyle={styles.strip}
+        contentContainerStyle={[styles.strip, stripLayout]}
         horizontal
         keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
-        style={{ height: TileSize + Spacing.one * 2, flexGrow: 0 }}>
+        style={{ height: stripLayout.height, flexGrow: 0 }}>
         {items.map((item) => {
           const isImage = isImageAttachment(item.contentType);
-          const key = isImage ? `${item.id}:${item.uri}` : item.id;
           return (
             <Animated.View
               entering={reducedMotion ? undefined : AttachmentEnter}
               exiting={reducedMotion ? undefined : AttachmentExit}
-              key={key}
+              key={item.id}
               layout={reducedMotion ? undefined : AttachmentReflow}
             >
               {isImage
@@ -133,7 +150,7 @@ function ImageAttachmentTile({ disabled, item, onRemove }: {
         placeholder={ChatImagePlaceholder}
         placeholderContentFit="cover"
         recyclingKey={item.id}
-        source={{ uri: item.uri }}
+        source={{ uri: item.previewUri ?? item.uri }}
         style={styles.thumb}
         transition={reducedMotion ? 0 : ChatImageTransition}
       />
@@ -287,7 +304,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingLeft: TouchTarget + Spacing.four,
     paddingRight: Spacing.one,
-    paddingVertical: Spacing.one,
   },
   thumb: {
     height: '100%',

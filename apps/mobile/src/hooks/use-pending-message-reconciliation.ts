@@ -30,10 +30,11 @@ export function usePendingMessageReconciliation(
         if (!isImageAttachment(entry.attachment.contentType)) return [];
         const localAttachments = correlatedPendingMessages.find(({ messageId }) => messageId === String(message._id))?.attachments;
         const local = localAttachments?.[index];
-        // Initial sends preserve attachment order. Do not infer geometry for a
-        // partial/retried list whose positions or file identity no longer match.
+        // Initial sends preserve attachment order. Preparation may change a
+        // HEIC/PNG file's encoding and filename, so match geometry only when
+        // the full arrays align and both entries at this position are images.
         if (local && localAttachments?.length === attachments.length &&
-            local.filename === entry.attachment.filename && local.contentType === entry.attachment.contentType) {
+            isImageAttachment(local.contentType) && isImageAttachment(entry.attachment.contentType)) {
           rememberChatImageDimensions(String(entry.attachment._id), local);
         }
         const url = ('previewUrl' in entry ? entry.previewUrl : null) ?? entry.url;

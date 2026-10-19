@@ -5,25 +5,22 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { File as ExpoFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Image as NativeImage, Linking } from 'react-native';
 import { useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { UploadableFile } from '@/lib/attachment-upload';
-import { prepareChatImageDimensions } from '@/lib/chat-image-layout';
+import { MaxImageEdge, prepareChatImageDimensions, prepareChatImageForUpload } from '@/lib/chat-image-layout';
 import { hapticDestructive, hapticLight, hapticMedium } from '@/lib/haptics';
 import { shouldFinishVoiceOnRelease, type VoiceGestureOutcome } from '@/lib/voice-recording-gesture';
 
-/**
- * Camera frames are re-encoded by the picker before they reach us. Dropping
- * quality is the only downscale available today; capping the longest edge to
- * `MaxImageEdge` additionally needs `expo-image-manipulator`, which is not a
- * dependency of this app yet.
- */
-export const MaxImageEdge = 1600;
-const CameraQuality = 0.6;
-const LibraryQuality = 0.7;
+/** Captured and selected images enter the composer at a bounded pixel size. */
+export { MaxImageEdge };
+const CameraQuality = 0.82;
+const LibraryQuality = 0.82;
 const SelectionLimit = 10;
 
 let sequence = 0;
@@ -62,10 +59,44 @@ function assetToFile(asset: ImagePicker.ImagePickerAsset): UploadableFile {
     height: asset.height,
     id: nextId(),
     kind: 'file',
+    previewUri: asset.uri,
     size: asset.fileSize,
     uri: asset.uri,
     width: asset.width,
   };
+}
+
+function filenameWithExtension(filename: string, extension: string) {
+  const lastDot = filename.lastIndexOf('.');
+  const stem = lastDot > 0 ? filename.slice(0, lastDot) : filename;
+  return `${stem}.${extension}`;
+}
+
+export async function prepareImageForUpload(file: UploadableFile) {
+  const contentType = file.contentType.toLowerCase();
+  if (!['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'].includes(contentType)) return file;
+  return await prepareChatImageForUpload(file, async (uri, dimensions) => {
+    const context = ImageManipulator.manipulate(uri);
+    context.resize(dimensions);
+    const rendered = await context.renderAsync();
+    const keepPng = contentType === 'image/png';
+    const format = keepPng ? SaveFormat.PNG : SaveFormat.JPEG;
+    const result = await rendered.saveAsync({
+      compress: keepPng ? 1 : 0.82,
+      format,
+    });
+    const nextUri = result.uri;
+    const extension = keepPng ? 'png' : 'jpg';
+    const outputSize = new ExpoFile(nextUri).size;
+    return {
+      contentType: keepPng ? 'image/png' : 'image/jpeg',
+      filename: filenameWithExtension(file.filename, extension),
+      height: result.height,
+      size: typeof outputSize === 'number' && outputSize > 0 ? outputSize : undefined,
+      uri: nextUri,
+      width: result.width,
+    };
+  });
 }
 
 export async function capturePhoto(): Promise<UploadableFile[]> {
@@ -112,9 +143,10 @@ export async function pickDocuments(): Promise<UploadableFile[]> {
   // Resolve one local file at a time to bound decoder work for large selections.
   const prepared: UploadableFile[] = [];
   for (const file of files) {
-    prepared.push(await prepareChatImageDimensions(file, (uri) => new Promise((resolve, reject) => {
+    const withDimensions = await prepareChatImageDimensions(file, (uri) => new Promise((resolve, reject) => {
       NativeImage.getSize(uri, (width, height) => resolve({ width, height }), reject);
-    })));
+    }));
+    prepared.push(await prepareImageForUpload(withDimensions));
   }
   return prepared;
 }

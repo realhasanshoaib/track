@@ -42,13 +42,14 @@ import type { DetailedMessage } from '@/components/thread-row';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/attachment-presentation';
-import { composerSurfaceBackgroundColor, composerTextMaxHeight } from '@/lib/composer-layout';
+import { composerControlVisibility, composerSurfaceBackgroundColor, composerTextMaxHeight } from '@/lib/composer-layout';
 import { createSubmissionGate } from '@/lib/submission-state';
 import type {
   ComposerSubmission,
   ComposerSubmissionResult,
   UploadableFile,
 } from '@/lib/attachment-upload';
+import { releasePreparedAttachment } from '@/lib/attachment-preview-flow';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import {
   applyMention,
@@ -227,7 +228,9 @@ function ComposerImpl({
   const hasFailedSubmission = Boolean(failedSubmission);
   const attachmentsLocked = sending || Boolean(failedSubmission) || Boolean(retryMessageId);
   /** Keep the recording control mounted until the hold gesture has ended. */
-  const showSend = mode === 'idle' && (hasContent || sending);
+  // Reserve the send action slot for every idle composer state so the input
+  // never expands/contracts when typing starts or the keyboard changes state.
+  const { sendAction: showSend, voiceControl: showInlineVoiceControl } = composerControlVisibility(mode, keyboardVisible, hasContent);
 
   function blockVoiceActivationForTransition() {
     setVoiceActivationBlocked(true);
@@ -524,9 +527,11 @@ function ComposerImpl({
         disabled={sending || Boolean(failedSubmission)}
         items={sending ? [] : attachments}
         onRemove={(id) => {
+          releasePreparedAttachment(id);
           if (attachments.length === 1 && retryMessageId) setRetryMessageId(null);
           setAttachments((prev) => prev.filter((item) => item.id !== id));
         }}
+        reserveSpace={sending && attachments.length > 0}
       />
 
       {failedSubmission ? (
@@ -702,7 +707,7 @@ function ComposerImpl({
                   <ThemedText accessible={false} numberOfLines={1} style={styles.placeholderText} themeColor="textTertiary" type="small">Message or ask @Track</ThemedText>
                 </View> : null}
               </View>
-              {voiceControl}
+              {showInlineVoiceControl ? voiceControl : null}
             </Animated.View>
           </Animated.View>
         )}
@@ -719,8 +724,8 @@ function ComposerImpl({
                 hitSlop={6}
                 onPress={handleSend}
                 style={({ pressed }) => Platform.OS === 'ios'
-                  ? [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : pressed ? 0.82 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]
-                  : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.5 : 1 }]}
+                  ? [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.72 : pressed ? 0.82 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]
+                  : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.72 : 1 }]}
               >
                 <Animated.View style={styles.sendState}>
                   {sendPending ? (
@@ -738,7 +743,7 @@ function ComposerImpl({
               </Pressable>
             </View>
           </View>
-        ) : mode !== 'idle' ? (
+        ) : (
           <View style={styles.actionSlot}>
             <View style={styles.actionLayer}>
               {mode === 'recording' ? (
@@ -751,13 +756,21 @@ function ComposerImpl({
               {voiceControl}
             </View>
           </View>
-        ) : null}
+        )}
       </Animated.View>
 
       <ChatAttachMenu
         onClose={() => setMenuOpen(false)}
         onError={setNotice}
         onPicked={(files: UploadableFile[]) => setAttachments((prev) => [...prev, ...files])}
+        onPrepared={(prepared) => {
+          // The upload pipeline awaits the same preparation promise. Avoid a
+          // composer rerender while sending; it can hitch the focused input.
+          if (sendingRef.current) return;
+          setAttachments((prev) => prev.map((item) => item.id === prepared.id
+            ? { ...item, ...prepared, failed: item.failed, progress: item.progress }
+            : item));
+        }}
         visible={menuOpen}
       />
 

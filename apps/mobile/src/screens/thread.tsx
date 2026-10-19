@@ -46,6 +46,7 @@ import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionRe
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
 import { pendingMessageAcknowledgementKey, pendingMessageIdempotencyKey, type PendingMessage } from '@/lib/pending-messages';
+import { clearPendingMessageProgress, reportPendingMessageProgress } from '@/lib/pending-message-progress';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
 import { useReleaseConfigState } from '@/lib/release-config';
@@ -171,7 +172,6 @@ export default function ThreadScreen() {
   const newestFeedTimeRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
-  const pendingProgressStepRef = useRef(new Map<string, number>());
   const [pendingTrackPrompts, setPendingTrackPrompts] = useState<Set<Id<'messages'>>>(new Set());
   const pendingTrackPromptIdsRef = useRef(new Set<Id<'messages'>>());
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -195,6 +195,8 @@ export default function ThreadScreen() {
   const [taskReviewDraft, setTaskReviewDraft] = useState<ReviewableMessageTaskDraft | null>(null);
   const [taskReviewError, setTaskReviewError] = useState<string | null>(null);
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(0);
+  const composerOverlayHeightRef = useRef(0);
+  const composerResizePendingRef = useRef(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DetailedMessage | null>(null);
   const [editBody, setEditBody] = useState('');
@@ -601,13 +603,7 @@ export default function ThreadScreen() {
         reportProgress: (attachmentId, progress) => {
           payload.reportProgress(attachmentId, progress);
           if (!pendingId) return;
-          const visibleStep = Math.round(progress * 10);
-          const lastStep = pendingProgressStepRef.current.get(attachmentId);
-          if (progress > 0 && progress < 1 && lastStep === visibleStep) return;
-          pendingProgressStepRef.current.set(attachmentId, visibleStep);
-          setPendingMessages((pending) => pending.map((message) => message.id === pendingId
-            ? { ...message, attachments: message.attachments?.map((file) => file.id === attachmentId ? { ...file, progress } : file) }
-            : message));
+          reportPendingMessageProgress(pendingId, attachmentId, progress);
         },
         replyToMessageId,
         target: {
@@ -710,12 +706,13 @@ export default function ThreadScreen() {
       pendingSendFollowRef.current = false;
       pinToLatestAfterSendRef.current = false;
       if (pendingId) {
+        clearPendingMessageProgress(pendingId);
         setPendingMessages((pending) => pending.filter((message) => message.id !== pendingId));
       }
       throw sendError;
     } finally {
+      if (pendingId) clearPendingMessageProgress(pendingId);
       if (!pendingId) pinToLatestAfterSendRef.current = false;
-      for (const attachment of payload.attachments) pendingProgressStepRef.current.delete(attachment.id);
       setBusy(false);
     }
   }
@@ -1315,7 +1312,7 @@ export default function ThreadScreen() {
                   entering={reducedMotion ? undefined : PendingMessageEntering}
                   key={message.id}
                 >
-                  <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} offline={network.isConnected === false || network.isInternetReachable === false} />
+                  <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} offline={network.isConnected === false || network.isInternetReachable === false} pendingId={message.id} sent={Boolean(message.messageId)} />
                 </Animated.View>
               ))}
             </View>
@@ -1395,6 +1392,8 @@ export default function ThreadScreen() {
           onContentSizeChange={(_width, height) => {
             const wasAtBottom = atBottomRef.current;
             const previousHeight = lastThreadContentHeightRef.current;
+            const composerResized = composerResizePendingRef.current;
+            composerResizePendingRef.current = false;
             lastThreadContentHeightRef.current = height;
             scrollMetricsRef.current.contentHeight = height;
             if (pendingBulkDeleteScrollRef.current) return;
@@ -1414,7 +1413,7 @@ export default function ThreadScreen() {
               pinAfterSend: pinToLatestAfterSendRef.current,
               wasAtBottom,
             }) && (!targetMessageId || positionedTargetMessageIdRef.current === targetMessageId)) {
-              scrollToLatest();
+              scrollToLatest(composerResized);
             }
           }}
           ref={listRef}
@@ -1443,6 +1442,10 @@ export default function ThreadScreen() {
         <View
           onLayout={({ nativeEvent }) => {
             const height = Math.ceil(nativeEvent.layout.height);
+            if (composerOverlayHeightRef.current > 0 && composerOverlayHeightRef.current !== height) {
+              composerResizePendingRef.current = true;
+            }
+            composerOverlayHeightRef.current = height;
             setComposerOverlayHeight((current) => current === height ? current : height);
           }}
         >

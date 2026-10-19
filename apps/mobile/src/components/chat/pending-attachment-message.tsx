@@ -1,13 +1,13 @@
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
-import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MessageBubbleFrame } from '@/components/chat/message-bubble';
 import { MESSAGE_MAX_WIDTH_RATIO } from '@/components/chat/message-layout';
-import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
+import { MESSAGE_ROW_VERTICAL_PADDING, PENDING_MESSAGE_BOTTOM_PADDING } from '@/lib/message-row-layout';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
-import { ChatImagePlaceholder, ChatImageTransition, PendingImageEntering } from '@/components/chat/message-motion';
+import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
 import { MessageText } from '@/components/chat/message-text';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -16,23 +16,31 @@ import { useTheme } from '@/hooks/use-theme';
 import { attachmentIcon, fileTypeLabel, formatFileSize, isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
 import type { PendingMessageAttachment } from '@/lib/pending-messages';
 import { chatImageAspectRatio } from '@/lib/chat-image-layout';
+import { usePendingMessageProgress } from '@/lib/pending-message-progress';
 
 const GAP = 2;
 const MAX_TILES = 4;
 
-export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFirstInGroup = true, offline = false }: {
+export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFirstInGroup = true, offline = false, pendingId, sent = false }: {
   attachments?: PendingMessageAttachment[];
   at: number;
   body: string;
   isFirstInGroup?: boolean;
   offline?: boolean;
+  pendingId: string;
+  sent?: boolean;
 }) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
   const { width } = useWindowDimensions();
-  const body = attachments.length && isAutoAttachmentBody(rawBody, attachments.map(({ filename }) => filename)) ? '' : rawBody;
-  const images = attachments.filter((file) => isImageAttachment(file.contentType));
-  const files = attachments.filter((file) => !isImageAttachment(file.contentType));
+  const progressByAttachment = usePendingMessageProgress(pendingId);
+  const visibleAttachments = attachments.map((file) => {
+    const progress = progressByAttachment[file.id];
+    return progress === undefined ? file : { ...file, progress };
+  });
+  const body = visibleAttachments.length && isAutoAttachmentBody(rawBody, visibleAttachments.map(({ filename }) => filename)) ? '' : rawBody;
+  const images = visibleAttachments.filter((file) => isImageAttachment(file.contentType));
+  const files = visibleAttachments.filter((file) => !isImageAttachment(file.contentType));
   const imageProgress = images.some((file) => file.progress !== undefined)
     ? images.reduce((total, file) => total + clampProgress(file.progress), 0) / Math.max(images.length, 1)
     : undefined;
@@ -41,8 +49,8 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
   const visibleImages = images.slice(0, MAX_TILES);
   const overflow = images.length - visibleImages.length;
   const hasImages = visibleImages.length > 0;
-  const deliveryState = attachments.length ? (offline ? 'waiting' : 'sending') : undefined;
-  const inlineTextMeta = attachments.length === 0 && Boolean(body);
+  const deliveryState = visibleAttachments.length && !sent ? (offline ? 'waiting' : 'sending') : undefined;
+  const inlineTextMeta = visibleAttachments.length === 0 && Boolean(body);
   const deliveryMeta = hasImages ? (
     <MessageDeliveryMeta
       deliveryState={deliveryState}
@@ -60,7 +68,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
     <View style={[styles.timelineRow, isFirstInGroup ? styles.groupStart : styles.grouped]}>
       <View testID="pending-message-row" style={styles.row}>
       <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage>
-        {attachments.length === 0 ? (
+        {visibleAttachments.length === 0 ? (
           inlineTextMeta ? (
             <View style={styles.inlineTextRow}>
               <MessageText body={body} style={styles.inlineText} />
@@ -69,7 +77,7 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
           ) : null
         ) : <>
           {visibleImages.length === 1 ? (
-            <PendingImage deliveryMeta={deliveryMeta} file={visibleImages[0]} offline={offline} width={maxWidth} />
+            <PendingImage deliveryMeta={deliveryMeta} file={visibleImages[0]} offline={offline} sent={sent} width={maxWidth} />
           ) : visibleImages.length > 1 ? (
             <View style={[styles.grid, { width: maxWidth }]}>
               {rows.map((row) => (
@@ -79,32 +87,30 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
                     const tileSize = row.length === 1 ? maxWidth : tileWidth;
                     return (
                       <View key={file.id} style={[styles.gridTile, { height: tileSize, width: tileSize }]}>
-                        <Animated.View entering={reducedMotion ? undefined : PendingImageEntering} style={styles.imageMotion}>
-                          <Image
-                            accessibilityLabel="Image attachment, sending"
-                            accessible
-                            cachePolicy="memory-disk"
-                            contentFit="cover"
-                            placeholder={ChatImagePlaceholder}
-                            placeholderContentFit="cover"
-                            transition={reducedMotion ? 0 : ChatImageTransition}
-                            recyclingKey={file.id}
-                            source={{ uri: file.uri }}
-                            style={styles.fill}
-                          />
-                        </Animated.View>
+                        <Image
+                          accessibilityLabel={sent ? 'Image attachment, sent' : 'Image attachment, sending'}
+                          accessible
+                          cachePolicy="memory-disk"
+                          contentFit="cover"
+                          placeholder={ChatImagePlaceholder}
+                          placeholderContentFit="cover"
+                          transition={reducedMotion ? 0 : ChatImageTransition}
+                          recyclingKey={file.id}
+                          source={{ uri: file.previewUri ?? file.uri }}
+                          style={styles.fill}
+                        />
                         {tileOverflow ? <View style={[styles.overflow, { backgroundColor: theme.overlay }]}><ThemedText style={styles.overflowText} type="subtitle">+{tileOverflow}</ThemedText></View> : null}
                       </View>
                     );
                   })}
                 </View>
               ))}
-              <PendingImageOverlay imageCount={images.length} offline={offline} progress={imageProgress} />
+              {!sent ? <PendingImageOverlay imageCount={images.length} offline={offline} progress={imageProgress} /> : null}
               {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
             </View>
           ) : null}
           {files.length ? <View style={[styles.fileList, { width: fileListWidth }, hasImages && styles.fileListAfterImage]}>
-            {files.map((file) => <PendingFileCard file={file} key={file.id} offline={offline} />)}
+            {files.map((file) => <PendingFileCard file={file} key={file.id} offline={offline} sent={sent} />)}
           </View> : null}
           {body ? <View style={styles.body}><MessageText body={body} /></View> : null}
         </>}
@@ -119,10 +125,11 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
   );
 }
 
-function PendingImage({ deliveryMeta, file, offline, width }: {
+function PendingImage({ deliveryMeta, file, offline, sent, width }: {
   deliveryMeta: ReactNode;
   file: PendingMessageAttachment;
   offline: boolean;
+  sent: boolean;
   width: number;
 }) {
   const theme = useTheme();
@@ -131,21 +138,19 @@ function PendingImage({ deliveryMeta, file, offline, width }: {
 
   return (
     <View style={[styles.singleImage, { aspectRatio: ratio, backgroundColor: theme.skeleton, width }]}>
-      <Animated.View entering={reducedMotion ? undefined : PendingImageEntering} style={styles.imageMotion}>
-        <Image
-          accessibilityLabel="Image attachment, sending"
-          accessible
-          cachePolicy="memory-disk"
-          contentFit={file.width && file.height ? 'cover' : 'contain'}
-          placeholder={ChatImagePlaceholder}
-          placeholderContentFit="cover"
-          transition={reducedMotion ? 0 : ChatImageTransition}
-          recyclingKey={file.id}
-          source={{ uri: file.uri }}
-          style={styles.fill}
-        />
-      </Animated.View>
-      <PendingImageOverlay imageCount={1} offline={offline} progress={file.progress} />
+      <Image
+        accessibilityLabel={sent ? 'Image attachment, sent' : 'Image attachment, sending'}
+        accessible
+        cachePolicy="memory-disk"
+        contentFit={file.width && file.height ? 'cover' : 'contain'}
+        placeholder={ChatImagePlaceholder}
+        placeholderContentFit="cover"
+        transition={reducedMotion ? 0 : ChatImageTransition}
+        recyclingKey={file.id}
+        source={{ uri: file.previewUri ?? file.uri }}
+        style={styles.fill}
+      />
+      {!sent ? <PendingImageOverlay imageCount={1} offline={offline} progress={file.progress} /> : null}
       {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
     </View>
   );
@@ -182,18 +187,20 @@ function PendingImageOverlay({ imageCount, offline, progress }: { imageCount: nu
   );
 }
 
-function PendingFileCard({ file, offline }: { file: PendingMessageAttachment; offline: boolean }) {
+function PendingFileCard({ file, offline, sent }: { file: PendingMessageAttachment; offline: boolean; sent: boolean }) {
   const theme = useTheme();
   const progress = clampProgress(file.progress);
-  const hasProgress = file.progress !== undefined && !offline;
+  const hasProgress = file.progress !== undefined && !offline && !sent;
   const isUploading = hasProgress && progress > 0 && progress < 1;
-  const status = offline
-    ? 'Waiting for connection'
-    : file.progress === undefined || progress === 0
-      ? 'Preparing to send'
-      : progress >= 1
-        ? 'Finishing up'
-        : 'Sending';
+  const status = sent
+    ? 'Sent'
+    : offline
+      ? 'Waiting for connection'
+      : file.progress === undefined || progress === 0
+        ? 'Preparing to send'
+        : progress >= 1
+          ? 'Finishing up'
+          : 'Sending';
   const detail = `${fileTypeLabel(file)}${typeof file.size === 'number' ? ` · ${formatFileSize(file.size)}` : ''}`;
   const progressLabel = `${file.filename}, ${detail}, ${status}${isUploading ? `, ${Math.round(progress * 100)} percent` : ''}`;
 
@@ -213,8 +220,10 @@ function PendingFileCard({ file, offline }: { file: PendingMessageAttachment; of
         <ThemedText ellipsizeMode="middle" numberOfLines={2} style={styles.fileName} type="smallBold">{file.filename}</ThemedText>
         <ThemedText numberOfLines={1} themeColor="textSecondary" type="caption">{detail}</ThemedText>
         <View style={styles.fileStatus}>
-          {offline
-            ? <PlatformIcon color={theme.textSecondary} name="cloud-off" size={13} />
+          {sent
+            ? <PlatformIcon color={theme.accentStrong} name="check" size={13} />
+            : offline
+              ? <PlatformIcon color={theme.textSecondary} name="cloud-off" size={13} />
             : !isUploading
               ? <ActivityIndicator color={theme.textSecondary} size="small" />
               : null}
@@ -259,7 +268,6 @@ const styles = StyleSheet.create({
   gridRow: { flexDirection: 'row', gap: GAP },
   gridTile: { borderCurve: 'continuous', borderRadius: Radius.medium, overflow: 'hidden' },
   imageOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  imageMotion: { ...StyleSheet.absoluteFill },
   imageStatus: { alignItems: 'center', backgroundColor: Colors.dark.overlay, borderRadius: Radius.pill, flexDirection: 'row', gap: Spacing.two, justifyContent: 'center', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   imageStatusText: { color: Colors.dark.text, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { height: 1, width: 0 }, textShadowRadius: 2 },
   overflow: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
@@ -269,7 +277,7 @@ const styles = StyleSheet.create({
   // Use the same outer group and row gutters as ThreadRow/MessageBubble so
   // reconciliation does not change scroll extent when the server row arrives.
   row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: MESSAGE_ROW_VERTICAL_PADDING, width: '100%' },
-  timelineRow: { paddingBottom: Spacing.half, width: '100%' },
+  timelineRow: { paddingBottom: PENDING_MESSAGE_BOTTOM_PADDING, width: '100%' },
   groupStart: { paddingTop: Spacing.two },
   grouped: { paddingTop: 2 },
   singleImage: { borderCurve: 'continuous', borderRadius: Radius.large, overflow: 'hidden' },

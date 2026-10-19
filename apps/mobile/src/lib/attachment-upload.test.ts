@@ -130,4 +130,68 @@ describe('sendComposerMessage recovery', () => {
     }));
     expect(fetchFile).not.toHaveBeenCalled();
   });
+
+  it('passes the uploaded storage id into the send mutation for atomic claiming', async () => {
+    const uploadFile = vi.fn().mockResolvedValue('uploaded-storage-id');
+    const generateUploadUrl = vi.fn().mockResolvedValue({
+      expiresAt: Date.now() + 60_000,
+      intentId: 'intent-atomic' as Id<'messageUploadIntents'>,
+      status: 'issued' as const,
+      storageId: null,
+      uploadUrl: 'https://uploads.example.test/atomic',
+    });
+    const sendMessage = vi.fn().mockResolvedValue('message-atomic' as Id<'messages'>);
+    const target = makeTarget({
+      generateUploadUrl,
+      getFileSize: vi.fn().mockReturnValue(4),
+      sendMessage,
+      uploadFile,
+    });
+
+    await sendComposerMessage({
+      attachments: [makeFile('atomic', 'photo.jpg')],
+      body: '',
+      idempotencyKey: 'send-atomic',
+      reportProgress: vi.fn(),
+      target,
+    });
+
+    expect(target.claimUploadIntent).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [expect.objectContaining({
+        storageId: 'uploaded-storage-id',
+        uploadIntentId: 'intent-atomic',
+      })],
+    }));
+  });
+
+  it('keeps uploaded bytes reusable if the message mutation fails', async () => {
+    const claimUploadIntent = vi.fn().mockResolvedValue({ storageId: 'uploaded-storage-id' as Id<'_storage'> });
+    const target = makeTarget({
+      claimUploadIntent,
+      generateUploadUrl: vi.fn().mockResolvedValue({
+        expiresAt: Date.now() + 60_000,
+        intentId: 'intent-recovery' as Id<'messageUploadIntents'>,
+        status: 'issued' as const,
+        storageId: null,
+        uploadUrl: 'https://uploads.example.test/recovery',
+      }),
+      getFileSize: vi.fn().mockReturnValue(4),
+      sendMessage: vi.fn().mockRejectedValue(new Error('mutation unavailable')),
+      uploadFile: vi.fn().mockResolvedValue('uploaded-storage-id'),
+    });
+
+    await expect(sendComposerMessage({
+      attachments: [makeFile('recovery', 'photo.jpg')],
+      body: '',
+      idempotencyKey: 'send-recovery',
+      reportProgress: vi.fn(),
+      target,
+    })).rejects.toThrow('mutation unavailable');
+
+    expect(claimUploadIntent).toHaveBeenCalledWith({
+      intentId: 'intent-recovery',
+      storageId: 'uploaded-storage-id',
+    });
+  });
 });

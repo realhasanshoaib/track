@@ -447,6 +447,48 @@ describe('Channel threads', () => {
     })
   })
 
+  it('claims a freshly uploaded storage object inside the send mutation', async () => {
+    const { groupId, owner, projectId, t } = await seedLegacyChannel()
+    const actor = asUser(t, owner)
+    const contents = 'atomic direct attachment'
+    const storageId = await t.run(async (ctx) =>
+      await ctx.storage.store(new Blob([contents], { type: 'text/plain' })),
+    )
+    const uploadIntent = await actor.mutation(api.messages.generateUploadUrl, {
+      contentType: 'text/plain',
+      filename: 'atomic-direct.txt',
+      groupId,
+      intentKey: 'atomic-direct-send-attachment',
+      size: new Blob([contents]).size,
+      userId: owner,
+    })
+
+    const messageId = await actor.mutation(api.messages.send, {
+      authorId: owner,
+      attachments: [{
+        contentType: 'text/plain',
+        filename: 'atomic-direct.txt',
+        size: new Blob([contents]).size,
+        storageId,
+        uploadIntentId: uploadIntent.intentId,
+      }],
+      body: 'Atomic direct send',
+      groupId,
+      idempotencyKey: 'atomic-direct-send',
+      projectId,
+    })
+
+    const attached = await t.run(async (ctx) => {
+      const message = await ctx.db.get(messageId)
+      const attachmentId = message?.attachmentIds[0]
+      return attachmentId ? await ctx.db.get(attachmentId) : null
+    })
+    const intent = await t.run(async (ctx) => await ctx.db.get(uploadIntent.intentId))
+
+    expect(attached).toMatchObject({ filename: 'atomic-direct.txt', storageId, messageId })
+    expect(intent).toMatchObject({ messageId, status: 'claimed', storageId })
+  })
+
   it('enforces creator or steward lifecycle authority and revision conflicts', async () => {
     const { groupId, member, owner, projectId, t } = await seedLegacyChannel()
     const threadId = await asUser(t, owner).mutation(api.channelThreads.create, {
