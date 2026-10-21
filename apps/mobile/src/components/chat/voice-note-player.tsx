@@ -7,7 +7,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { MESSAGE_MAX_WIDTH_RATIO, MESSAGE_SELECTION_RAIL_WIDTH } from '@/components/chat/message-layout';
+import { messageSelectionLayout } from '@/lib/message-selection-layout';
 import { ColoredAvatar } from '@/components/colored-avatar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
@@ -69,7 +69,6 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
   const [trackWidth, setTrackWidth] = useState(0);
   const scrubbing = useRef(false);
   const progress = useSharedValue(0);
-  const heldForActions = useSharedValue(false);
   const progressWidth = Math.max(trackWidth - TRACK_INSET * 2, 0);
   const totalSeconds = attachment.durationMs ? attachment.durationMs / 1000 : status.duration;
   const elapsedSeconds = Math.min(status.currentTime, totalSeconds || status.currentTime);
@@ -128,29 +127,32 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
   }
 
   const scrub = Gesture.Pan()
-    .minDistance(0)
-    .onBegin((event) => {
-      heldForActions.value = false;
+    .minDistance(4)
+    .onStart((event) => {
       if (progressWidth <= 0) return;
       scheduleOnRN(beginScrub);
       progress.value = clamp01((event.x - TRACK_INSET) / progressWidth);
     })
     .onUpdate((event) => {
-      if (progressWidth <= 0 || heldForActions.value) return;
+      if (progressWidth <= 0) return;
       progress.value = clamp01((event.x - TRACK_INSET) / progressWidth);
     })
-    .onFinalize(() => {
-      if (progressWidth > 0 && !heldForActions.value) scheduleOnRN(seekToFraction, progress.value);
+    .onEnd(() => {
+      if (progressWidth > 0) scheduleOnRN(seekToFraction, progress.value);
     });
+  const tapTrack = Gesture.Tap().onEnd((event) => {
+    if (progressWidth > 0) scheduleOnRN(seekToFraction, clamp01((event.x - TRACK_INSET) / progressWidth));
+  });
   const hold = Gesture.LongPress()
     .enabled(Boolean(onLongPress) && !selectionMode)
     .minDuration(500)
     .maxDistance(8)
     .onStart(() => {
-      heldForActions.value = true;
       scheduleOnRN(openMessageActions);
     });
-  const trackGesture = Gesture.Simultaneous(scrub, hold);
+  // A zero-distance pan previously won immediately, so holding the waveform
+  // scrubbed audio and never opened the message actions.
+  const trackGesture = Gesture.Race(hold, scrub, tapTrack);
 
   const playedStyle = useAnimatedStyle(() => ({ width: progress.value * progressWidth }));
   const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: progress.value * progressWidth }] }));
@@ -174,10 +176,7 @@ export function VoiceNotePlayer({ attachment, deliveryMeta, isOwnMessage, onLong
 
   const percent = Math.round((totalSeconds ? elapsedSeconds / totalSeconds : 0) * 100);
   const speed = SPEEDS[speedIndex];
-  const selectionReservedWidth = selectionMode
-    ? MESSAGE_SELECTION_RAIL_WIDTH + (isOwnMessage ? 0 : Spacing.two * 2)
-    : 0;
-  const playerWidth = Math.max(0, Math.min(windowWidth * MESSAGE_MAX_WIDTH_RATIO, 340) - selectionReservedWidth);
+  const playerWidth = messageSelectionLayout({ isOwnMessage, selectionMode, windowWidth }).voicePlayerWidth;
   const senderAvatar = senderAvatarUrl ? (
     <Image accessibilityLabel={`${senderName} profile photo`} accessibilityRole="image" contentFit="cover" recyclingKey={senderAvatarUrl} source={{ uri: senderAvatarUrl }} style={styles.avatar} transition={120} />
   ) : <ColoredAvatar label={senderName} seed={senderName} size={AVATAR_SIZE} />;

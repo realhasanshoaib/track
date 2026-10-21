@@ -9,7 +9,7 @@ import { File as ExpoFile, UploadType } from 'expo-file-system';
 import { KeyboardEvents, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 import * as Clipboard from 'expo-clipboard';
-import { parseMentions } from '@track/shared';
+import { MAX_BULK_MESSAGE_DELETE_COUNT, parseMentions } from '@track/shared';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
@@ -19,10 +19,12 @@ import { ConnectivityBanner } from '@/components/connectivity-banner';
 import { ConversationLoading } from '@/components/conversation-loading';
 import { EmptyState } from '@/components/empty-state';
 import { PendingMessageBubble } from '@/components/chat/pending-attachment-message';
+import { ChatTypingIndicator } from '@/components/chat/typing-indicator';
 import { ChatHeaderBackground } from '@/components/chat/chat-header-background';
 import {
   JumpToLatestEntering,
   JumpToLatestExiting,
+  MessageDeleteMotionDuration,
   PendingMessageEntering,
 } from '@/components/chat/message-motion';
 import { ForwardMessageSheet } from '@/components/forward-message-sheet';
@@ -33,7 +35,6 @@ import { MessageReportSheet, type ReportReason } from '@/components/message-repo
 import { MessageTaskReviewSheet } from '@/components/message-task-review-sheet';
 import { OptionsSheet, SheetInput, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon, type IconName } from '@/components/platform-icon';
-import { TaskInlineCards } from '@/components/task-inline-cards';
 import { ThreadRow, DateSeparator, type DetailedMessage, type GroupedThreadItem, resolveMentionIds, resolveMentionProjectMemberIds } from '@/components/thread-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -43,9 +44,9 @@ import { useAppToast } from '@/components/app-toast';
 import { useTheme } from '@/hooks/use-theme';
 import { channelHref, navigationUnavailableCopy } from '@/lib/company-navigation';
 import { sendComposerMessage, type ComposerSubmission, type ComposerSubmissionResult } from '@/lib/attachment-upload';
-import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { hapticDestructive, hapticLight, hapticSuccess } from '@/lib/haptics';
 import { idempotencyKey } from '@/lib/idempotency';
-import { pendingMessageAcknowledgementKey, pendingMessageIdempotencyKey, type PendingMessage } from '@/lib/pending-messages';
+import { pendingMessageAcknowledgementKey, pendingMessageGroupStarts, pendingMessageIdempotencyKey, type PendingMessage, type PendingMessageGroupAnchor } from '@/lib/pending-messages';
 import { clearPendingMessageProgress, reportPendingMessageProgress } from '@/lib/pending-message-progress';
 import { usePendingMessageReconciliation } from '@/hooks/use-pending-message-reconciliation';
 import { buildMentionCandidates } from '@/lib/mention-autocomplete';
@@ -56,13 +57,23 @@ import { threadConversationHref } from '@/lib/thread-navigation';
 import { threadSlug } from '@/lib/thread-name';
 import { setActivePushContext } from '@/lib/push-presentation';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
+import { useChatTypingPresence } from '@/hooks/use-chat-typing-presence';
 import { AnimatedPressable, usePressFeedback } from '@/hooks/use-press-feedback';
 import { shouldShowJumpToLatest } from '@/lib/thread-list';
+import { CHAT_HISTORY_REARM_THRESHOLD, olderMessagesState, shouldAutoLoadOlderMessages, shouldPrefetchHistory } from '@/lib/chat-pagination';
 import { TaskLinkBatchProvider } from '@/lib/task-link-context';
 import { communicationErrorMessage, taskErrorMessage } from '@/lib/user-facing-error';
 import { archivePresentation } from '@/lib/archive-presentation';
-import { androidKeyboardInsetForViewport, createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldFollowLatestAfterContentResize, shouldFollowPendingSendAfterContentLayout, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
-import { groupThreadTimeline } from '@/lib/grouped-thread-items';
+import { androidKeyboardInsetForViewport, createCoalescedChatScrollScheduler, followLatestAfterViewportLayout, restoreChatScrollAfterDeletion, scrollListToLatest, shouldFollowLatestOnComposerFocus, shouldFollowLatestAfterContentResize, shouldFollowPendingSendAfterContentLayout, type ChatDeleteScrollSnapshot } from '@/lib/chat-scroll-follow';
+
+const ComposerDock = Platform.OS === 'android' ? View : KeyboardStickyView;
+
+type PendingDeleteState = {
+  hideForMe: boolean;
+  messageIds: Id<'messages'>[];
+  status: 'animating' | 'undoable' | 'deleting' | 'committed' | 'failed';
+};
+import { groupThreadTimeline, visibleTimelineItems } from '@/lib/grouped-thread-items';
 
 function ThreadHeaderButton({ accessibilityLabel, icon, onPress }: { accessibilityLabel: string; icon: IconName; onPress: () => void }) {
   if (Platform.OS !== 'ios') return <IconButton accessibilityLabel={accessibilityLabel} icon={icon} onPress={onPress} />;
@@ -103,6 +114,14 @@ export default function ThreadScreen() {
   const targetMessageId = messageId as Id<'messages'> | undefined;
   const cid = companyId as Id<'companies'> | undefined;
   const pmid = membershipId as Id<'projectMembers'> | undefined;
+  const chatPresence = useChatTypingPresence({
+    actingCompanyId: cid,
+    channelThreadId: tid,
+    groupId: gid,
+    projectId: pid,
+    projectMemberId: pmid,
+    userId: trackUserId ?? undefined,
+  });
   useFocusEffect(useCallback(() => {
     if (pid && gid && tid) setActivePushContext({ projectId: pid, groupId: gid, threadId: tid });
     return () => setActivePushContext(null);
@@ -144,6 +163,7 @@ export default function ThreadScreen() {
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const claimUploadIntent = useMutation(api.messages.claimUploadIntent);
   const attachFile = useMutation(api.messages.attachFile);
+  const publishVideoPreview = useAction(api.messages.publishVideoPreview);
   const askTrack = useAction(api.assistant.ask);
   const markRead = useMutation(api.channelThreads.markRead);
   const setFollowing = useMutation(api.channelThreads.setFollowing);
@@ -155,7 +175,6 @@ export default function ThreadScreen() {
   const deleteMessages = useMutation(api.messages.removeMany);
   const hideDeletedMessages = useMutation(api.messages.hideDeletedForMe);
   const editMessage = useMutation(api.messages.edit);
-  const sendSignatureRef = useRef<string | null>(null);
   const [replySelection, setReplySelection] = useState<{ scopeKey: string; message: DetailedMessage } | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<'messages'> | null>(null);
   const handledTargetMessageIdRef = useRef<Id<'messages'> | null>(null);
@@ -189,6 +208,10 @@ export default function ThreadScreen() {
   selectedMessageIdsRef.current = selectedMessageIds;
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const bulkDeleteBusyRef = useRef(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingDeleteState | null>(null);
+  const pendingDeleteRef = useRef<PendingDeleteState | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryDeleteRef = useRef<(() => void) | null>(null);
   const [reportTarget, setReportTarget] = useState<GroupedThreadItem | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -223,12 +246,15 @@ export default function ThreadScreen() {
     const id = item.item.message._id;
     const next = new Set(selectedMessageIdsRef.current);
     if (next.has(id)) next.delete(id);
-    else next.add(id);
+    else if (next.size >= MAX_BULK_MESSAGE_DELETE_COUNT) {
+      showToast({ title: 'Selection limit reached', message: `Select up to ${MAX_BULK_MESSAGE_DELETE_COUNT} messages at a time.`, tone: 'error' });
+      return;
+    } else next.add(id);
     selectedMessageIdsRef.current = next;
     setSelectedMessageIds(next);
     setActionTarget(next.size ? item : null);
     if (!next.size) setMessageSelectionMode(false);
-  }, []);
+  }, [showToast]);
   useEffect(() => {
     if (Platform.OS !== 'android' || !messageSelectionMode) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -241,7 +267,28 @@ export default function ThreadScreen() {
   const [forwardTarget, setForwardTarget] = useState<DetailedMessage | null>(null);
   const [forwardBusyGroupId, setForwardBusyGroupId] = useState<string | null>(null);
   const [forwardError, setForwardError] = useState<string | null>(null);
-  const hasMoreThreadItems = messagePageStatus === 'CanLoadMore' || assistantPage.status === 'CanLoadMore';
+  const historyScrollRequestedRef = useRef(false);
+  const olderPageLoadArmedRef = useRef(true);
+  const olderPageLoadInFlightRef = useRef(false);
+  const { hasMore: hasMoreThreadItems, loading: loadingOlderThreadItems } = olderMessagesState([
+    messagePageStatus,
+    assistantPage.status,
+  ]);
+  const loadOlderThreadItems = useCallback(() => {
+    if (!hasMoreThreadItems || loadingOlderThreadItems || olderPageLoadInFlightRef.current) return;
+    olderPageLoadInFlightRef.current = true;
+    if (messagePageStatus === 'CanLoadMore') loadMoreMessages(50);
+    if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(50);
+  }, [assistantPage, hasMoreThreadItems, loadMoreMessages, loadingOlderThreadItems, messagePageStatus]);
+  const prefetchShortHistory = useCallback(() => {
+    const { contentHeight, viewportHeight } = scrollMetricsRef.current;
+    if (shouldPrefetchHistory({ contentHeight, viewportHeight, hasMore: hasMoreThreadItems, loading: loadingOlderThreadItems })) {
+      loadOlderThreadItems();
+    }
+  }, [hasMoreThreadItems, loadOlderThreadItems, loadingOlderThreadItems]);
+  useEffect(() => {
+    if (!loadingOlderThreadItems) olderPageLoadInFlightRef.current = false;
+  }, [loadingOlderThreadItems]);
   const composerDraftScope = useMemo(() => trackUserId && pid && gid && tid ? {
     actorId: trackUserId,
     actingCompanyId: cid,
@@ -259,7 +306,7 @@ export default function ThreadScreen() {
       ? current
       : { ...current, composer: nextComposer });
   }, [composerDraft.setDraft]);
-  const sendKey = useRef<string | null>(null);
+  const sendKeysBySignatureRef = useRef(new Map<string, string>());
   const listRef = useRef<FlatList<GroupedThreadItem>>(null);
   const pendingBulkDeleteScrollRef = useRef<ChatDeleteScrollSnapshot & {
     selectedIds: Set<Id<'messages'>>;
@@ -286,6 +333,12 @@ export default function ThreadScreen() {
     api.channelThreads.readReceiptSequences,
     queryArgs && !readOnly ? queryArgs : 'skip',
   );
+  const readReceiptsRef = useRef(readReceipts);
+  readReceiptsRef.current = readReceipts;
+  const readReceiptRenderKey = readReceipts
+    ? `${readReceipts.recipientCount}:${readReceipts.readThroughSequences.join(',')}`
+    : '';
+  const threadListExtraData = useMemo(() => ({ readReceiptRenderKey, selectedMessageIds }), [readReceiptRenderKey, selectedMessageIds]);
   const scheduleCoalescedScroll = useMemo(() => createCoalescedChatScrollScheduler(), []);
   const pinToLatest = useCallback(() => {
     if (!followingLatestRef.current && !atBottomRef.current && !pinToLatestAfterSendRef.current) return;
@@ -295,7 +348,10 @@ export default function ThreadScreen() {
     }));
   }, []);
   useEffect(() => {
-    const subscriptions = [KeyboardEvents.addListener('keyboardDidShow', pinToLatest)];
+    const subscriptions = [
+      KeyboardEvents.addListener('keyboardDidShow', pinToLatest),
+      KeyboardEvents.addListener('keyboardDidHide', pinToLatest),
+    ];
     return () => {
       for (const subscription of subscriptions) subscription.remove();
     };
@@ -311,8 +367,9 @@ export default function ThreadScreen() {
     });
   }, [scheduleCoalescedScroll]);
   const focusComposerAtLatest = useCallback(() => {
-    // Opening the composer means composing from the newest reply. Keep the
-    // list pinned through keyboard-driven viewport changes; user drag cancels it.
+    // Preserve the reader's history position when the keyboard opens. Keep the
+    // latest edge pinned only when it was already the active reading position.
+    if (!shouldFollowLatestOnComposerFocus(atBottomRef.current)) return;
     pinToLatestAfterSendRef.current = true;
     followingLatestRef.current = true;
     scrollToLatest();
@@ -343,6 +400,7 @@ export default function ThreadScreen() {
     if (pendingDeleteScrollRestoreFrameRef.current !== null) {
       cancelAnimationFrame(pendingDeleteScrollRestoreFrameRef.current);
     }
+    if (pendingDeleteTimerRef.current !== null) clearTimeout(pendingDeleteTimerRef.current);
   }, []);
   const taskIdentity = useMemo<MobileTaskIdentity | null>(() => cid && pmid ? {
     archived: readOnly,
@@ -360,10 +418,13 @@ export default function ThreadScreen() {
   }, []);
   useFocusEffect(useCallback(() => {
     screenActiveRef.current = true;
+    if (followingLatestRef.current || atBottomRef.current) {
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollToLatest()));
+    }
     return () => {
       screenActiveRef.current = false;
     };
-  }, []));
+  }, [scrollToLatest]));
 
   const acknowledgeViewedMessage = useCallback((sequence: number) => {
     if (!queryArgs || readOnly || !screenActiveRef.current) return;
@@ -410,6 +471,35 @@ export default function ThreadScreen() {
     pendingMessageIdempotencyKeys,
     pendingMessageIds,
   }), [assistantStreams, messages, pendingMessageIdempotencyKeys, pendingMessageIds]);
+  const lastTimelineAnchor = useMemo<PendingMessageGroupAnchor | null>(() => {
+    for (let index = threadItems.length - 1; index >= 0; index--) {
+      const item = threadItems[index];
+      if (item?.kind === 'message') return {
+        at: item.at,
+        authorId: item.item.author?._id ?? 'unknown',
+        key: item.key,
+        kind: 'message',
+      };
+      if (item?.kind === 'assistant') return { at: item.at, authorId: null, key: item.key, kind: 'assistant' };
+    }
+    return null;
+  }, [threadItems]);
+  const pendingGroupStarts = useMemo(
+    () => pendingMessageGroupStarts(pendingMessages, trackUserId ? String(trackUserId) : '', lastTimelineAnchor),
+    [lastTimelineAnchor, pendingMessages, trackUserId],
+  );
+  const visibleThreadItems = useMemo(() => {
+    // Keep deleted-for-everyone rows in the timeline so the row can transition
+    // to its deleted-message label when the mutation is reflected by Convex.
+    const hiddenIds = pendingDelete?.hideForMe && pendingDelete.status !== 'failed' && pendingDelete.status !== 'animating'
+      ? new Set(pendingDelete.messageIds)
+      : null;
+    const deletedIds = pendingDelete && !pendingDelete.hideForMe && pendingDelete.status !== 'failed'
+      ? new Set(pendingDelete.messageIds)
+      : undefined;
+    return visibleTimelineItems(threadItems, hiddenIds ?? undefined, deletedIds);
+  }, [pendingDelete, threadItems]);
+  useEffect(prefetchShortHistory, [prefetchShortHistory, visibleThreadItems.length]);
   const selectedMessages = useMemo(
     () => threadItems.filter((item): item is Extract<GroupedThreadItem, { kind: 'message' }> =>
       item.kind === 'message' && selectedMessageIds.has(item.item.message._id),
@@ -465,6 +555,23 @@ export default function ThreadScreen() {
   usePendingMessageReconciliation(messages as DetailedMessage[] | undefined, pendingMessages, setPendingMessages);
 
   useEffect(() => {
+    if (pendingDelete?.status === 'committed') {
+      const settled = pendingDelete.messageIds.every((id) => {
+        const current = threadItems.find((item) => item.kind === 'message' && item.item.message._id === id);
+        return pendingDelete.hideForMe
+          ? current === undefined
+          : current?.kind === 'message' && current.item.message.deletedAt !== undefined;
+      });
+      if (settled) {
+        if (pendingDeleteTimerRef.current === null) {
+          pendingDeleteRef.current = null;
+          pendingDeleteTimerRef.current = setTimeout(() => {
+            pendingDeleteTimerRef.current = null;
+            setPendingDelete((current) => current?.status === 'committed' ? null : current);
+          }, 1_600);
+        }
+      }
+    }
     const pending = pendingBulkDeleteScrollRef.current;
     if (!pending || pending.restorationScheduled) return;
     const settled = [...pending.selectedIds].every((id) => {
@@ -484,11 +591,11 @@ export default function ThreadScreen() {
         atBottomRef.current = pending.wasAtBottom;
         followingLatestRef.current = pending.followingLatest;
         pinToLatestAfterSendRef.current = pending.pinAfterSend;
-        restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest);
+        restoreChatScrollAfterDeletion(pending, scrollToLatest);
         updateJumpToLatest();
       });
     });
-  }, [scrollToLatest, threadItems, updateJumpToLatest]);
+  }, [pendingDelete, scrollToLatest, threadItems, updateJumpToLatest]);
   const taskLinkMessageIds = useMemo(() => threadItems.flatMap((item) => item.kind === 'message' ? [item.item.message._id] : []), [threadItems]);
   const linkedTasks = useQuery(
     api.tasks.listForMessages,
@@ -561,6 +668,7 @@ export default function ThreadScreen() {
   }, [context, gid, pid, router, threadItems, tid]);
 
   async function handleSendMessage(payload: ComposerSubmission): Promise<ComposerSubmissionResult> {
+    chatPresence.reportActivity(null);
     if (!trackUserId || !pid || !gid || !tid || readOnly) {
       throw new Error('thread_unavailable');
     }
@@ -571,11 +679,9 @@ export default function ThreadScreen() {
       body,
       replyToMessageId: replyToMessageId ?? null,
     });
-    if (!sendKey.current || sendSignatureRef.current !== sendSignature) {
-      sendKey.current = idempotencyKey();
-      sendSignatureRef.current = sendSignature;
-    }
-    const pendingId = payload.messageId ? null : `pending-${sendKey.current}`;
+    const sendKey = payload.idempotencyKey ?? sendKeysBySignatureRef.current.get(sendSignature) ?? idempotencyKey();
+    sendKeysBySignatureRef.current.set(sendSignature, sendKey);
+    const pendingId = payload.messageId ? null : `pending-${sendKey}`;
     atBottomRef.current = true;
     followingLatestRef.current = true;
     pinToLatestAfterSendRef.current = true;
@@ -585,7 +691,7 @@ export default function ThreadScreen() {
       setShowJumpToLatest(false);
       setPendingMessages((pending) => pending.some((message) => message.id === pendingId)
         ? pending
-        : [...pending, { attachments: payload.attachments, id: pendingId, idempotencyKey: sendKey.current!, body, at: Date.now() }]);
+        : [...pending, { attachments: payload.attachments, id: pendingId, idempotencyKey: sendKey, body, at: Date.now() }]);
     }
     setBusy(true);
     setError(null);
@@ -593,7 +699,7 @@ export default function ThreadScreen() {
       const result = await sendComposerMessage({
         ...payload,
         body,
-        idempotencyKey: sendKey.current,
+        idempotencyKey: sendKey,
         onMessageCreated: (messageId) => {
           if (!pendingId) return;
           setPendingMessages((pending) => pending.map((message) => message.id === pendingId
@@ -607,6 +713,14 @@ export default function ThreadScreen() {
         },
         replyToMessageId,
         target: {
+          publishVideoPreview: (input) => publishVideoPreview({
+            ...input,
+            projectId: pid,
+            groupId: gid,
+            userId: trackUserId,
+            actingCompanyId: cid,
+            projectMemberId: pmid,
+          }),
           getFileSize: (file) => {
             const size = new ExpoFile(file.uri).size;
             return size > 0 ? size : file.size ?? size;
@@ -645,6 +759,7 @@ export default function ThreadScreen() {
             storageId: input.storageId,
             filename: input.filename, contentType: input.contentType,
             size: input.size, kind: input.kind, durationMs: input.durationMs,
+            width: input.width, height: input.height,
           }),
           claimUploadIntent: (input) => claimUploadIntent({
             intentId: input.intentId,
@@ -698,8 +813,9 @@ export default function ThreadScreen() {
         requestTrackResponse(sentMessageId, body);
       }
       if (result.failedIds.length === 0) {
-        sendKey.current = null;
-        sendSignatureRef.current = null;
+        if (sendKeysBySignatureRef.current.get(sendSignature) === sendKey) {
+          sendKeysBySignatureRef.current.delete(sendSignature);
+        }
       }
       return result;
     } catch (sendError) {
@@ -884,69 +1000,102 @@ export default function ThreadScreen() {
   }, [beginMessageSelection, copyMessageText, gid, pendingTrackPrompts, pid, pmid, readOnly, releaseConfig.tasks, requestTrackResponse, retryAssistantAnswer, setReplyTo, trackUserId]);
   const messageActions = useMemo(() => actionTarget ? buildMessageActions(actionTarget) : [], [actionTarget, buildMessageActions]);
 
+  const undoPendingDelete = useCallback(() => {
+    if (pendingDeleteRef.current?.status !== 'undoable' && pendingDeleteRef.current?.status !== 'animating') return;
+    if (pendingDeleteTimerRef.current !== null) clearTimeout(pendingDeleteTimerRef.current);
+    pendingDeleteTimerRef.current = null;
+    retryDeleteRef.current = null;
+    pendingDeleteRef.current = null;
+    setPendingDelete(null);
+    const pending = pendingBulkDeleteScrollRef.current;
+    pendingBulkDeleteScrollRef.current = null;
+    if (pending) {
+      atBottomRef.current = pending.wasAtBottom;
+      followingLatestRef.current = pending.followingLatest;
+      pinToLatestAfterSendRef.current = pending.pinAfterSend;
+    }
+    updateJumpToLatest();
+  }, [updateJumpToLatest]);
+
   const deleteSelectedMessages = useCallback(() => {
-    if (!trackUserId || !canRemoveSelectedMessages || bulkDeleteBusy) return;
+    if (!trackUserId || !canRemoveSelectedMessages || bulkDeleteBusy || pendingDeleteRef.current) return;
+    hapticDestructive();
     const messageIds = selectedMessages.map(({ item }) => item.message._id);
     const selectedIds = new Set(messageIds);
     const hideForMe = canHideSelectedForMe;
-    const title = hideForMe
-      ? messageIds.length === 1 ? 'Delete this message for me?' : `Delete ${messageIds.length} messages for me?`
-      : messageIds.length === 1 ? 'Delete this message for everyone?' : `Delete ${messageIds.length} messages for everyone?`;
-    const confirmLabel = hideForMe ? 'Delete for me' : 'Delete for everyone';
-    const detail = hideForMe
-      ? 'These deleted-message notices will be hidden only for you.'
-      : 'The selected message content and attachments will be removed for everyone. You can’t undo this.';
-    Alert.alert(title, detail, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: confirmLabel,
-        style: 'destructive',
-        onPress: () => {
-          pendingBulkDeleteScrollRef.current = {
-            selectedIds,
-            hideForMe,
-            offsetY: scrollMetricsRef.current.offsetY,
-            wasAtBottom: atBottomRef.current,
-            followingLatest: followingLatestRef.current,
-            pinAfterSend: pinToLatestAfterSendRef.current,
-            restorationScheduled: false,
-            userScrolled: false,
-          };
-          atBottomRef.current = false;
-          followingLatestRef.current = false;
-          pinToLatestAfterSendRef.current = false;
-          bulkDeleteBusyRef.current = true;
-          setBulkDeleteBusy(true);
-          const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
-          const request = hideForMe ? hideDeletedMessages(scope) : deleteMessages(scope);
-          void request.then(() => {
-            if (replyMessageId && selectedIds.has(replyMessageId)) setReplyTo(null);
-            exitMessageSelection();
-            showToast({
-              title: hideForMe ? 'Hidden for you' : messageIds.length === 1 ? 'Message deleted' : 'Messages deleted',
-              message: hideForMe
-                ? `${messageIds.length} deleted ${messageIds.length === 1 ? 'message is' : 'messages are'} hidden only for you.`
-                : `${messageIds.length} ${messageIds.length === 1 ? 'message was' : 'messages were'} deleted for everyone.`,
-              tone: 'success',
-            });
-          }).catch((caught) => {
-            const pending = pendingBulkDeleteScrollRef.current;
-            if (pending) {
-              pendingBulkDeleteScrollRef.current = null;
-              atBottomRef.current = pending.wasAtBottom;
-              followingLatestRef.current = pending.followingLatest;
-              pinToLatestAfterSendRef.current = pending.pinAfterSend;
-              requestAnimationFrame(() => restoreChatScrollAfterDeletion(listRef.current, pending, scrollToLatest));
-            }
-            setError(communicationErrorMessage(caught, 'delete these messages'));
-          }).finally(() => {
-            bulkDeleteBusyRef.current = false;
-            setBulkDeleteBusy(false);
-          });
-        },
-      },
-    ]);
-  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, scrollToLatest, selectedMessages, setReplyTo, showToast, threadItems, trackUserId]);
+    const queued: PendingDeleteState = { hideForMe, messageIds, status: 'animating' };
+    pendingBulkDeleteScrollRef.current = {
+      selectedIds,
+      hideForMe,
+      wasAtBottom: atBottomRef.current,
+      followingLatest: followingLatestRef.current,
+      pinAfterSend: pinToLatestAfterSendRef.current,
+      restorationScheduled: false,
+      userScrolled: false,
+    };
+    pendingDeleteRef.current = queued;
+    setPendingDelete(queued);
+    atBottomRef.current = false;
+    followingLatestRef.current = false;
+    pinToLatestAfterSendRef.current = false;
+    exitMessageSelection();
+
+    const runDelete = () => {
+      if (pendingDeleteTimerRef.current !== null) clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = null;
+      if (!pendingBulkDeleteScrollRef.current) {
+        pendingBulkDeleteScrollRef.current = {
+          selectedIds,
+          hideForMe,
+          wasAtBottom: atBottomRef.current,
+          followingLatest: followingLatestRef.current,
+          pinAfterSend: pinToLatestAfterSendRef.current,
+          restorationScheduled: false,
+          userScrolled: false,
+        };
+        atBottomRef.current = false;
+        followingLatestRef.current = false;
+        pinToLatestAfterSendRef.current = false;
+      }
+      const deleting: PendingDeleteState = { hideForMe, messageIds, status: 'deleting' };
+      pendingDeleteRef.current = deleting;
+      setPendingDelete(deleting);
+      bulkDeleteBusyRef.current = true;
+      setBulkDeleteBusy(true);
+      const scope = { messageIds, actorId: trackUserId, actingCompanyId: cid, projectMemberId: pmid };
+      const request = hideForMe ? hideDeletedMessages(scope) : deleteMessages(scope);
+      void request.then(() => {
+        if (replyMessageId && selectedIds.has(replyMessageId)) setReplyTo(null);
+        retryDeleteRef.current = null;
+        const committed: PendingDeleteState = { hideForMe, messageIds, status: 'committed' };
+        pendingDeleteRef.current = committed;
+        setPendingDelete(committed);
+      }).catch(() => {
+        const pending = pendingBulkDeleteScrollRef.current;
+        if (pending) {
+          pendingBulkDeleteScrollRef.current = null;
+          atBottomRef.current = pending.wasAtBottom;
+          followingLatestRef.current = pending.followingLatest;
+          pinToLatestAfterSendRef.current = pending.pinAfterSend;
+        }
+        const failed: PendingDeleteState = { hideForMe, messageIds, status: 'failed' };
+        pendingDeleteRef.current = failed;
+        setPendingDelete(failed);
+      }).finally(() => {
+        bulkDeleteBusyRef.current = false;
+        setBulkDeleteBusy(false);
+      });
+    };
+
+    retryDeleteRef.current = runDelete;
+    pendingDeleteTimerRef.current = setTimeout(() => {
+      if (pendingDeleteRef.current?.status !== 'animating') return;
+      const undoable: PendingDeleteState = { hideForMe, messageIds, status: 'undoable' };
+      pendingDeleteRef.current = undoable;
+      setPendingDelete(undoable);
+      pendingDeleteTimerRef.current = setTimeout(runDelete, 2_300);
+    }, MessageDeleteMotionDuration + 32);
+  }, [bulkDeleteBusy, canHideSelectedForMe, canRemoveSelectedMessages, cid, deleteMessages, exitMessageSelection, hideDeletedMessages, pmid, replyMessageId, selectedMessages, setReplyTo, trackUserId]);
 
   async function submitReport(reason: ReportReason, note: string) {
     const target = reportTarget;
@@ -1022,18 +1171,29 @@ export default function ThreadScreen() {
 
   const renderItem = useCallback<ListRenderItem<GroupedThreadItem>>(({ item }) => {
     if (item.kind === 'date-sep') return <DateSeparator label={item.label} />;
-    return <View>
+    const isOwnMessage = item.kind === 'message' && item.item.author?._id === trackUserId;
+    const currentReadReceipts = readReceiptsRef.current;
+    const readReceipt = isOwnMessage ? {
+      readCount: currentReadReceipts?.readThroughSequences.filter((sequence) =>
+        sequence >= (item.kind === 'message' ? item.item.message.channelSequence ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER),
+      ).length ?? 0,
+      recipientCount: currentReadReceipts?.recipientCount ?? 0,
+    } : undefined;
+    return (
       <ThreadRow
+        deleting={pendingDelete?.hideForMe === true && pendingDelete.status === 'animating' && item.kind === 'message' && pendingDelete.messageIds.includes(item.item.message._id)}
         highlighted={item.kind === 'message' && item.item.message._id === highlightedMessageId}
         contextActions={Platform.OS === 'ios' && !messageSelectionMode && item.kind === 'message' ? buildMessageActions(item) : undefined}
         interactionVersion={renderItem}
         isFirstInGroup={item.isFirstInGroup}
-        isOwnMessage={item.kind === 'message' && item.item.author?._id === trackUserId}
+        isOwnMessage={isOwnMessage}
         item={item}
+        optimisticallyDeleted={pendingDelete?.hideForMe === false && pendingDelete.status !== 'failed' && item.kind === 'message' && pendingDelete.messageIds.includes(item.item.message._id)}
         selected={item.kind === 'message' && selectedMessageIdsRef.current.has(item.item.message._id)}
         selectionMode={messageSelectionMode}
         onPressMessage={messageSelectionMode ? toggleMessageSelection : undefined}
-        readReceipts={readReceipts}
+        readReceipt={readReceipt}
+        taskLink={releaseConfig.tasks && pid ? { identity: taskIdentity, projectId: pid, readOnly } : undefined}
         onLongPress={() => {
           if (item.kind === 'message' && messageSelectionMode) {
             toggleMessageSelection(item);
@@ -1052,15 +1212,8 @@ export default function ThreadScreen() {
         } : undefined}
         variant="thread"
       />
-      {releaseConfig.tasks && pid ? <TaskInlineCards
-        assistantStreamId={item.kind === 'assistant' ? item.stream._id : undefined}
-        identity={taskIdentity}
-        messageId={item.kind === 'message' ? item.item.message._id : undefined}
-        projectId={pid}
-        readOnly={readOnly}
-      /> : null}
-    </View>;
-  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pid, readOnly, readReceipts, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
+    );
+  }, [beginMessageSelection, buildMessageActions, highlightedMessageId, messageSelectionMode, pendingDelete, pid, readOnly, releaseConfig.tasks, scrollToMessage, setReplyTo, submitSwipeReport, taskIdentity, toggleMessageSelection, trackUserId]);
 
   async function changeFollowing() {
     if (!queryArgs || !thread) return;
@@ -1223,7 +1376,7 @@ export default function ThreadScreen() {
           /> : null)}
           <IconButton
             count={selectedMessages.length}
-            disabled={!canRemoveSelectedMessages}
+            disabled={!canRemoveSelectedMessages || Boolean(pendingDelete)}
             accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
             appearance="surface"
             icon="trash-can-outline"
@@ -1248,7 +1401,7 @@ export default function ThreadScreen() {
             /> : null)}
             <IconButton
               count={selectedMessages.length}
-              disabled={!canRemoveSelectedMessages}
+              disabled={!canRemoveSelectedMessages || Boolean(pendingDelete)}
               accessibilityLabel={`Delete ${selectedMessages.length} ${selectedMessages.length === 1 ? 'message' : 'messages'} ${canHideSelectedForMe ? 'for me' : 'for everyone'}`}
               appearance="glass"
               icon="trash-can-outline"
@@ -1279,13 +1432,13 @@ export default function ThreadScreen() {
         messageIds={taskLinkMessageIds}
       >
       <FlatList
-          extraData={selectedMessageIds}
+          extraData={threadListExtraData}
           maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
           contentContainerStyle={[styles.list, { paddingBottom: composerOverlayHeight + (Platform.OS === 'ios' ? keyboardHeight : androidKeyboardInset) + Spacing.two }]}
           contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'never' : 'automatic'}
           showsVerticalScrollIndicator={false}
           style={styles.flex}
-          data={threadItems}
+          data={visibleThreadItems}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.key}
@@ -1294,27 +1447,18 @@ export default function ThreadScreen() {
             : <EmptyState body="Start the focused conversation." icon="thread" title="No replies yet" />}
           ListHeaderComponent={<>
             {sourceContextCard}
-            {hasMoreThreadItems ? <Pressable
-              accessibilityRole="button"
-              disabled={messagePageStatus === 'LoadingMore' || assistantPage.status === 'LoadingMore'}
-              onPress={() => {
-                if (messagePageStatus === 'CanLoadMore') loadMoreMessages(50);
-                if (assistantPage.status === 'CanLoadMore') assistantPage.loadMore(50);
-              }}
-              style={styles.loadMore}>
-              <ThemedText type="smallBold">Load older replies</ThemedText>
-            </Pressable> : null}
           </>}
-          ListFooterComponent={pendingMessages.length ? (
+          ListFooterComponent={pendingMessages.length || chatPresence.people.length ? (
             <View>
               {pendingMessages.map((message) => (
                 <Animated.View
                   entering={reducedMotion ? undefined : PendingMessageEntering}
                   key={message.id}
                 >
-                  <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} offline={network.isConnected === false || network.isInternetReachable === false} pendingId={message.id} sent={Boolean(message.messageId)} />
+                  <PendingMessageBubble at={message.at} attachments={message.attachments} body={message.body} isFirstInGroup={pendingGroupStarts.get(message.id) ?? true} offline={network.isConnected === false || network.isInternetReachable === false} pendingId={message.id} sent={Boolean(message.messageId)} />
                 </Animated.View>
               ))}
+              <ChatTypingIndicator people={chatPresence.people} />
             </View>
           ) : null}
           onScrollToIndexFailed={({ averageItemLength, index }) => requestAnimationFrame(() => {
@@ -1340,6 +1484,7 @@ export default function ThreadScreen() {
               }
             }
             scrollMetricsRef.current.viewportHeight = nativeEvent.layout.height;
+            prefetchShortHistory();
             if (!pendingBulkDeleteScrollRef.current) {
               updateJumpToLatest();
               followLatestAfterViewportLayout({
@@ -1354,14 +1499,26 @@ export default function ThreadScreen() {
             scrollMetricsRef.current.contentHeight = nativeEvent.contentSize.height;
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
             const pending = pendingBulkDeleteScrollRef.current;
+            const offsetY = nativeEvent.contentOffset.y;
+            if (offsetY > CHAT_HISTORY_REARM_THRESHOLD) olderPageLoadArmedRef.current = true;
+            else if (!pending && shouldAutoLoadOlderMessages({
+              armed: olderPageLoadArmedRef.current,
+              hasMore: hasMoreThreadItems,
+              loading: loadingOlderThreadItems || olderPageLoadInFlightRef.current,
+              offsetY,
+              userInitiated: historyScrollRequestedRef.current,
+            })) {
+              olderPageLoadArmedRef.current = false;
+              loadOlderThreadItems();
+            }
             if (pending?.userScrolled) {
-              pending.offsetY = nativeEvent.contentOffset.y;
               pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
             } else if (!pending) {
               updateJumpToLatest();
             }
           }}
           onScrollBeginDrag={() => {
+            historyScrollRequestedRef.current = true;
             const pending = pendingBulkDeleteScrollRef.current;
             if (pending) {
               pending.userScrolled = true;
@@ -1381,7 +1538,6 @@ export default function ThreadScreen() {
             scrollMetricsRef.current.viewportHeight = nativeEvent.layoutMeasurement.height;
             const pending = pendingBulkDeleteScrollRef.current;
             if (pending?.userScrolled) {
-              pending.offsetY = nativeEvent.contentOffset.y;
               pending.wasAtBottom = Math.max(0, nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height) <= 80;
             } else if (!pending) {
               updateJumpToLatest();
@@ -1396,6 +1552,7 @@ export default function ThreadScreen() {
             composerResizePendingRef.current = false;
             lastThreadContentHeightRef.current = height;
             scrollMetricsRef.current.contentHeight = height;
+            prefetchShortHistory();
             if (pendingBulkDeleteScrollRef.current) return;
             updateJumpToLatest();
             if (shouldFollowPendingSendAfterContentLayout(pendingSendFollowRef.current, {
@@ -1436,9 +1593,9 @@ export default function ThreadScreen() {
         <PlatformIcon color={theme.text} name="chevron-down" size={20} />
         {newReplyCount ? <ThemedText style={[styles.jumpToLatestCount, { color: theme.text }]} type="captionBold">{newReplyCount > 99 ? '99+' : newReplyCount}</ThemedText> : null}
       </AnimatedPressable> : null}
-      {!readOnly ? <KeyboardStickyView
-        offset={composerKeyboardOffset}
-        style={styles.composerOverlay}>
+      {!readOnly ? <ComposerDock
+        {...(Platform.OS === 'ios' ? { offset: composerKeyboardOffset } : {})}
+        style={[styles.composerOverlay, Platform.OS === 'android' && { bottom: androidKeyboardInset }]}>
         <View
           onLayout={({ nativeEvent }) => {
             const height = Math.ceil(nativeEvent.layout.height);
@@ -1450,13 +1607,23 @@ export default function ThreadScreen() {
           }}
         >
           <Composer
+            actionNotice={pendingDelete && (pendingDelete.status === 'animating' || pendingDelete.status === 'undoable' || pendingDelete.status === 'failed') ? {
+              actionLabel: pendingDelete.status === 'failed' ? 'Retry' : pendingDelete.status === 'animating' || pendingDelete.status === 'undoable' ? 'Undo' : undefined,
+              label: pendingDelete.status === 'failed'
+                ? 'Delete failed'
+                : `${pendingDelete.messageIds.length === 1 ? 'Message' : 'Messages'} deleted`,
+              onAction: pendingDelete.status === 'failed' ? () => retryDeleteRef.current?.() : pendingDelete.status === 'animating' || pendingDelete.status === 'undoable' ? undoPendingDelete : undefined,
+              tone: pendingDelete.status === 'failed' ? 'danger' : 'accent',
+            } : undefined}
             activeGroupName={thread.thread.name}
             busy={busy}
+            expandOnKeyboard={false}
             mentionCandidatesHasMore={projectMembersPage.status === 'CanLoadMore'}
             mentionCandidatesLoading={projectMembersPage.status === 'LoadingMore'}
             mentionCandidates={mentionCandidates}
             onCancelReply={cancelComposerReply}
             onChangeText={setComposer}
+            onActivityChange={chatPresence.reportActivity}
             onFocus={focusComposerAtLatest}
             onLoadMoreMentionCandidates={loadMoreMentionCandidates}
             onSendMessage={sendFromComposer}
@@ -1464,7 +1631,7 @@ export default function ThreadScreen() {
             value={composer}
           />
         </View>
-      </KeyboardStickyView> : null}
+      </ComposerDock> : null}
       <OptionsSheet onClose={() => setToolsOpen(false)} title="Thread" visible={toolsOpen}>
         <SheetSection>
           {!navigation.archived ? <SheetRow label={thread.following ? 'Unfollow' : 'Follow'} icon="bell-outline" onPress={() => void changeFollowing()} /> : null}

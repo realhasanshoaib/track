@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
-import { MenuView } from '@expo/ui/community/menu';
-import type { MenuAction } from '@expo/ui/community/menu';
+import { Button, Host, Menu, RNHostView } from '@expo/ui/swift-ui';
 import type { SFSymbol } from 'sf-symbols-typescript';
 
 import type { MessageAction } from '@/components/message-actions';
@@ -21,28 +20,27 @@ const ACTION_SYMBOLS: Partial<Record<NonNullable<MessageAction['icon']>, SFSymbo
 };
 
 export function MessageContextMenu({ actions, children, inlinePlayback = false }: Props) {
-  // Inline playback stays in the RN touch hierarchy. Its row opens the same
-  // actions through the existing long-press sheet instead of a SwiftUI host.
+  // Keep voice and video controls in React Native's touch hierarchy. Their
+  // long press uses the screen's action sheet instead of a SwiftUI host.
   if (!actions.length || inlinePlayback) return <>{children}</>;
 
-  const actionIds = actions.map((_, index) => `message-action-${index}`);
-  const menuActions: MenuAction[] = actions.map((action, index) => ({
-    id: actionIds[index],
-    title: action.label,
-    image: action.icon ? ACTION_SYMBOLS[action.icon] : undefined,
-    attributes: action.destructive ? { destructive: true } : undefined,
-  }));
-
-  // Keep the host content-sized so inline media actions stay beside the bubble.
   return (
-    <MenuView
-      actions={menuActions}
-      onPressAction={({ nativeEvent }) => {
-        const index = actionIds.indexOf(nativeEvent.event);
-        if (index >= 0) actions[index]?.onPress();
-      }}
-      shouldOpenOnLongPress>
-      {children}
-    </MenuView>
+    <Host ignoreSafeArea="all" matchContents>
+      <Menu
+        // SwiftUI Menu with a primary action opens its options on hold without
+        // creating the raised, shadowed message preview of ContextMenu.
+        label={<RNHostView matchContents><>{children}</></RNHostView>}
+        onPrimaryAction={() => undefined}>
+        {actions.map((action, index) => (
+          <Button
+            key={`message-action-${index}`}
+            label={action.label}
+            onPress={action.onPress}
+            role={action.destructive ? 'destructive' : undefined}
+            systemImage={action.icon ? ACTION_SYMBOLS[action.icon] : undefined}
+          />
+        ))}
+      </Menu>
+    </Host>
   );
 }

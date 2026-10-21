@@ -17,6 +17,7 @@ const typingActivity = v.union(
 export const list = query({
   args: {
     groupId: v.id('groups'),
+    channelThreadId: v.optional(v.id('channelThreads')),
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -32,18 +33,22 @@ export const list = query({
       projectMemberId: args.projectMemberId,
     }, 'readChannel')
 
+    const now = Date.now()
     const indicators = await ctx.db
       .query('typingIndicators')
-      .withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId))
+      .withIndex('by_group_thread_updated_at', (q) =>
+        q.eq('groupId', args.groupId).eq('channelThreadId', args.channelThreadId),
+      )
       .order('desc')
       .take(LIST_LIMIT)
 
     return await Promise.all(
       indicators
-        .filter((indicator) => indicator.userId !== args.userId || indicator.projectMemberId !== args.projectMemberId)
+        .filter((indicator) => indicator.userId !== args.userId && indicator.updatedAt > now - STALE_DELETE_MS)
         .map(async (indicator) => {
           const user = await ctx.db.get(indicator.userId)
-          return { indicator, user }
+          const avatarUrl = user?.avatarStorageId ? await ctx.storage.getUrl(user.avatarStorageId) : null
+          return { avatarUrl, indicator, user }
         }),
     )
   },
@@ -53,6 +58,7 @@ export const heartbeat = mutation({
   args: {
     projectId: v.id('projects'),
     groupId: v.id('groups'),
+    channelThreadId: v.optional(v.id('channelThreads')),
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -70,6 +76,10 @@ export const heartbeat = mutation({
     if (!group || group.projectId !== args.projectId) {
       throw new Error('group_project_mismatch')
     }
+    if (args.channelThreadId) {
+      const thread = await ctx.db.get(args.channelThreadId)
+      if (!thread || thread.groupId !== args.groupId) throw new Error('thread_group_mismatch')
+    }
     const now = Date.now()
     const staleIndicators = await ctx.db
       .query('typingIndicators')
@@ -80,11 +90,11 @@ export const heartbeat = mutation({
     await Promise.all(staleIndicators.map((indicator) => ctx.db.delete(indicator._id)))
 
     const existing = args.projectMemberId
-      ? await ctx.db.query('typingIndicators').withIndex('by_group_project_member', (q) =>
-          q.eq('groupId', args.groupId).eq('projectMemberId', args.projectMemberId),
+      ? await ctx.db.query('typingIndicators').withIndex('by_group_thread_project_member', (q) =>
+          q.eq('groupId', args.groupId).eq('channelThreadId', args.channelThreadId).eq('projectMemberId', args.projectMemberId),
         ).unique()
-      : await ctx.db.query('typingIndicators').withIndex('by_group_user', (q) =>
-          q.eq('groupId', args.groupId).eq('userId', args.userId),
+      : await ctx.db.query('typingIndicators').withIndex('by_group_thread_user', (q) =>
+          q.eq('groupId', args.groupId).eq('channelThreadId', args.channelThreadId).eq('userId', args.userId),
         ).unique()
 
     if (existing) {
@@ -105,6 +115,7 @@ export const heartbeat = mutation({
     return await ctx.db.insert('typingIndicators', {
       projectId: args.projectId,
       groupId: args.groupId,
+      channelThreadId: args.channelThreadId,
       userId: args.userId,
       projectMemberId: args.projectMemberId,
       activity: args.activity,
@@ -117,6 +128,7 @@ export const heartbeat = mutation({
 export const clear = mutation({
   args: {
     groupId: v.id('groups'),
+    channelThreadId: v.optional(v.id('channelThreads')),
     userId: v.id('users'),
     actingCompanyId: v.optional(v.id('companies')),
     projectMemberId: v.optional(v.id('projectMembers')),
@@ -131,6 +143,10 @@ export const clear = mutation({
       actingCompanyId: args.actingCompanyId,
       projectMemberId: args.projectMemberId,
     }, 'writeChannel')
+    if (args.channelThreadId) {
+      const thread = await ctx.db.get(args.channelThreadId)
+      if (!thread || thread.groupId !== args.groupId) throw new Error('thread_group_mismatch')
+    }
     const now = Date.now()
     const staleIndicators = await ctx.db
       .query('typingIndicators')
@@ -141,11 +157,11 @@ export const clear = mutation({
     await Promise.all(staleIndicators.map((indicator) => ctx.db.delete(indicator._id)))
 
     const existing = args.projectMemberId
-      ? await ctx.db.query('typingIndicators').withIndex('by_group_project_member', (q) =>
-          q.eq('groupId', args.groupId).eq('projectMemberId', args.projectMemberId),
+      ? await ctx.db.query('typingIndicators').withIndex('by_group_thread_project_member', (q) =>
+          q.eq('groupId', args.groupId).eq('channelThreadId', args.channelThreadId).eq('projectMemberId', args.projectMemberId),
         ).unique()
-      : await ctx.db.query('typingIndicators').withIndex('by_group_user', (q) =>
-          q.eq('groupId', args.groupId).eq('userId', args.userId),
+      : await ctx.db.query('typingIndicators').withIndex('by_group_thread_user', (q) =>
+          q.eq('groupId', args.groupId).eq('channelThreadId', args.channelThreadId).eq('userId', args.userId),
         ).unique()
 
     if (existing) await ctx.db.delete(existing._id)

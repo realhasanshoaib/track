@@ -20,6 +20,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withRepeat,
+  withSequence,
   withSpring,
   withTiming,
   type SharedValue,
@@ -31,7 +32,7 @@ import {
   PendingAttachmentStrip,
   type PendingAttachment,
 } from '@/components/chat-attach-menu';
-import { IOSGlassContainer } from '@/components/ios-glass-material';
+import { IOSGlassContainer, IOSGlassMaterial } from '@/components/ios-glass-material';
 import { ChatPartEntering, ChatPartExiting, PendingMessageLayout } from '@/components/chat/message-motion';
 import { MentionSuggestions } from '@/components/chat/mention-suggestions';
 import { OptionsSheet, SheetNote, SheetRow } from '@/components/options-sheet';
@@ -42,8 +43,7 @@ import type { DetailedMessage } from '@/components/thread-row';
 import { MaxFontScale, Radius, Spacing, TouchTarget, Typography } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration } from '@/lib/attachment-presentation';
-import { composerControlVisibility, composerSurfaceBackgroundColor, composerTextMaxHeight } from '@/lib/composer-layout';
-import { createSubmissionGate } from '@/lib/submission-state';
+import { ComposerVisibleLineLimit, composerControlVisibility, composerInputMultilineThreshold, composerSurfaceBackgroundColor, composerTextMaxHeight } from '@/lib/composer-layout';
 import type {
   ComposerSubmission,
   ComposerSubmissionResult,
@@ -58,6 +58,7 @@ import {
   type MentionCandidate,
 } from '@/lib/mention-autocomplete';
 import { useVoiceRecorder } from '@/lib/media-capture';
+import { idempotencyKey } from '@/lib/idempotency';
 import {
   nextVoiceGestureOutcome,
   shouldFinishVoiceOnRelease,
@@ -68,8 +69,15 @@ import {
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 export type ComposerProps = {
+  actionNotice?: {
+    actionLabel?: string;
+    busy?: boolean;
+    label: string;
+    onAction?: () => void;
+    tone?: 'neutral' | 'danger' | 'accent';
+  };
   activeGroupName: string | null;
-  /** Screen-level busy flag; disables sending while another write is in flight. */
+  /** Screen-level send activity, used for status feedback outside this composer. */
   busy: boolean;
   /**
    * Everyone who can be mentioned here, assistant included. Omitting it turns
@@ -82,6 +90,7 @@ export type ComposerProps = {
   onLoadMoreMentionCandidates?: () => void;
   onCancelReply: () => void;
   onChangeText: (value: string) => void;
+  onActivityChange?: (activity: 'typing' | 'attaching' | 'recording' | null) => void;
   onExpandedChange?: (expanded: boolean) => void;
   onFocus?: () => void;
   /**
@@ -95,7 +104,6 @@ export type ComposerProps = {
 
 const HoldDelay = 220;
 const BarFactors = [0.5, 0.85, 1, 0.7, 0.45];
-const ComposerExpandHeight = Typography.message.lineHeight * 2 + Spacing.four;
 const ComposerVerticalChrome = Spacing.four + StyleSheet.hairlineWidth * 2;
 const ComposerLayoutTransition = PendingMessageLayout;
 const ComposerPartEntering = ChatPartEntering;
@@ -105,6 +113,7 @@ type FailedSubmission = {
   attachments: PendingAttachment[];
   body: string;
   draftRevision: number;
+  idempotencyKey: string;
   replyToMessageId?: Id<'messages'>;
 };
 
@@ -140,14 +149,15 @@ function LevelBar({ color, index, level }: { color: string; index: number; level
 }
 
 function ComposerImpl({
+  actionNotice,
   activeGroupName,
-  busy,
   mentionCandidatesHasMore = false,
   mentionCandidatesLoading = false,
   mentionCandidates = [],
-  expandOnKeyboard = true,
+  expandOnKeyboard = false,
   onCancelReply,
   onChangeText,
+  onActivityChange,
   onExpandedChange,
   onFocus,
   onLoadMoreMentionCandidates,
@@ -159,7 +169,11 @@ function ComposerImpl({
   const { fontScale } = useWindowDimensions();
   const isIOS = Platform.OS === 'ios';
   const reducedMotion = useReducedMotion();
-  const composerLayoutTransition = isIOS && !reducedMotion
+  // Text entry is a high-frequency interaction. On iOS, UIKit already
+  // animates the keyboard; a 200 ms layout transition on each content-size
+  // change makes the composer trail the text as lines wrap. Let the measured
+  // TextInput height commit directly while retaining Android layout motion.
+  const composerLayoutTransition = !isIOS && !reducedMotion
     ? ComposerLayoutTransition
     : undefined;
   const hasLiquidGlass = isIOS && safeGlassAvailable();
@@ -167,8 +181,14 @@ function ComposerImpl({
   const maxComposerHeight = maxComposerTextHeight + ComposerVerticalChrome;
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const inputRef = useRef<TextInput>(null);
-  const submissionGate = useRef(createSubmissionGate());
+  const activeSubmissionsRef = useRef(new Set<string>());
+  const cancelledAttachmentIdsRef = useRef(new Set<string>());
   const sendingRef = useRef(false);
+  const sendingCountRef = useRef(0);
+  const actionPillScale = useSharedValue(1);
+  const actionPillOffset = useSharedValue(0);
+  const actionPillOpacity = useSharedValue(1);
+  const actionPillWasVisible = useRef(false);
 
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [caret, setCaret] = useState(0);
@@ -181,7 +201,7 @@ function ComposerImpl({
   const [failedSubmission, setFailedSubmission] = useState<FailedSubmission | null>(null);
   /** Set for one commit after inserting a mention, to place the caret after it. */
   const [selection, setSelection] = useState<{ end: number; start: number } | null>(null);
-  const [sending, setSending] = useState(false);
+  const [retryingFailure, setRetryingFailure] = useState(false);
   const [voiceActivationBlocked, setVoiceActivationBlocked] = useState(false);
   const [draftValue, setDraftValue] = useState(value);
   const draftRevisionRef = useRef(0);
@@ -193,14 +213,57 @@ function ComposerImpl({
   // keyboard is presenting. Expanding the composer during that transition can
   // make UIKit drop focus before the person can type.
   const inputExpanded = expandOnKeyboard && !isIOS && keyboardReady;
-  const inputMultiline = measuredInputHeight > ComposerExpandHeight;
-  const inputContentHeight = Math.min(maxComposerTextHeight, Math.max(Typography.message.lineHeight, measuredInputHeight));
-  const iosInputHeight = inputContentHeight;
-  const iosPillHeight = Math.min(maxComposerHeight, Math.max(56, inputContentHeight + ComposerVerticalChrome));
+  const scaledLineHeight = Math.ceil(Typography.message.lineHeight * Math.min(fontScale, MaxFontScale));
+  // TextInput can report its old multiline content size after submit clears
+  // the controlled value. Ignore that stale measurement for an empty draft
+  // so the composer returns to one line in the same render as the send.
+  const visibleMeasuredInputHeight = draftValue.length === 0 ? scaledLineHeight : measuredInputHeight;
+  const inputMultiline = draftValue.includes('\n')
+    || visibleMeasuredInputHeight > composerInputMultilineThreshold(Typography.message.lineHeight, Spacing.two);
+  const explicitLineCount = Math.max(1, draftValue.split('\n').length);
+  const explicitLineHeight = scaledLineHeight * explicitLineCount;
+  const inputContentHeight = Math.min(maxComposerTextHeight, Math.max(scaledLineHeight, explicitLineHeight, visibleMeasuredInputHeight));
+  const iosPillHeight = Math.min(
+    maxComposerHeight,
+    Math.max(56, inputContentHeight + ComposerVerticalChrome + (inputMultiline ? Spacing.two : 0)),
+  );
+  const hasActionNotice = Boolean(actionNotice);
+  const noticeIsError = Boolean(notice && /could not|failed|exceeds|not sent/i.test(notice));
+  const actionPillMotionStyle = useAnimatedStyle(() => ({
+    opacity: actionPillOpacity.value,
+    transform: [{ translateY: actionPillOffset.value }, { scale: actionPillScale.value }],
+  }));
+
+  useEffect(() => {
+    const entering = hasActionNotice && !actionPillWasVisible.current;
+    actionPillWasVisible.current = hasActionNotice;
+    if (!entering || !isIOS || reducedMotion) {
+      actionPillScale.value = 1;
+      actionPillOffset.value = 0;
+      actionPillOpacity.value = 1;
+      return;
+    }
+
+    actionPillScale.value = 0.88;
+    actionPillOffset.value = 7;
+    actionPillOpacity.value = 0;
+    actionPillScale.value = withSequence(
+      withSpring(1.045, { dampingRatio: 0.68, duration: 230 }),
+      withSpring(1, { dampingRatio: 0.86, duration: 180 }),
+    );
+    actionPillOffset.value = withSpring(0, { dampingRatio: 0.78, duration: 250 });
+    actionPillOpacity.value = withTiming(1, { duration: 120 });
+  }, [actionPillOffset, actionPillOpacity, actionPillScale, hasActionNotice, isIOS, reducedMotion]);
 
   useEffect(() => {
     setDraftValue(value);
   }, [value]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = setTimeout(() => setNotice((current) => current === notice ? null : current), 4_000);
+    return () => clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => () => {
     if (voiceActivationTimerRef.current !== null) clearTimeout(voiceActivationTimerRef.current);
@@ -216,6 +279,10 @@ function ComposerImpl({
     onPermissionDenied: setMicrophoneCanAskAgain,
   });
   const mode = voice.mode;
+  useEffect(() => {
+    if (mode === 'recording' || mode === 'locked') onActivityChange?.('recording');
+    else if (mode === 'idle') onActivityChange?.(null);
+  }, [mode, onActivityChange]);
 
   const dragX = useSharedValue(0);
   const dragY = useSharedValue(0);
@@ -223,10 +290,13 @@ function ComposerImpl({
   const micScale = useSharedValue(1);
 
   const hasContent = Boolean(draftValue.trim()) || attachments.length > 0;
-  const canSend = hasContent && !sending && !busy && !failedSubmission;
-  const sendPending = sending || busy;
+  const hasSendableContent = Boolean(draftValue.trim()) || attachments.length > 0;
+  // A failed send stays in the retry pill, but it must not lock the composer:
+  // people can write and send a fresh text while retrying the older item later.
+  const canSend = hasSendableContent;
+  const sendPending = false;
   const hasFailedSubmission = Boolean(failedSubmission);
-  const attachmentsLocked = sending || Boolean(failedSubmission) || Boolean(retryMessageId);
+  const attachmentsLocked = false;
   /** Keep the recording control mounted until the hold gesture has ended. */
   // Reserve the send action slot for every idle composer state so the input
   // never expands/contracts when typing starts or the keyboard changes state.
@@ -283,6 +353,7 @@ function ComposerImpl({
 
   function changeDraft(nextValue: string) {
     draftRevisionRef.current += 1;
+    if (nextValue.length === 0) setMeasuredInputHeight(0);
     setDraftValue(nextValue);
     onChangeText(nextValue);
   }
@@ -292,66 +363,102 @@ function ComposerImpl({
     body: string,
     replyToMessageId = replyTo?.message._id,
     draftRevision = draftRevisionRef.current,
+    retryTargetId: Id<'messages'> | null = null,
+    retryKey?: string,
   ) {
-    const submissionToken = submissionGate.current.begin();
-    if (!submissionToken) return;
+    for (const file of files) cancelledAttachmentIdsRef.current.delete(file.id);
+    const signature = JSON.stringify({
+      attachmentIds: files.map((file) => file.id),
+      body,
+      draftRevision,
+      replyToMessageId: replyToMessageId ?? null,
+      retryMessageId: retryTargetId ?? null,
+    });
+    if (activeSubmissionsRef.current.has(signature)) return;
+    activeSubmissionsRef.current.add(signature);
+    const submissionKey = retryKey ?? idempotencyKey();
     const retainInputFocus = inputFocused || keyboardVisible;
     setNotice(null);
     sendingRef.current = true;
-    setSending(true);
+    sendingCountRef.current += 1;
+    if (retryKey) setRetryingFailure(true);
     const replyId = replyToMessageId;
-    const retryingAttachments = Boolean(retryMessageId);
+    const retryingAttachments = Boolean(retryTargetId);
     if (!retryingAttachments && draftRevisionRef.current === draftRevision) {
       // Keep the composer responsive while the optimistic bubble is sent.
       // Restore this exact draft if sending fails and the user hasn't typed again.
       setDraftValue('');
+      setMeasuredInputHeight(0);
       onChangeText('');
+    }
+    if (!retryingAttachments && files.length > 0) {
+      const submittedIds = new Set(files.map((file) => file.id));
+      setAttachments((current) => current.filter((file) => !submittedIds.has(file.id)));
     }
     try {
       const result = await onSendMessage({
         attachments: files,
         body: retryingAttachments ? '' : body,
-        messageId: retryMessageId,
+        idempotencyKey: submissionKey,
+        messageId: retryTargetId,
         replyToMessageId: retryingAttachments ? undefined : replyToMessageId,
         reportProgress,
       });
       if (!result.messageId) throw new Error('message_send_without_id');
       if (!retryingAttachments && draftRevisionRef.current === draftRevision) {
         setDraftValue('');
+        setMeasuredInputHeight(0);
         onChangeText('');
       }
       if (!retryingAttachments && replyId && replyToRef.current?.message._id === replyId) onCancelReply();
       if (result.failedIds.length === 0) {
-        setAttachments([]);
-        setRetryMessageId(null);
-        setFailedSubmission(null);
+        if (retryingAttachments) {
+          setRetryMessageId(null);
+          setFailedSubmission(null);
+        }
         return;
       }
-      setFailedSubmission(null);
+      if (retryingAttachments) setFailedSubmission(null);
       setRetryMessageId(result.messageId);
-      setAttachments((prev) =>
-        prev
-          .filter((item) => result.failedIds.includes(item.id))
-          .map((item) => ({ ...item, failed: true, progress: 0 })),
-      );
-      setNotice('Your message was sent. Retry or remove the failed files before writing another message.');
-    } catch {
-      setAttachments((prev) => prev.map((item) => ({ ...item, failed: true, progress: 0 })));
-      if (!retryingAttachments) {
-        if (draftRevisionRef.current === draftRevision) {
+      setFailedSubmission({
+        attachments: files.filter((file) => result.failedIds.includes(file.id)),
+        body: '',
+        draftRevision,
+        idempotencyKey: submissionKey,
+      });
+      setNotice(result.failedIds.some((id) => result.failedReasons?.[id] === 'attachment_too_large')
+        ? 'Attachment exceeds the 100 MiB limit. Remove it or choose a smaller file.'
+        : 'Your message was sent. Retry the failed media when ready.');
+    } catch (error) {
+      const activeFiles = files.filter((file) => !cancelledAttachmentIdsRef.current.has(file.id));
+      if (files.length > 0 && activeFiles.length === 0) {
+        for (const file of files) releasePreparedAttachment(file.id);
+        if (!retryingAttachments && draftRevisionRef.current === draftRevision) {
           setDraftValue(body);
+          setMeasuredInputHeight(0);
           onChangeText(body);
         }
-        setFailedSubmission({ attachments: files, body, draftRevision, replyToMessageId });
-        setNotice('Message not sent. Your draft is saved.');
+        setFailedSubmission(null);
+        setNotice(null);
+        return;
+      }
+      const attachmentTooLarge = error instanceof Error && error.message === 'attachment_too_large';
+      if (attachmentTooLarge) {
+        setNotice('Attachment exceeds the 100 MiB limit. Remove it or choose a smaller file.');
+      }
+      if (!retryingAttachments) {
+        setRetryMessageId(null);
+        setFailedSubmission({ attachments: activeFiles, body, draftRevision, idempotencyKey: submissionKey, replyToMessageId });
+        if (!attachmentTooLarge) setNotice('Message not sent. Your draft is saved.');
       } else {
-        setNotice('Your message is sent. Retry the failed files or remove them.');
+        if (!attachmentTooLarge) setNotice('Your message is sent. Retry the failed files or remove them.');
       }
     } finally {
-      sendingRef.current = false;
+      sendingCountRef.current = Math.max(0, sendingCountRef.current - 1);
+      sendingRef.current = sendingCountRef.current > 0;
+      if (retryKey) setRetryingFailure(false);
       blockVoiceActivationForTransition();
-      setSending(false);
-      submissionGate.current.finish(submissionToken);
+      activeSubmissionsRef.current.delete(signature);
       if (retainInputFocus) requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
@@ -361,7 +468,10 @@ function ComposerImpl({
     blockVoiceActivationForTransition();
     hapticMedium();
     setCaret(0);
-    void submit(attachments, retryMessageId ? '' : draftValue.trim(), replyTo?.message._id);
+    const body = draftValue.trim();
+    // The submitted draft and media move to their own optimistic row. New
+    // content remains free to use this composer while the upload finishes.
+    void submit(attachments, body, replyTo?.message._id, draftRevisionRef.current);
   }
 
   function handleSelectionChange(event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) {
@@ -382,10 +492,9 @@ function ComposerImpl({
 
   /** A finished recording joins the strip, then sends unless a write is in flight. */
   function handleCapture(file: UploadableFile) {
-    if (failedSubmission) return;
     const next = [...attachments, file];
     setAttachments(next);
-    if (!busy && !sending) void submit(next, draftValue.trim(), replyTo?.message._id);
+    void submit(next, draftValue.trim(), replyTo?.message._id);
   }
 
   function openMicrophoneSettings() {
@@ -524,35 +633,108 @@ function ComposerImpl({
 
       <PendingAttachmentStrip
         collapseSpacing={Spacing.two}
-        disabled={sending || Boolean(failedSubmission)}
-        items={sending ? [] : attachments}
+        disabled={false}
+        items={attachments}
         onRemove={(id) => {
+          cancelledAttachmentIdsRef.current.add(id);
           releasePreparedAttachment(id);
-          if (attachments.length === 1 && retryMessageId) setRetryMessageId(null);
-          setAttachments((prev) => prev.filter((item) => item.id !== id));
+          const remaining = attachments.filter((item) => item.id !== id);
+          // Removing the failed attachment is the user's cancellation. Drop its
+          // stale send-error notice and unlock the preserved text draft.
+          setNotice(null);
+          setAttachments(remaining);
+          setFailedSubmission((current) => {
+            if (!current) return null;
+            const retained = current.attachments.filter((item) => item.id !== id);
+            return retained.length === 0 ? null : { ...current, attachments: retained };
+          });
         }}
-        reserveSpace={sending && attachments.length > 0}
       />
 
-      {failedSubmission ? (
-        <View accessibilityLiveRegion="polite" style={styles.notice}>
-          <PlatformIcon color={theme.danger} name="alert-circle" size={14} />
-          <ThemedText style={styles.noticeText} themeColor="danger" type="caption">Message not sent. Your draft is saved.</ThemedText>
-          <Pressable
-            accessibilityLabel={sending ? 'Retrying saved message' : 'Retry sending saved message'}
+      {actionNotice ? (
+        <Animated.View
+          accessibilityLiveRegion="polite"
+          entering={reducedMotion ? undefined : ComposerPartEntering}
+          layout={composerLayoutTransition}
+          style={[
+          styles.actionPill,
+          actionPillMotionStyle,
+          {
+            backgroundColor: actionNotice.tone === 'danger'
+              ? theme.dangerSoft
+              : actionNotice.tone === 'accent'
+                ? theme.accentSoft
+              : isIOS
+                ? 'transparent'
+                : theme.backgroundElevated,
+            borderColor: actionNotice.tone === 'danger' ? theme.danger : actionNotice.tone === 'accent' ? theme.accent : theme.hairline,
+          },
+        ]}>
+          {isIOS && actionNotice.tone !== 'danger' && actionNotice.tone !== 'accent' ? <IOSGlassMaterial style={styles.actionPillMaterial} /> : null}
+          <ThemedText numberOfLines={1} style={styles.actionPillLabel} themeColor={actionNotice.tone === 'danger' ? 'danger' : actionNotice.tone === 'accent' ? 'accentInk' : 'textSecondary'} type="caption">
+            {actionNotice.label}
+          </ThemedText>
+          {actionNotice.actionLabel && actionNotice.onAction ? <Pressable
+            accessibilityLabel={actionNotice.actionLabel}
             accessibilityRole="button"
-            accessibilityState={{ disabled: sending || busy }}
-            disabled={sending || busy}
-            onPress={() => void submit(failedSubmission.attachments, failedSubmission.body, failedSubmission.replyToMessageId, failedSubmission.draftRevision)}
-            style={({ pressed }) => [styles.retryNoticeButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, opacity: sending || busy ? 0.5 : 1 }]}
+            accessibilityState={{ disabled: actionNotice.busy }}
+            disabled={actionNotice.busy}
+            hitSlop={8}
+            onPress={() => { hapticLight(); actionNotice.onAction?.(); }}
+            style={({ pressed }) => [styles.actionPillButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElevated, opacity: actionNotice.busy ? 0.55 : 1 }]}
           >
-            <ThemedText type="captionBold">{sending ? 'Sending' : 'Retry'}</ThemedText>
+            <ThemedText type="captionBold">{actionNotice.actionLabel}</ThemedText>
+          </Pressable> : null}
+        </Animated.View>
+      ) : null}
+
+      {failedSubmission || retryMessageId ? (
+        <View accessibilityLiveRegion="polite" style={[styles.failurePill, { backgroundColor: theme.dangerSoft, borderColor: theme.danger, bottom: TouchTarget + Spacing.six + (actionNotice ? 54 : 0) }]}>
+          <ThemedText numberOfLines={1} style={styles.failureText} themeColor="danger" type="caption">
+            {retryingFailure
+              ? 'Retrying…'
+              : notice?.startsWith('Attachment exceeds')
+                ? 'Attachment exceeds 100 MiB'
+                : failedSubmission ? 'Message not sent' : 'Media not sent'}
+          </ThemedText>
+          <Pressable
+            accessibilityLabel={retryingFailure ? 'Retrying message' : 'Retry sending message'}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: retryingFailure }}
+            disabled={retryingFailure}
+            onPress={() => {
+              if (failedSubmission) {
+                void submit(failedSubmission.attachments, failedSubmission.body, failedSubmission.replyToMessageId, failedSubmission.draftRevision, retryMessageId, failedSubmission.idempotencyKey);
+              } else {
+                void submit(attachments, '', undefined, draftRevisionRef.current);
+              }
+            }}
+            style={({ pressed }) => [styles.retryNoticeButton, { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement, opacity: retryingFailure ? 0.5 : 1 }]}
+          >
+            <ThemedText type="captionBold">{retryingFailure ? 'Retrying' : 'Retry'}</ThemedText>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Dismiss failed message"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              if (failedSubmission?.body && !draftValue.trim()) {
+                changeDraft(failedSubmission.body);
+              }
+              for (const file of failedSubmission?.attachments ?? []) releasePreparedAttachment(file.id);
+              setFailedSubmission(null);
+              setRetryMessageId(null);
+              setNotice(null);
+              hapticLight();
+            }}
+            style={styles.dismissFailure}>
+            <PlatformIcon color={theme.danger} name="close" size={16} />
           </Pressable>
         </View>
       ) : notice ? (
-        <View accessibilityLiveRegion="polite" style={styles.notice}>
-          <PlatformIcon color={theme.textSecondary} name="information-outline" size={14} />
-          <ThemedText style={styles.noticeText} themeColor="textSecondary" type="caption">
+        <View accessibilityLiveRegion="polite" style={[styles.noticePill, { bottom: TouchTarget + Spacing.six + (actionNotice ? 54 : 0), backgroundColor: noticeIsError ? theme.dangerSoft : theme.accentSoft, borderColor: noticeIsError ? theme.danger : theme.accent }]}>
+          <PlatformIcon color={noticeIsError ? theme.danger : theme.accentInk} name={noticeIsError ? 'alert-circle' : 'information-outline'} size={15} />
+          <ThemedText style={styles.noticeText} themeColor={noticeIsError ? 'danger' : 'accentInk'} type="caption">
             {notice}
           </ThemedText>
         </View>
@@ -619,7 +801,7 @@ function ComposerImpl({
               !isIOS && !inputExpanded && [styles.androidMessageField, { backgroundColor: theme.backgroundElement, borderColor: theme.homeBorder }],
               inputExpanded && styles.expandedMessageField,
               isIOS && styles.iosMessageField,
-              inputMultiline && styles.multilineMessageField,
+              !isIOS && inputMultiline && styles.multilineMessageField,
               !isIOS && inputMultiline && styles.androidMultilineMessageField,
             ]}
           >
@@ -650,7 +832,7 @@ function ComposerImpl({
             </Animated.View>}
             <Animated.View
               layout={composerLayoutTransition}
-              style={[styles.inputPill, { maxHeight: maxComposerHeight }, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
+              style={[styles.inputPill, { maxHeight: maxComposerHeight }, !isIOS && styles.androidInputPill, inputExpanded && styles.expandedInputPill, inputMultiline && styles.multilineInputPill, isIOS && styles.iosCenteredInputPill, isIOS && { height: iosPillHeight }, { borderColor: inputExpanded ? theme.accentStrong : theme.homeBorder }]}
             >
               {isIOS && hasLiquidGlass ? (
                 <GlassView
@@ -676,16 +858,19 @@ function ComposerImpl({
                 maxLength={10_000}
                 maxFontSizeMultiplier={MaxFontScale}
                 multiline
-                editable={!retryMessageId}
+                editable
                 showSoftInputOnFocus
                 onContentSizeChange={({ nativeEvent }) => {
-                  const nextHeight = Math.min(maxComposerTextHeight, Math.ceil(nativeEvent.contentSize.height));
+                  // Preserve the natural content height: the composer grows to
+                  // four lines, then the TextInput itself becomes scrollable.
+                  const nextHeight = draftValue ? Math.ceil(nativeEvent.contentSize.height) : 0;
                   setMeasuredInputHeight((current) => current === nextHeight ? current : nextHeight);
                 }}
                 onChangeText={(next) => {
                   if (notice) setNotice(null);
                   // Typing always wins back the caret, even if no selection event lands.
                   if (selection) setSelection(null);
+                  onActivityChange?.(next.trim() ? 'typing' : null);
                   changeDraft(next);
                 }}
                 onBlur={() => setInputFocused(false)}
@@ -698,8 +883,26 @@ function ComposerImpl({
                 selection={selection ?? undefined}
                 selectionColor={theme.accent}
                 selectionHandleColor={theme.accent}
-                scrollEnabled
-                style={[styles.input, isIOS && !inputMultiline && styles.iosCenteredInput, inputExpanded && styles.expandedInput, inputMultiline && styles.multilineInput, (isIOS || inputMultiline) && { height: inputMultiline ? inputContentHeight : iosInputHeight }, { color: theme.text, maxHeight: maxComposerTextHeight }]}
+                // Turn on native scrolling as soon as the four-line viewport
+                // is full. iOS can clamp contentSize to maxHeight, so waiting
+                // for a strictly larger measurement leaves overflow trapped.
+                scrollEnabled={visibleMeasuredInputHeight >= maxComposerTextHeight || explicitLineCount > ComposerVisibleLineLimit}
+                style={[
+                  styles.input,
+                  inputExpanded && styles.expandedInput,
+                  inputMultiline && styles.multilineInput,
+                  isIOS && styles.iosCenteredInput,
+                  {
+                    // On iOS, size the surrounding pill from the measured
+                    // content and let UITextView fill it. Setting the same
+                    // measured height on both the pill and UITextView can
+                    // constrain UIKit to one line and suppress its next size
+                    // change. Android needs an explicit input height to grow.
+                    ...(isIOS ? {} : { height: inputMultiline ? inputContentHeight : 48 }),
+                    color: theme.text,
+                    maxHeight: maxComposerTextHeight,
+                  },
+                ]}
                 value={draftValue}
               />
               <View pointerEvents="box-none" style={styles.inputContentOverlay}>
@@ -716,7 +919,7 @@ function ComposerImpl({
           <View style={styles.actionSlot}>
             <View style={styles.actionLayer}>
               <Pressable
-                accessibilityLabel={sendPending ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
+                accessibilityLabel={sendPending && !hasSendableContent ? 'Sending message' : retryMessageId ? 'Retry failed attachments' : 'Send message'}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canSend, busy: sendPending }}
                 android_ripple={{ borderless: true, color: theme.backgroundSelected }}
@@ -728,7 +931,7 @@ function ComposerImpl({
                   : [styles.circle, { backgroundColor: theme.accent, opacity: !canSend ? 0.72 : 1 }]}
               >
                 <Animated.View style={styles.sendState}>
-                  {sendPending ? (
+                  {sendPending && !hasSendableContent ? (
                     <ActivityIndicator
                       accessibilityLabel="Sending message"
                       accessibilityRole="progressbar"
@@ -762,7 +965,10 @@ function ComposerImpl({
       <ChatAttachMenu
         onClose={() => setMenuOpen(false)}
         onError={setNotice}
-        onPicked={(files: UploadableFile[]) => setAttachments((prev) => [...prev, ...files])}
+        onPicked={(files: UploadableFile[]) => {
+          onActivityChange?.('attaching');
+          setAttachments((prev) => [...prev, ...files]);
+        }}
         onPrepared={(prepared) => {
           // The upload pipeline awaits the same preparation promise. Avoid a
           // composer rerender while sending; it can hitch the focused input.
@@ -837,7 +1043,7 @@ const styles = StyleSheet.create({
   androidInputPill: { backgroundColor: 'transparent', borderRadius: 0, borderWidth: 0 },
   androidMessageField: { borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: Spacing.one },
   androidMultilineMessageField: { borderRadius: Radius.large },
-  multilineInput: { flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'top' },
+  multilineInput: { flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
   multilineInputMaterial: { borderRadius: Radius.large },
   multilineInputPill: { borderRadius: Radius.large, justifyContent: 'flex-start', paddingVertical: Spacing.two },
   multilineMessageField: { alignItems: 'flex-end' },
@@ -857,6 +1063,7 @@ const styles = StyleSheet.create({
   },
   inputContentOverlay: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0, zIndex: 2 },
   iosCenteredInput: { alignSelf: 'center', flex: 1, minHeight: 0, paddingBottom: 0, paddingTop: 0, textAlignVertical: 'center' },
+  iosCenteredInputPill: { justifyContent: 'center' },
   placeholderContainer: { bottom: 0, justifyContent: 'center', left: Spacing.three, position: 'absolute', right: TouchTarget + Spacing.two, top: 0 },
   expandedPlaceholderContainer: { justifyContent: 'flex-start', paddingTop: Spacing.three },
   placeholderText: { ...Typography.message },
@@ -910,9 +1117,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 30,
   },
-  notice: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three },
+  noticePill: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '92%', minHeight: 38, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, position: 'absolute', zIndex: 11 },
+  failurePill: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, maxWidth: '92%', minHeight: 38, paddingHorizontal: Spacing.three, paddingVertical: Spacing.half, position: 'absolute', zIndex: 11 },
+  failureText: { flexShrink: 1 },
+  dismissFailure: { alignItems: 'center', justifyContent: 'center', minHeight: 28, minWidth: 28 },
+  // Delete/retry feedback floats above the input instead of adding height to
+  // the keyboard-sticky composer. Measuring this transient pill used to resize
+  // the chat viewport and leave a blank strip while its exit state settled.
+  actionPill: { alignItems: 'center', alignSelf: 'center', borderCurve: 'continuous', borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, bottom: TouchTarget + Spacing.six, flexDirection: 'row', gap: Spacing.two, justifyContent: 'center', maxWidth: '92%', minHeight: 42, overflow: 'hidden', paddingLeft: Spacing.three, paddingRight: Spacing.one, paddingVertical: Spacing.one, position: 'absolute', zIndex: 10 },
+  actionPillMaterial: { borderCurve: 'continuous', borderRadius: Radius.pill },
+  actionPillLabel: { flexShrink: 1 },
+  actionPillButton: { alignItems: 'center', borderRadius: Radius.pill, justifyContent: 'center', minHeight: 34, minWidth: 56, paddingHorizontal: Spacing.three },
   noticeText: { flex: 1 },
-  retryNoticeButton: { alignItems: 'center', borderRadius: Radius.pill, justifyContent: 'center', minHeight: TouchTarget, minWidth: TouchTarget, paddingHorizontal: Spacing.three },
+  retryNoticeButton: { alignItems: 'center', borderRadius: Radius.pill, justifyContent: 'center', minHeight: 28, minWidth: 52, paddingHorizontal: Spacing.three },
   recordAction: { minHeight: TouchTarget, justifyContent: 'center' },
   recordBar: {
     alignItems: 'center',
@@ -943,7 +1160,7 @@ const styles = StyleSheet.create({
   },
   slideHint: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   sendState: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  surface: { gap: Spacing.two, paddingVertical: Spacing.two },
+  surface: { gap: Spacing.two, paddingVertical: Spacing.two, position: 'relative' },
   iosSurface: { borderTopWidth: 0 },
   timer: { minWidth: 34 },
   voiceButton: { alignItems: 'center', alignSelf: 'center', flexShrink: 0, height: TouchTarget, justifyContent: 'center', width: TouchTarget, zIndex: 3 },

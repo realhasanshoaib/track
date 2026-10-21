@@ -90,6 +90,7 @@ export type IconName =
   | 'refresh'
   | 'reply'
   | 'search'
+  | 'share'
   | 'selector'
   | 'send'
   | 'shield-check'
@@ -200,6 +201,7 @@ const SYMBOLS: Record<IconName, SymbolDefinition> = {
   refresh: { android: 'refresh', ios: 'arrow.clockwise' },
   reply: { android: 'reply', ios: 'arrowshape.turn.up.left', iosFilled: 'arrowshape.turn.up.left.fill' },
   search: { android: 'search', ios: 'magnifyingglass' },
+  share: { android: 'share', ios: 'square.and.arrow.up' },
   selector: { android: 'unfold_more', ios: 'chevron.up.chevron.down' },
   send: { android: 'send', ios: 'paperplane', iosFilled: 'paperplane.fill' },
   'shield-check': { android: 'verified_user', ios: 'checkmark.shield', iosFilled: 'checkmark.shield.fill' },

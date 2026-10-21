@@ -4,6 +4,10 @@ export function isImageAttachment(contentType: string) {
   return contentType.startsWith('image/');
 }
 
+export function isVideoAttachment(contentType: string) {
+  return contentType.startsWith('video/');
+}
+
 export function isAudioAttachment(input: { contentType: string; kind?: string }) {
   return input.kind === 'voice_note' || input.contentType.startsWith('audio/');
 }
@@ -72,6 +76,7 @@ const EXTENSION_ICONS: Record<string, IconName> = {
 
 export function attachmentIcon(input: { contentType: string; filename: string }): IconName {
   if (isImageAttachment(input.contentType)) return 'image';
+  if (isVideoAttachment(input.contentType)) return 'video';
   if (isAudioAttachment(input)) return 'file-music';
   const extension = input.filename.split('.').pop()?.toLowerCase();
   if (extension && EXTENSION_ICONS[extension]) return EXTENSION_ICONS[extension];

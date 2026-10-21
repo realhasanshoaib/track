@@ -454,6 +454,7 @@ export default defineSchema({
   typingIndicators: defineTable({
     projectId: v.id('projects'),
     groupId: v.id('groups'),
+    channelThreadId: v.optional(v.id('channelThreads')),
     userId: v.id('users'),
     projectMemberId: v.optional(v.id('projectMembers')),
     activity: v.optional(
@@ -464,8 +465,11 @@ export default defineSchema({
   })
     .index('by_project', ['projectId'])
     .index('by_group_updated_at', ['groupId', 'updatedAt'])
+    .index('by_group_thread_updated_at', ['groupId', 'channelThreadId', 'updatedAt'])
     .index('by_group_user', ['groupId', 'userId'])
     .index('by_group_project_member', ['groupId', 'projectMemberId'])
+    .index('by_group_thread_user', ['groupId', 'channelThreadId', 'userId'])
+    .index('by_group_thread_project_member', ['groupId', 'channelThreadId', 'projectMemberId'])
     .index('by_user', ['userId']),
 
   attachments: defineTable({

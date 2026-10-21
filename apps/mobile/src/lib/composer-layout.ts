@@ -1,5 +1,10 @@
 export const ComposerVisibleLineLimit = 4;
 
+/** Switch the input to top alignment as soon as it contains a second line. */
+export function composerInputMultilineThreshold(lineHeight: number, verticalInset: number) {
+  return lineHeight + verticalInset;
+}
+
 export function composerTextMaxHeight(lineHeight: number, fontScale: number, maxFontScale: number) {
   return Math.ceil(lineHeight * ComposerVisibleLineLimit * Math.min(fontScale, maxFontScale));
 }
@@ -11,11 +16,10 @@ export function composerControlVisibility(mode: string, keyboardVisible: boolean
   };
 }
 
-export function composerAttachmentStripMetrics(hasItems: boolean, reserveSpace: boolean, stripHeight: number, collapseSpacing: number) {
-  const reserved = hasItems || reserveSpace;
+export function composerAttachmentStripMetrics(hasItems: boolean, stripHeight: number, collapseSpacing: number) {
   return {
-    height: reserved ? stripHeight : 0,
-    marginBottom: reserved ? 0 : -collapseSpacing,
+    height: hasItems ? stripHeight : 0,
+    marginBottom: hasItems ? 0 : -collapseSpacing,
   };
 }
 

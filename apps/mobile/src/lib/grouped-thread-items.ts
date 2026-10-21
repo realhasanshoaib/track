@@ -1,5 +1,5 @@
 type TimelineMessage = {
-  message: { _id: string; createdAt: number; idempotencyKey?: string };
+  message: { _id: string; createdAt: number; deletedAt?: number | null; idempotencyKey?: string };
   author: { _id: string } | null;
 };
 
@@ -104,4 +104,37 @@ export function groupThreadTimeline<
   }
 
   return result;
+}
+
+/** Hide local removals and keep a date pill only when that day has content. */
+export function visibleTimelineItems<
+  Message extends TimelineMessage,
+  AssistantStream extends TimelineAssistantStream,
+>(
+  items: readonly GroupedTimelineItem<Message, AssistantStream>[],
+  hiddenMessageIds: ReadonlySet<string> = new Set(),
+  optimisticallyDeletedIds: ReadonlySet<string> = new Set(),
+): GroupedTimelineItem<Message, AssistantStream>[] {
+  const visible = items.filter((item) => item.kind !== 'message' || !hiddenMessageIds.has(item.item.message._id));
+  const withVisibleDates = visible.filter((item, index) => {
+    if (item.kind !== 'date-sep') return true;
+    for (let next = index + 1; next < visible.length && visible[next]?.kind !== 'date-sep'; next++) {
+      const candidate = visible[next];
+      if (candidate?.kind === 'assistant') return true;
+      if (candidate?.kind === 'message' && !candidate.item.message.deletedAt && !optimisticallyDeletedIds.has(candidate.item.message._id)) return true;
+    }
+    return false;
+  });
+  // A day pill can disappear when every message in that day was deleted.
+  // Keep adjacent tombstones from the same author at the same small gap even
+  // when the hidden day boundary or a long time interval started a new group.
+  return withVisibleDates.map((item, index) => {
+    const previous = withVisibleDates[index - 1];
+    if (item.kind !== 'message' || previous?.kind !== 'message') return item;
+    const deleted = Boolean(item.item.message.deletedAt) || optimisticallyDeletedIds.has(item.item.message._id);
+    const previousDeleted = Boolean(previous.item.message.deletedAt)
+      || optimisticallyDeletedIds.has(previous.item.message._id);
+    if (!deleted || !previousDeleted || item.item.author?._id !== previous.item.author?._id) return item;
+    return item.isFirstInGroup ? { ...item, isFirstInGroup: false } : item;
+  });
 }

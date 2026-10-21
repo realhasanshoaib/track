@@ -6,6 +6,7 @@ import {
   followLatestAfterViewportLayout,
   restoreChatScrollAfterDeletion,
   scrollListToLatest,
+  shouldFollowLatestOnComposerFocus,
   shouldFollowLatestAfterContentResize,
   shouldFollowPendingSendAfterContentLayout,
 } from './chat-scroll-follow';
@@ -79,6 +80,16 @@ describe('shouldFollowLatestAfterContentResize', () => {
   });
 });
 
+describe('shouldFollowLatestOnComposerFocus', () => {
+  it('keeps following when the reader is already at the latest message', () => {
+    expect(shouldFollowLatestOnComposerFocus(true)).toBe(true);
+  });
+
+  it('preserves the reader position when the reader is browsing history', () => {
+    expect(shouldFollowLatestOnComposerFocus(false)).toBe(false);
+  });
+});
+
 describe('shouldFollowPendingSendAfterContentLayout', () => {
   it('waits for the pending send layout and follows when the reader is pinned', () => {
     expect(shouldFollowPendingSendAfterContentLayout(true, {
@@ -126,46 +137,35 @@ describe('scrollListToLatest', () => {
 });
 
 describe('restoreChatScrollAfterDeletion', () => {
-  it('restores the reader to the same offset when they were browsing history', () => {
-    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
+  it('leaves a history reader on the native visible-content anchor', () => {
     const scrollToLatest = vi.fn();
 
     restoreChatScrollAfterDeletion(
-      list,
-      { offsetY: 1_248, wasAtBottom: false, followingLatest: false, pinAfterSend: false },
+      { wasAtBottom: false, followingLatest: false, pinAfterSend: false },
       scrollToLatest,
     );
 
-    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 1_248 });
-    expect(list.scrollToEnd).not.toHaveBeenCalled();
     expect(scrollToLatest).not.toHaveBeenCalled();
   });
 
   it('keeps the reader pinned to latest when deletion happens at the bottom', () => {
-    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
     const scrollToLatest = vi.fn();
 
     restoreChatScrollAfterDeletion(
-      list,
-      { offsetY: 1_248, wasAtBottom: true, followingLatest: false, pinAfterSend: false },
+      { wasAtBottom: true, followingLatest: false, pinAfterSend: false },
       scrollToLatest,
     );
 
     expect(scrollToLatest).toHaveBeenCalledOnce();
-    expect(list.scrollToOffset).not.toHaveBeenCalled();
   });
 
-  it('clamps a negative rubber-band offset before restoring it', () => {
-    const list = { scrollToEnd: vi.fn(), scrollToOffset: vi.fn() };
-
+  it('does not replay a stale offset after a reader browsed during deletion', () => {
     restoreChatScrollAfterDeletion(
-      list,
-      { offsetY: -18, wasAtBottom: false, followingLatest: false, pinAfterSend: false },
+      { wasAtBottom: false, followingLatest: false, pinAfterSend: false },
       vi.fn(),
     );
-
-    expect(list.scrollToOffset).toHaveBeenCalledWith({ animated: false, offset: 0 });
   });
+
 });
 
 describe('androidKeyboardInsetForViewport', () => {

@@ -3,11 +3,12 @@ import { StyleSheet, View } from 'react-native';
 
 import { FileAttachment } from '@/components/chat/file-attachment';
 import { ImageAttachments } from '@/components/chat/image-attachment';
+import { VideoAttachment } from '@/components/chat/video-attachment';
 import { hasReadyAttachmentPreview } from '@/components/chat/types';
 import type { AttachmentWithUrl, ViewableImage } from '@/components/chat/types';
 import { VoiceNotePlayer } from '@/components/chat/voice-note-player';
 import { Radius, Spacing } from '@/constants/theme';
-import { isAudioAttachment, isImageAttachment } from '@/lib/attachment-presentation';
+import { isAudioAttachment, isImageAttachment, isVideoAttachment } from '@/lib/attachment-presentation';
 
 import type { Doc } from '../../../../../convex/_generated/dataModel';
 
@@ -20,26 +21,35 @@ type PlayableVoiceNote = { attachment: Doc<'attachments'>; url: string };
  */
 export function AttachmentList({
   attachments,
+  videoCaptionAttached = false,
   imageDeliveryAccessibilityLabel,
   imageDeliveryMeta,
   isOwnMessage,
+  onForwardMedia,
   onLongPress,
   selectionMode = false,
   senderAvatarUrl,
   senderName,
+  videoDeliveryAccessibilityLabel,
+  videoDeliveryMeta,
   voiceDeliveryMeta,
 }: {
   attachments: AttachmentWithUrl[];
+  videoCaptionAttached?: boolean;
   imageDeliveryAccessibilityLabel?: string;
   imageDeliveryMeta?: ReactNode;
   isOwnMessage: boolean;
+  onForwardMedia?: () => void;
   onLongPress?: () => void;
   selectionMode?: boolean;
   senderAvatarUrl?: string | null;
   senderName: string;
+  videoDeliveryAccessibilityLabel?: string;
+  videoDeliveryMeta?: ReactNode;
   voiceDeliveryMeta?: ReactNode;
 }) {
   const images: ViewableImage[] = [];
+  const videos: AttachmentWithUrl[] = [];
   const voiceNotes: PlayableVoiceNote[] = [];
   const files: AttachmentWithUrl[] = [];
 
@@ -71,6 +81,10 @@ export function AttachmentList({
       });
       continue;
     }
+    if (isVideoAttachment(attachment.contentType)) {
+      videos.push(entry);
+      continue;
+    }
     if (!url) {
       files.push(entry);
       continue;
@@ -93,6 +107,20 @@ export function AttachmentList({
           selectionMode={selectionMode}
         />
       ) : null}
+      {videos.map((entry, index) => (
+        <VideoAttachment
+          attachment={entry.attachment}
+          captionAttached={videoCaptionAttached && index === videos.length - 1}
+          deliveryAccessibilityLabel={index === videos.length - 1 ? videoDeliveryAccessibilityLabel : undefined}
+          deliveryMeta={index === videos.length - 1 ? videoDeliveryMeta : undefined}
+          key={entry.attachment._id}
+          onLongPress={onLongPress}
+          onForward={onForwardMedia}
+          selectionMode={selectionMode}
+          previewUrl={entry.previewUrl}
+          url={entry.url}
+        />
+      ))}
       {voiceNotes.map(({ attachment, url }, index) => (
         <View
           key={attachment._id}
@@ -105,7 +133,7 @@ export function AttachmentList({
             attachment={attachment}
             deliveryMeta={index === voiceNotes.length - 1 ? voiceDeliveryMeta : undefined}
             isOwnMessage={isOwnMessage}
-              onLongPress={onLongPress}
+            onLongPress={onLongPress}
             selectionMode={selectionMode}
             senderAvatarUrl={senderAvatarUrl}
             senderName={senderName}

@@ -6,12 +6,13 @@ import { AttachmentList } from '@/components/chat/attachment-list';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
 import { MessageContextMenu } from '@/components/chat/message-context-menu';
 import {
-  MESSAGE_MAX_WIDTH_RATIO,
   MESSAGE_SELECTION_INDICATOR_SIZE,
 } from '@/components/chat/message-layout';
 import { MessageText } from '@/components/chat/message-text';
+import { TextMessageBody } from '@/components/chat/text-message-body';
 import { hasReadyAttachmentPreview } from '@/components/chat/types';
 import { MESSAGE_ROW_VERTICAL_PADDING } from '@/lib/message-row-layout';
+import { messageBubbleMaxWidth, selectionIndicatorSide } from '@/lib/message-selection-layout';
 import type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 import { ColoredAvatar } from '@/components/colored-avatar';
 import { IOSGlassMaterial } from '@/components/ios-glass-material';
@@ -19,11 +20,12 @@ import type { MessageAction } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing, TouchTarget } from '@/constants/theme';
-import { hasPlayableAudioAttachment, isAudioAttachment, isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
+import { hasPlayableAudioAttachment, isAudioAttachment, isAutoAttachmentBody, isImageAttachment, isVideoAttachment } from '@/lib/attachment-presentation';
 import { hapticLight } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { displayText } from '@/lib/display-text';
 import { messageDeliveryAccessibilityLabel } from '@/lib/message-receipt';
+import { useTaskLinkBatch } from '@/lib/task-link-context';
 
 const AVATAR_SIZE = 32;
 const SELECTION_HIT_SLOP = Platform.OS === 'android' ? 8 : 6;
@@ -63,9 +65,9 @@ export function MessageBubbleFrame({
   const { width } = useWindowDimensions();
   const longPressHandled = useRef(false);
   const transparentBareMedia = bareMedia && !highlighted;
-  // The selection rail is outside the bubble. Keep the bubble's measured width
-  // unchanged when selection mode appears so message text never rewraps.
-  const maxWidth = Math.min(width * MESSAGE_MAX_WIDTH_RATIO, 560);
+  // Keep text bubbles compact on phones; the same cap applies before and during
+  // selection so opening the selection controls never rewraps message text.
+  const maxWidth = messageBubbleMaxWidth(width);
 
   return (
     <Pressable
@@ -102,7 +104,7 @@ export function MessageBubbleFrame({
         isOwnMessage ? styles.tailOwn : styles.tailOther,
       ]}
     >
-      <View pointerEvents={selectionMode ? 'none' : 'auto'} style={styles.bubbleBody}>{children}</View>
+      <View pointerEvents={selectionMode ? 'none' : 'auto'} style={[styles.bubbleBody, !hasMedia && styles.bubbleBodyText]}>{children}</View>
       {afterContent ? <View pointerEvents={selectionMode ? 'none' : 'auto'}>{afterContent}</View> : null}
     </Pressable>
   );
@@ -112,7 +114,9 @@ type Props = {
   highlighted?: boolean;
   isFirstInGroup: boolean;
   isOwnMessage: boolean;
+  linkedTasks?: ReactNode;
   message: DetailedMessage;
+  optimisticallyDeleted?: boolean;
   readReceipt?: { readCount: number; recipientCount: number };
   selected?: boolean;
   selectionMode?: boolean;
@@ -130,7 +134,9 @@ export function MessageBubble({
   highlighted = false,
   isFirstInGroup,
   isOwnMessage,
+  linkedTasks,
   message,
+  optimisticallyDeleted = false,
   readReceipt,
   selected = false,
   selectionMode = false,
@@ -144,17 +150,21 @@ export function MessageBubble({
   timeLabel,
 }: Props) {
   const theme = useTheme();
-  const lastVoiceHold = useRef(-Infinity);
+  const taskBatch = useTaskLinkBatch();
+  const hasLinkedTasks = Boolean(taskBatch?.messageTasks.get(String(message.message._id))?.length);
+  const lastMediaHold = useRef(-Infinity);
   const name = message.author?.displayName ?? 'Member';
   const authorId = message.author?._id ?? name;
-  const isDeleted = Boolean(message.message.deletedAt);
+  const isDeleted = Boolean(message.message.deletedAt) || optimisticallyDeleted;
   const rawBody = displayText(message.message.body.trim());
   const attachmentNames = message.attachments.map(({ attachment }) => attachment.filename);
   const body = message.attachments.length && isAutoAttachmentBody(rawBody, attachmentNames) ? '' : rawBody;
   const selectionLabel = isDeleted
     ? isOwnMessage ? 'your deleted message' : `deleted message from ${name}`
     : `${isOwnMessage ? 'your message' : `message from ${name}`}: ${body || attachmentNames.join(', ') || 'attachment'}`;
-  const selectionIndicator = selectionMode ? <MessageSelectionIndicator selected={selected} /> : null;
+  const selectionIndicator = selectionMode
+    ? <MessageSelectionIndicator selected={selected} side={selectionIndicatorSide(isOwnMessage)} />
+    : null;
   const keyboardSelectionProps = Platform.OS === 'web' && selectionMode ? {
     onKeyDownCapture: (event: KeyboardEvent) => {
       if (event.key !== ' ' && event.key !== 'Enter') return;
@@ -164,34 +174,44 @@ export function MessageBubble({
     },
   } : {};
   const hasImage = !isDeleted && message.attachments.some(isRenderableImage);
+  const hasVideo = !isDeleted && message.attachments.some(({ attachment }) => isVideoAttachment(attachment.contentType));
   const hasVoiceNote = !isDeleted && hasPlayableAudioAttachment(message.attachments);
-  const bubbleLongPress = Platform.OS === 'android' || !onLongPress ? undefined : () => {
-    if (hasVoiceNote) {
+  const bubbleLongPress = !onLongPress || (Platform.OS === 'android' && !hasVoiceNote && !hasVideo) ? undefined : () => {
+    if (hasVoiceNote || hasVideo) {
       const now = performance.now();
-      // The waveform gesture and RN parent can observe the same hold. A new
+      // An inner media control and its parent can observe the same hold. A new
       // deliberate hold takes at least 500 ms, so coalesce only duplicate delivery.
-      if (now - lastVoiceHold.current < 250) return;
-      lastVoiceHold.current = now;
+      if (now - lastMediaHold.current < 250) return;
+      lastMediaHold.current = now;
     }
     onLongPress();
   };
   const showHeader = isFirstInGroup && !isOwnMessage && !hasVoiceNote;
-  const hasMedia = hasImage || hasVoiceNote;
-  const imageOnly = hasImage && !body && !message.replyTo && !message.forwardedFrom
-    && !message.channelThread && message.attachments.every(isRenderableImage);
+  const hasMedia = hasImage || hasVideo || hasVoiceNote;
+  const mediaOnly = (hasImage || hasVideo) && !body && !hasLinkedTasks && !message.replyTo && !message.forwardedFrom
+    && !message.channelThread && message.attachments.every((entry) =>
+      isVideoAttachment(entry.attachment.contentType) || isRenderableImage(entry),
+    );
   const voiceClosesBubble =
     hasVoiceNote &&
     !body &&
+    !hasLinkedTasks &&
     !message.channelThread &&
     message.attachments.every(({ attachment, url }) => url && isAudioAttachment(attachment));
-  const showMediaForward = hasImage && !isDeleted && !selected && Boolean(onForwardMedia);
+  const showMediaForward = hasImage && !isDeleted && Boolean(onForwardMedia);
   const voiceDeliveryMeta = voiceClosesBubble ? (
     <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} tone="voice" />
   ) : undefined;
-  const imageDeliveryMeta = hasImage ? (
+  const imageDeliveryMeta = hasImage && !hasVideo ? (
     <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} tone="media" />
   ) : undefined;
-  const imageDeliveryAccessibilityLabel = hasImage
+  const videoDeliveryMeta = hasVideo ? (
+    <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} tone="media" />
+  ) : undefined;
+  const imageDeliveryAccessibilityLabel = hasImage && !hasVideo
+    ? messageDeliveryAccessibilityLabel({ isDeleted, isOwnMessage, readReceipt, timeLabel })
+    : undefined;
+  const videoDeliveryAccessibilityLabel = hasVideo
     ? messageDeliveryAccessibilityLabel({ isDeleted, isOwnMessage, readReceipt, timeLabel })
     : undefined;
   const threadControl = message.channelThread ? (
@@ -225,12 +245,14 @@ export function MessageBubble({
       {onOpenThread ? <PlatformIcon color={theme.textTertiary} name="chevron-right" size={16} /> : null}
     </GesturePressable>
   ) : null;
-  const timeMeta = !voiceClosesBubble && !hasImage ? (
+  // Image, video, and voice surfaces own their delivery metadata. Rendering a
+  // second row here made video receipts appear both inside and below the tile.
+  const timeMeta = !voiceClosesBubble && !hasImage && !hasVideo ? (
     <View style={[styles.timeMeta, hasMedia && styles.mediaFooter]}>
       <MessageDeliveryMeta isDeleted={isDeleted} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} />
     </View>
   ) : null;
-  const inlineTextMeta = !isDeleted && Boolean(body) && !hasMedia && !message.replyTo && !message.forwardedFrom && !threadControl;
+  const inlineTextMeta = !isDeleted && Boolean(body) && !hasMedia && !hasLinkedTasks && !message.replyTo && !message.forwardedFrom && !threadControl;
   const afterContent = threadControl || (timeMeta && !inlineTextMeta) ? (
     <View style={styles.bubbleAfterContent}>
       {threadControl}
@@ -249,33 +271,31 @@ export function MessageBubble({
       focusable={selectionMode}
       hitSlop={selectionMode ? { bottom: SELECTION_HIT_SLOP, top: SELECTION_HIT_SLOP } : undefined}
       onPress={selectionMode ? onPressSelection : undefined}
-      style={[
-      styles.row,
-      selectionMode && styles.rowSelection,
-    ]}>
-      {selectionIndicator}
+      style={styles.row}>
       <View
         accessibilityElementsHidden={selectionMode}
         importantForAccessibility={selectionMode ? 'no-hide-descendants' : 'auto'}
         pointerEvents={selectionMode ? 'none' : 'box-none'}
         style={[styles.rowContent, isOwnMessage ? styles.rowOwn : styles.rowOther]}
       >
-      {isOwnMessage ? null : selectionMode ? (
-        <View style={styles.avatarSpacer} />
-      ) : hasVoiceNote ? (
-        <View style={styles.avatarSpacer} />
-      ) : isFirstInGroup ? (
-        <ColoredAvatar label={name} seed={authorId} size={AVATAR_SIZE} />
-      ) : (
-        <View style={styles.avatarSpacer} />
-      )}
-      {showMediaForward && !selectionMode && isOwnMessage ? <ForwardMediaButton onPress={onForwardMedia} /> : null}
+      {isOwnMessage ? null : selectionMode
+        ? isFirstInGroup
+          ? <ColoredAvatar label={name} seed={authorId} size={AVATAR_SIZE} />
+          : <View style={styles.avatarSpacer} />
+        : hasVoiceNote
+          ? <View style={styles.avatarSpacer} />
+          : isFirstInGroup
+            ? <ColoredAvatar label={name} seed={authorId} size={AVATAR_SIZE} />
+            : <View style={styles.avatarSpacer} />}
+      {showMediaForward && isOwnMessage ? (
+        selectionMode ? <View style={styles.forwardMediaPlaceholder} /> : <ForwardMediaButton onPress={onForwardMedia} />
+      ) : null}
       <View style={styles.messageColumn}>
-      {showHeader && imageOnly ? <ThemedText numberOfLines={2} style={styles.imageAuthor} themeColor="textSecondary" type="smallBold">{name}</ThemedText> : null}
-      <MessageContextMenu actions={selectionMode ? [] : contextActions ?? []} inlinePlayback={hasVoiceNote}>
+      {showHeader && mediaOnly ? <ThemedText numberOfLines={2} style={styles.imageAuthor} themeColor="textSecondary" type="smallBold">{name}</ThemedText> : null}
+      <MessageContextMenu actions={selectionMode ? [] : contextActions ?? []} inlinePlayback={hasVoiceNote || hasVideo}>
         <MessageBubbleFrame
           afterContent={afterContent}
-          bareMedia={voiceClosesBubble || imageOnly}
+          bareMedia={voiceClosesBubble || mediaOnly}
           compact={isDeleted}
           hasMedia={hasMedia}
           highlighted={highlighted}
@@ -286,7 +306,7 @@ export function MessageBubble({
           selectionMode={selectionMode}
         >
           <View style={styles.bubbleBodyContent}>
-        {showHeader && !imageOnly ? (
+        {showHeader && !mediaOnly ? (
           <View style={[
             styles.header,
             isOwnMessage && styles.headerOwn,
@@ -346,48 +366,45 @@ export function MessageBubble({
           {message.attachments.length ? (
             <AttachmentList
               attachments={message.attachments}
+              videoCaptionAttached={hasVideo && Boolean(body)}
               imageDeliveryAccessibilityLabel={imageDeliveryAccessibilityLabel}
               imageDeliveryMeta={imageDeliveryMeta}
               isOwnMessage={isOwnMessage}
+              onForwardMedia={onForwardMedia}
               onLongPress={selectionMode ? undefined : bubbleLongPress}
               selectionMode={selectionMode}
               senderAvatarUrl={message.authorAvatarUrl}
               senderName={name}
+              videoDeliveryAccessibilityLabel={videoDeliveryAccessibilityLabel}
+              videoDeliveryMeta={videoDeliveryMeta}
               voiceDeliveryMeta={voiceDeliveryMeta}
             />
           ) : null}
 
-          {body ? (
-            <View style={[
-              hasMedia && styles.inset,
-              hasImage && styles.bodyWithImage,
-              !hasMedia && (isOwnMessage ? styles.textBodyOwn : styles.textBodyOther),
-              inlineTextMeta && styles.inlineTextRow,
-            ]}>
-              <MessageText body={body} style={inlineTextMeta ? styles.inlineText : undefined} />
-              {inlineTextMeta ? (
-                <MessageDeliveryMeta
-                  isDeleted={isDeleted}
-                  isOwnMessage={isOwnMessage}
-                  readReceipt={readReceipt}
-                  timeLabel={timeLabel}
-                />
-              ) : null}
+          {body ? inlineTextMeta ? (
+            <TextMessageBody body={body} isOwnMessage={isOwnMessage} readReceipt={readReceipt} timeLabel={timeLabel} />
+          ) : (
+            <View style={[hasMedia && styles.inset, (hasImage || hasVideo) && styles.bodyWithImage, !hasMedia && (isOwnMessage ? styles.textBodyOwn : styles.textBodyOther)]}>
+              <MessageText body={body} />
             </View>
           ) : null}
+          {linkedTasks && hasLinkedTasks ? <View style={hasMedia && styles.inset}>{linkedTasks}</View> : null}
         </>}
 
           </View>
         </MessageBubbleFrame>
       </MessageContextMenu>
       </View>
-      {showMediaForward && !selectionMode && !isOwnMessage ? <ForwardMediaButton onPress={onForwardMedia} /> : null}
+      {showMediaForward && !isOwnMessage ? (
+        selectionMode ? <View style={styles.forwardMediaPlaceholder} /> : <ForwardMediaButton onPress={onForwardMedia} />
+      ) : null}
       </View>
+      {selectionIndicator}
     </Pressable>
   );
 }
 
-function MessageSelectionIndicator({ selected }: { selected: boolean }) {
+function MessageSelectionIndicator({ selected, side }: { selected: boolean; side: 'left' | 'right' }) {
   const theme = useTheme();
   return (
     <View
@@ -396,6 +413,7 @@ function MessageSelectionIndicator({ selected }: { selected: boolean }) {
       pointerEvents="none"
       style={[
         styles.selectionIndicator,
+        side === 'left' ? styles.selectionIndicatorLeft : styles.selectionIndicatorRight,
         {
           // Message lists can mount many selection controls at once. Keep the
           // soft iOS pill treatment, but avoid a native GlassView per row: the
@@ -505,6 +523,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 36,
   },
+  forwardMediaPlaceholder: { alignSelf: 'center', height: 36, width: 36 },
   deletedCopy: { flexShrink: 1, fontStyle: 'italic' },
   deletedRow: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
   bubble: {
@@ -516,8 +535,11 @@ const styles = StyleSheet.create({
   },
   bubbleAfterContent: { alignSelf: 'stretch', gap: Spacing.one },
   bubbleBody: { alignSelf: 'stretch', gap: Spacing.one, minWidth: 0 },
+  bubbleBodyText: { alignSelf: 'flex-start' },
   bubbleBodyContent: { gap: Spacing.one, minWidth: 0 },
-  bodyWithImage: { marginTop: Spacing.one },
+  // Media and caption are one continuous bubble. The parent already supplies
+  // the small inter-item rhythm; adding another margin doubled the visible gap.
+  bodyWithImage: { marginTop: 0 },
   bubbleMedia: {
     overflow: 'hidden',
   },
@@ -588,13 +610,12 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingVertical: MESSAGE_ROW_VERTICAL_PADDING,
     paddingHorizontal: Spacing.three,
+    position: 'relative',
     width: '100%',
   },
   rowContent: { alignItems: 'flex-start', flex: 1, flexDirection: 'row', minWidth: 0 },
-  messageColumn: { flexShrink: 1, maxWidth: '100%', minWidth: 0 },
+  messageColumn: { flexShrink: 1, maxWidth: '100%', minWidth: 0, position: 'relative' },
   imageAuthor: { marginBottom: Spacing.one, marginHorizontal: MEDIA_PAD },
-  inlineText: { flexShrink: 1, minWidth: 0 },
-  inlineTextRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },
   textBodyOwn: { alignSelf: 'flex-end', maxWidth: '100%', paddingRight: Spacing.half },
   textBodyOther: { alignSelf: 'flex-start', maxWidth: '100%', paddingLeft: Spacing.half },
   selectionIndicator: {
@@ -605,13 +626,16 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     height: MESSAGE_SELECTION_INDICATOR_SIZE,
     justifyContent: 'center',
-    left: Spacing.three,
     overflow: 'hidden',
     position: 'absolute',
     top: '50%',
     transform: [{ translateY: -MESSAGE_SELECTION_INDICATOR_SIZE / 2 }],
     width: MESSAGE_SELECTION_INDICATOR_SIZE,
   },
+  // Anchor the control to the row's far wall, opposite the bubble, instead of
+  // letting it crowd the message's media or text edge.
+  selectionIndicatorLeft: { left: Spacing.three },
+  selectionIndicatorRight: { right: Spacing.three },
   rowOther: {
     gap: 2,
     justifyContent: 'flex-start',
@@ -620,7 +644,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     justifyContent: 'flex-end',
   },
-  rowSelection: { alignItems: 'flex-start', position: 'relative' },
   selectionMaterial: { borderCurve: 'continuous', borderRadius: Radius.pill },
   tailOther: {
     borderBottomLeftRadius: 0,

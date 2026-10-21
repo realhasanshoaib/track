@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
@@ -14,6 +14,7 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useTaskLinkBatch } from '@/lib/task-link-context';
 
 import type { Doc } from '../../../../../convex/_generated/dataModel';
 
@@ -22,6 +23,7 @@ const VISIBLE_EVIDENCE = 3;
 
 type Props = {
   isFirstInGroup: boolean;
+  linkedTasks?: ReactNode;
   onLongPress?: () => void;
   stream: Doc<'assistantStreams'>;
   timeLabel: string;
@@ -31,8 +33,10 @@ type Props = {
  * The assistant answers in the same incoming bubble as everyone else; only the
  * mark and the "Assistant" chip mark it as Track rather than a member.
  */
-export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabel }: Props) {
+export function AssistantMessage({ isFirstInGroup, linkedTasks, onLongPress, stream, timeLabel }: Props) {
   const theme = useTheme();
+  const taskBatch = useTaskLinkBatch();
+  const hasLinkedTasks = Boolean(taskBatch?.assistantTasks.get(String(stream._id))?.length);
   const progressStream: AssistantProgressStream = stream;
   const failed = stream.status === 'failed';
   const answer = failed ? '' : stream.answer.trim();
@@ -41,7 +45,7 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
   const evidence = stream.evidence.slice(0, VISIBLE_EVIDENCE);
   const hiddenEvidence = stream.evidence.length - evidence.length;
   // Only an answer that closes the bubble can tuck the time into its last line.
-  const timeInline = Boolean(answer) && evidence.length === 0;
+  const timeInline = Boolean(answer) && evidence.length === 0 && !hasLinkedTasks;
   return (
     <View style={styles.row}>
       {isFirstInGroup ? <AssistantMark size={MARK_SIZE} /> : <View style={styles.markSpacer} />}
@@ -133,6 +137,8 @@ export function AssistantMessage({ isFirstInGroup, onLongPress, stream, timeLabe
             ) : null}
           </View>
         ) : null}
+
+        {linkedTasks}
 
         {timeInline ? null : (
           <View style={styles.timeMeta}>

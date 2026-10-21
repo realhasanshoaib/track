@@ -14,12 +14,12 @@ export function IOSGlassContainer({ spacing, ...props }: IOSGlassContainerProps)
 }
 
 /** Background material for compact iOS header controls and identity pills. */
-export function IOSGlassMaterial({ style }: { style?: StyleProp<ViewStyle> }) {
+export function IOSGlassMaterial({ style, tintColor }: { style?: StyleProp<ViewStyle>; tintColor?: string }) {
   const theme = useTheme();
   if (Platform.OS !== 'ios') return null;
 
   if (!hasNativeGlassEffect()) {
-    return <View pointerEvents="none" style={[StyleSheet.absoluteFill, style, { backgroundColor: theme.backgroundElevated }]} />;
+    return <View pointerEvents="none" style={[StyleSheet.absoluteFill, style, { backgroundColor: tintColor ?? theme.backgroundElevated }]} />;
   }
 
   return (
@@ -29,7 +29,7 @@ export function IOSGlassMaterial({ style }: { style?: StyleProp<ViewStyle> }) {
       isInteractive={false}
       pointerEvents="none"
       style={[StyleSheet.absoluteFill, style]}
-      tintColor={theme.navigationGlass}
+      tintColor={tintColor ?? theme.navigationGlass}
     />
   );
 }

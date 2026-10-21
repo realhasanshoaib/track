@@ -14,6 +14,7 @@ describe('thread row render state', () => {
       isFirstInGroup: true,
       isOwnMessage: true,
       item,
+      optimisticallyDeleted: false,
       readReceipts: null,
       selected: false,
       selectionMode: false,
@@ -33,6 +34,7 @@ describe('thread row render state', () => {
       isFirstInGroup: false,
       isOwnMessage: true,
       item: { key: 'message-1', body: 'before' },
+      optimisticallyDeleted: false,
       readReceipts: null,
       selected: false,
       selectionMode: false,
@@ -55,6 +57,7 @@ describe('thread row render state', () => {
       isFirstInGroup: false,
       isOwnMessage: true,
       item: messageContent,
+      optimisticallyDeleted: false,
       readReceipts: null,
       selected: false,
       selectionMode: false,
@@ -76,6 +79,7 @@ describe('thread row render state', () => {
       isFirstInGroup: false,
       isOwnMessage: true,
       item: { key: 'message-1' },
+      optimisticallyDeleted: false,
       readReceipts: null,
       selected: false,
       selectionMode: false,
@@ -83,7 +87,9 @@ describe('thread row render state', () => {
     };
 
     expect(areThreadRowRenderStatesEqual(previous, { ...previous, selected: true })).toBe(false);
+    expect(areThreadRowRenderStatesEqual(previous, { ...previous, optimisticallyDeleted: true })).toBe(false);
     expect(areThreadRowRenderStatesEqual(previous, { ...previous, interactionVersion: 'screen-interactions-2' })).toBe(false);
     expect(areThreadRowRenderStatesEqual(previous, { ...previous, interactionAvailability: '100001' })).toBe(false);
+    expect(areThreadRowRenderStatesEqual(previous, { ...previous, taskLinkSignature: 'project-1|company-1|member-1|false|false' })).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { useRouter } from 'expo-router';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { api } from '../../../../convex/_generated/api';
@@ -10,7 +10,7 @@ import { TaskAction, TaskStatusPill } from '@/components/task-ui';
 import { OptionsSheet, SheetNote, SheetRow, SheetSection } from '@/components/options-sheet';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { taskDetailHref, type MobileTaskIdentity } from '@/lib/task-navigation';
@@ -22,20 +22,10 @@ import { taskErrorMessage } from '@/lib/user-facing-error';
 type LinkedTask = FunctionReturnType<typeof api.tasks.listForMessages>[number]['tasks'][number];
 type BoardState = FunctionReturnType<typeof api.taskBoards.list>[number]['states'][number];
 
-/** Matches the avatar column MessageBubble reserves, so cards line up with bubbles. */
-const GUTTER = 40;
-
 type Props = {
   assistantStreamId?: Id<'assistantStreams'>;
   identity: MobileTaskIdentity | null;
-  isOwnMessage?: boolean;
   messageId?: Id<'messages'>;
-  /**
-   * Reports whether the message or answer carries cards, so the screen can break
-   * the author group after an interruption. Keyed by the message or stream id,
-   * which is also the row key the thread list uses.
-   */
-  onCardsChange?: (rowId: string, hasCards: boolean) => void;
   projectId: Id<'projects'>;
   readOnly?: boolean;
 };
@@ -43,9 +33,7 @@ type Props = {
 export const TaskInlineCards = memo(function TaskInlineCards({
   assistantStreamId,
   identity,
-  isOwnMessage,
   messageId,
-  onCardsChange,
   projectId,
   readOnly = false,
 }: Props) {
@@ -68,7 +56,6 @@ export const TaskInlineCards = memo(function TaskInlineCards({
     ? batch?.messageTasks.get(String(messageId)) ?? messageTasks
     : batch?.assistantTasks.get(String(assistantStreamId)) ?? assistantTasks;
   const hasCards = Boolean(tasks?.length);
-  const rowId = messageId ?? assistantStreamId;
   const canChangeStatus = !readOnly && !identity?.archived;
   const boards = useQuery(api.taskBoards.list, hasCards && canChangeStatus ? {
     projectId,
@@ -79,10 +66,6 @@ export const TaskInlineCards = memo(function TaskInlineCards({
   const [statusError, setStatusError] = useState('');
   const [statusBusy, setStatusBusy] = useState(false);
   const [confirmState, setConfirmState] = useState<BoardState | null>(null);
-
-  useEffect(() => {
-    if (rowId) onCardsChange?.(rowId, hasCards);
-  }, [hasCards, onCardsChange, rowId]);
 
   if (!tasks?.length) return null;
   const visibleTasks = uniqueTaskViews(tasks);
@@ -132,13 +115,12 @@ export const TaskInlineCards = memo(function TaskInlineCards({
   }
 
   return (
-    <View style={[styles.row, isOwnMessage ? styles.rowOwn : styles.rowOther]}>
-      {isOwnMessage ? null : <View style={styles.gutter} />}
+    <View style={styles.row}>
       <View style={styles.stack}>
         {visibleTasks.map((item) => {
           const status = item.state?.name ?? 'Unknown status';
           return (
-            <View key={item.task._id} style={[styles.card, { backgroundColor: theme.backgroundElevated, borderColor: theme.hairline }]}>
+            <View key={item.task._id} style={[styles.card, { borderTopColor: theme.hairline }]}>
               <View style={styles.sourceLabel}>
                 <PlatformIcon color={theme.accentStrong} name="link" size={13} />
                 <ThemedText numberOfLines={1} style={styles.sourceLabelText} themeColor="accentStrong" type="captionBold">Created from this message</ThemedText>
@@ -209,15 +191,9 @@ export const TaskInlineCards = memo(function TaskInlineCards({
 
 const styles = StyleSheet.create({
   card: {
-    borderCurve: 'continuous',
-    borderRadius: Radius.large,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
     gap: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-  },
-  gutter: {
-    width: GUTTER,
+    paddingVertical: Spacing.one,
   },
   header: {
     alignItems: 'center',
@@ -232,21 +208,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   row: {
-    flexDirection: 'row',
-    paddingBottom: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    alignSelf: 'stretch',
+    minWidth: 0,
     paddingTop: Spacing.one,
-  },
-  rowOther: {
-    justifyContent: 'flex-start',
-  },
-  rowOwn: {
-    justifyContent: 'flex-end',
   },
   stack: {
     flexShrink: 1,
     gap: Spacing.one,
-    maxWidth: '84%',
+    maxWidth: '100%',
+    minWidth: 0,
   },
   sourceLabel: { alignItems: 'center', flexDirection: 'row', gap: Spacing.one },
   sourceLabelText: { flexShrink: 1 },

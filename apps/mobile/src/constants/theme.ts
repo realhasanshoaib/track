@@ -271,6 +271,12 @@ export const Spacing = {
   six: 32,
 } as const;
 
+/** Shared timeline rhythm keeps pending and confirmed message rows aligned. */
+export const ChatMessageSpacing = {
+  grouped: Spacing.half,
+  groupStart: Spacing.two,
+} as const;
+
 /** Shared spacing for native and content-level mobile headers. */
 export const MobileHeaderMetrics = {
   actionGap: Spacing.one,

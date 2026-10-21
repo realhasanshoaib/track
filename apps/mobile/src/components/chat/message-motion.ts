@@ -15,6 +15,7 @@ export const PendingMessageEntering = FadeIn.duration(120).easing(ChatMotionEasi
 export const PendingMessageLayout = StateLayout;
 export const ChatImagePlaceholder = MediaPlaceholder;
 export const ChatImageTransition = MediaTransition;
+export const MessageDeleteMotionDuration = 240;
 
 export const JumpToLatestEntering = FadeInUp.duration(180);
 export const JumpToLatestExiting = FadeOutDown.duration(130);

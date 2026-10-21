@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { OptionsSheet, SheetRow, SheetSection } from '@/components/options-sheet';
 import { ChatImagePlaceholder, ChatImageTransition, ChatMotionDuration, ChatMotionEasing } from '@/components/chat/message-motion';
@@ -9,12 +9,14 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { attachmentIcon, formatFileSize, isImageAttachment } from '@/lib/attachment-presentation';
+import { attachmentIcon, formatDuration, formatFileSize, isImageAttachment, isVideoAttachment } from '@/lib/attachment-presentation';
 import { publishFilesBeforePreparation } from '@/lib/attachment-preview-flow';
 import { composerAttachmentStripLayout, composerAttachmentStripMetrics } from '@/lib/composer-layout';
 import { hapticLight } from '@/lib/haptics';
 import type { UploadableFile } from '@/lib/attachment-upload';
-import { capturePhoto, pickDocuments, pickImages, prepareImageForUpload } from '@/lib/media-capture';
+import { capturePhoto, pickDocuments, pickMedia, prepareImageForUpload } from '@/lib/media-capture';
+import { videoThumbnail, type VideoFrameSource } from '@/lib/video-thumbnail';
+import { chatVideoAspectRatio, videoGeometryKey } from '@/lib/video-layout';
 
 export type PendingAttachment = UploadableFile & {
   failed?: boolean;
@@ -61,7 +63,7 @@ export function ChatAttachMenu({ onClose, onError, onPicked, onPrepared, visible
       visible={visible}>
       <SheetSection>
         <SheetRow icon="camera" label="Camera" onPress={() => choose(capturePhoto, 'Could not open the camera. Try again or choose a photo.')} />
-        <SheetRow icon="image-multiple" label="Photo library" onPress={() => choose(pickImages, 'Could not open the photo library. Try again.')} />
+        <SheetRow icon="image-multiple" label="Photos & videos" onPress={() => choose(pickMedia, 'Could not open the photo library. Try again.')} />
         <SheetRow icon="file-document-outline" label="Document" onPress={() => choose(pickDocuments, 'Could not open the document picker. Try again.')} />
       </SheetSection>
     </OptionsSheet>
@@ -73,7 +75,6 @@ type StripProps = {
   disabled?: boolean;
   items: PendingAttachment[];
   onRemove: (id: string) => void;
-  reserveSpace?: boolean;
 };
 
 function describe(item: PendingAttachment) {
@@ -84,7 +85,7 @@ function describe(item: PendingAttachment) {
   return item.size ? `${item.filename}, ${formatFileSize(item.size)}` : item.filename;
 }
 
-export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, items, onRemove, reserveSpace = false }: StripProps) {
+export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, items, onRemove }: StripProps) {
   const reducedMotion = useReducedMotion();
   const visible = items.length > 0;
   const reveal = useSharedValue(visible ? 1 : 0);
@@ -99,7 +100,7 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
   // height made the screen update its bottom inset and re-scroll on every
   // frame of the preview reveal.
   const stripLayout = composerAttachmentStripLayout(TileSize, Spacing.one, 0);
-  const stripMetrics = composerAttachmentStripMetrics(visible, reserveSpace, stripLayout.height, collapseSpacing);
+  const stripMetrics = composerAttachmentStripMetrics(visible, stripLayout.height, collapseSpacing);
 
   return (
     <Animated.View accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'} pointerEvents={visible ? 'auto' : 'none'} testID="composer-pending-attachments" style={[styles.stripClip, stripMetrics, revealStyle]}>
@@ -111,6 +112,7 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
         style={{ height: stripLayout.height, flexGrow: 0 }}>
         {items.map((item) => {
           const isImage = isImageAttachment(item.contentType);
+          const isVideo = isVideoAttachment(item.contentType);
           return (
             <Animated.View
               entering={reducedMotion ? undefined : AttachmentEnter}
@@ -120,7 +122,9 @@ export function PendingAttachmentStrip({ collapseSpacing = 0, disabled = false, 
             >
               {isImage
                 ? <ImageAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />
-                : <FileAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />}
+                : isVideo
+                  ? <VideoAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />
+                  : <FileAttachmentTile disabled={disabled} item={item} onRemove={onRemove} />}
             </Animated.View>
           );
         })}
@@ -169,6 +173,77 @@ function ImageAttachmentTile({ disabled, item, onRemove }: {
   );
 }
 
+function VideoAttachmentTile({ disabled, item, onRemove }: {
+  disabled: boolean;
+  item: PendingAttachment;
+  onRemove: (id: string) => void;
+}) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const [thumbnail, setThumbnail] = useState<VideoFrameSource | undefined>(item.previewThumbnail);
+  const [VideoPlayback, setVideoPlayback] = useState<ComponentType<{
+    aspectRatio: number;
+    onClose: () => void;
+    url: string;
+  }> | null>(null);
+
+  async function openPreview() {
+    try {
+      const playback = await import('@/components/chat/video-playback');
+      setVideoPlayback(() => playback.VideoPlayback);
+    } catch {
+      Alert.alert('Video preview unavailable', 'Rebuild this app with native video playback to preview the selected video.');
+    }
+  }
+
+  useEffect(() => {
+    if (item.previewThumbnail) {
+      setThumbnail(item.previewThumbnail);
+      return;
+    }
+    let active = true;
+    void videoThumbnail(item.previewUri ?? item.uri, videoGeometryKey(item)).then((frame) => {
+      if (active && frame) setThumbnail(frame);
+    });
+    return () => { active = false; };
+  }, [item.id, item.previewThumbnail, item.previewUri, item.uri]);
+
+  const previewUri = item.previewUri ?? item.uri;
+  return (
+    <>
+    <View style={[styles.tile, styles.imageTile, { backgroundColor: theme.skeleton, borderColor: item.failed ? theme.danger : theme.hairline }]}>
+      {thumbnail ? (
+        <Image
+          accessibilityLabel={`Video preview for ${item.filename}`}
+          accessible
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          source={thumbnail}
+          style={styles.thumb}
+          transition={reducedMotion ? 0 : ChatImageTransition}
+        />
+      ) : (
+        <View style={styles.videoFallback}>
+          <PlatformIcon color={theme.textSecondary} name="video" size={22} />
+        </View>
+      )}
+      <Pressable accessibilityLabel="Preview selected video" accessibilityRole="button" disabled={disabled} onPress={() => { void openPreview(); }} style={styles.videoPreviewButton}>
+        <View style={[styles.videoPlay, { backgroundColor: theme.accent }]}>
+          <PlatformIcon color={theme.accentInk} name="play" size={14} />
+        </View>
+      </Pressable>
+      {item.durationMs ? <View pointerEvents="none" style={styles.videoDuration}>
+        <PlatformIcon color="#000000" name="video" size={11} />
+        <ThemedText style={styles.videoDurationText} type="caption">{formatDuration(item.durationMs)}</ThemedText>
+      </View> : null}
+      <AttachmentProgress item={item} />
+      <RemoveAttachmentButton disabled={disabled} item={item} onRemove={onRemove} />
+    </View>
+    {VideoPlayback ? <VideoPlayback aspectRatio={chatVideoAspectRatio(item)} onClose={() => setVideoPlayback(null)} url={previewUri} /> : null}
+    </>
+  );
+}
+
 function FileAttachmentTile({ disabled, item, onRemove }: {
   disabled: boolean;
   item: PendingAttachment;
@@ -201,7 +276,11 @@ function RemoveAttachmentButton({ disabled, item, onRemove }: {
 
   return (
     <Pressable
-      accessibilityLabel={isImageAttachment(item.contentType) ? 'Remove selected image' : `Remove ${item.filename}`}
+      accessibilityLabel={isImageAttachment(item.contentType)
+        ? 'Remove selected image'
+        : isVideoAttachment(item.contentType)
+          ? 'Remove selected video'
+          : `Remove ${item.filename}`}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
@@ -212,7 +291,7 @@ function RemoveAttachmentButton({ disabled, item, onRemove }: {
       }}
       style={[
         styles.remove,
-        isImageAttachment(item.contentType) && styles.imageRemove,
+        (isImageAttachment(item.contentType) || isVideoAttachment(item.contentType)) && styles.imageRemove,
         { backgroundColor: theme.overlay, opacity: disabled ? 0.5 : 1 },
       ]}>
       <PlatformIcon color={Colors.dark.text} name="close" size={13} />
@@ -273,6 +352,11 @@ const styles = StyleSheet.create({
   imageTile: {
     width: TileSize,
   },
+  videoFallback: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  videoPreviewButton: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  videoPlay: { alignItems: 'center', borderRadius: Radius.pill, height: 32, justifyContent: 'center', width: 32 },
+  videoDuration: { alignItems: 'center', bottom: Spacing.one, flexDirection: 'row', gap: 2, left: Spacing.one, position: 'absolute' },
+  videoDurationText: { color: '#000000', fontSize: 9, lineHeight: 12 },
   previewFallback: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',

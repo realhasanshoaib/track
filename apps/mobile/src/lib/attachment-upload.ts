@@ -8,8 +8,11 @@
  */
 
 import type { Id } from '../../../../convex/_generated/dataModel';
+import type { VideoThumbnail } from 'expo-video';
 import { releasePreparedAttachment, resolvePreparedAttachment } from './attachment-preview-flow';
 import { withOperationTimeout } from './promise-timeout';
+import { sendWithRateLimitRetry } from './send-rate-limit';
+import { videoGeometryKey } from './video-layout';
 
 export type AttachmentKind = 'file' | 'voice_note';
 
@@ -22,21 +25,33 @@ export type UploadableFile = {
   kind?: AttachmentKind;
   /** Keep the displayed local image stable while `uri` changes to its upload-optimized copy. */
   previewUri?: string;
+  /** Native frame reference used only by the local composer preview. */
+  previewThumbnail?: VideoThumbnail;
   size?: number;
   uri: string;
   width?: number;
 };
 
 export type AttachmentUploadTarget = {
+  /** A poster is optional: a failed preview must not turn a sent video into a failed message. */
+  publishVideoPreview?: (input: {
+    bytes: ArrayBuffer;
+    height: number;
+    messageId: Id<'messages'>;
+    storageId: Id<'_storage'>;
+    width: number;
+  }) => Promise<unknown>;
   attachFile: (input: {
     contentType: string;
     durationMs?: number;
     filename: string;
+    height?: number;
     kind?: AttachmentKind;
     messageId: Id<'messages'>;
     uploadIntentId: Id<'messageUploadIntents'>;
     size: number;
     storageId: Id<'_storage'>;
+    width?: number;
   }) => Promise<unknown>;
   /** Persist uploaded bytes if message attachment creation fails, enabling retry without re-upload. */
   claimUploadIntent: (input: { intentId: Id<'messageUploadIntents'>; storageId: string }) => Promise<{
@@ -55,10 +70,12 @@ export type AttachmentUploadTarget = {
       contentType: string;
       durationMs?: number;
       filename: string;
+      height?: number;
       kind?: AttachmentKind;
       size: number;
       storageId: Id<'_storage'>;
       uploadIntentId: Id<'messageUploadIntents'>;
+      width?: number;
     }>;
     body: string;
     idempotencyKey?: string;
@@ -95,6 +112,7 @@ export type ComposerSubmission = {
 
 export type ComposerSubmissionResult = {
   failedIds: string[];
+  failedReasons?: Record<string, string>;
   messageId: Id<'messages'> | null;
 };
 
@@ -108,12 +126,44 @@ type PreparedAttachment = {
   uploadIntentId: Id<'messageUploadIntents'>;
 };
 
+async function publishVideoPreview(
+  attachment: PreparedAttachment,
+  messageId: Id<'messages'>,
+  target: AttachmentUploadTarget,
+) {
+  if (!target.publishVideoPreview || !attachment.contentType.toLowerCase().startsWith('video/')) return;
+  const [{ videoPosterFile }, { File }] = await Promise.all([
+    import('./video-thumbnail'),
+    import('expo-file-system'),
+  ]);
+  const poster = await videoPosterFile(
+    attachment.file.previewUri ?? attachment.file.uri,
+    videoGeometryKey(attachment.file),
+  );
+  if (!poster) return;
+  const bytes = await new File(poster.uri).arrayBuffer();
+  if (bytes.byteLength > 512 * 1024) return;
+  await target.publishVideoPreview({
+    bytes,
+    height: poster.height,
+    messageId,
+    storageId: attachment.storageId,
+    width: poster.width,
+  });
+}
+
 /** Progress updates land in React state, so only report meaningful steps. */
 const ProgressStep = 0.05;
 const UploadTimeoutMs = 120_000;
 const BackendMutationTimeoutMs = 30_000;
 const UploadRetryRecoveryTimeoutMs = 5_000;
 const MaxConcurrentUploads = 3;
+function rejectsMediaDimensions(error: unknown) {
+  return error instanceof Error && /ArgumentValidationError/i.test(error.message)
+    && /extra field[^\n]*(height|width)/i.test(error.message);
+}
+/** Keep in sync with `MAX_MESSAGE_ATTACHMENT_BYTES` in convex/messages.ts. */
+export const MaxMessageAttachmentBytes = 100 * 1024 * 1024;
 
 async function mapConcurrent<Result>(
   count: number,
@@ -203,6 +253,7 @@ async function uploadOne(input: {
     size = blob.size;
   }
   if (!Number.isFinite(size) || size < 0) throw new Error('file_size_unavailable');
+  if (size > MaxMessageAttachmentBytes) throw new Error('attachment_too_large');
   const contentType = file.contentType || blob?.type || 'application/octet-stream';
   const intent = await withOperationTimeout(input.target.generateUploadUrl({
     contentType,
@@ -231,6 +282,14 @@ async function uploadOne(input: {
     // The send or retry mutation validates and claims this server-issued ID
     // atomically, so the upload path does not need another network round trip.
     storageId = uploadedStorageId as Id<'_storage'>;
+  }
+  if (contentType.toLowerCase().startsWith('video/')) {
+    try {
+      const { aliasVideoThumbnail } = await import('./video-thumbnail');
+      aliasVideoThumbnail(videoGeometryKey(file), videoGeometryKey({ ...file, storageId }));
+    } catch {
+      // Local preview caching is optional; uploaded video delivery still succeeds.
+    }
   }
   return {
     contentType,
@@ -270,11 +329,11 @@ export async function sendComposerMessage(
   const { attachments, body, replyToMessageId, reportProgress, target } = input;
 
   if (attachments.length === 0) {
-    const messageId = await withOperationTimeout(target.sendMessage({
+    const messageId = await sendWithRateLimitRetry(() => withOperationTimeout(target.sendMessage({
       body,
       idempotencyKey: input.idempotencyKey,
       replyToMessageId,
-    }), BackendMutationTimeoutMs, 'message_send');
+    }), BackendMutationTimeoutMs, 'message_send'));
     input.onMessageCreated?.(messageId);
     return { failedIds: [], messageId };
   }
@@ -290,38 +349,52 @@ export async function sendComposerMessage(
         onProgress: (fraction) => reportProgress(file.id, fraction),
         target,
       });
-      return { failedId: null, prepared };
-    } catch {
+      return { failedId: null, failureReason: null, prepared };
+    } catch (error) {
       reportProgress(file.id, 0);
-      return { failedId: file.id, prepared: null };
+      const failureReason = error instanceof Error ? error.message : String(error);
+      return { failedId: file.id, failureReason, prepared: null };
     }
   });
   const prepared = uploadResults.flatMap(({ prepared }) => prepared ? [prepared] : []);
   const failedIds = uploadResults.flatMap(({ failedId }) => failedId ? [failedId] : []);
+  const failedReasons = Object.fromEntries(uploadResults.flatMap(({ failedId, failureReason }) =>
+    failedId && failureReason === 'attachment_too_large' ? [[failedId, failureReason]] : [],
+  ));
 
   let messageId = input.messageId ?? null;
   if (!messageId && (body || prepared.length > 0)) {
     try {
-      messageId = await withOperationTimeout(target.sendMessage({
-        attachments: prepared.map(({ contentType, durationMs, file, kind, size, storageId, uploadIntentId }) => ({
+      const attachmentsWithDimensions = prepared.map(({ contentType, durationMs, file, kind, size, storageId, uploadIntentId }) => ({
           contentType,
           durationMs,
           filename: file.filename,
+          height: file.height,
           kind,
           size,
           storageId,
           uploadIntentId,
-        })),
+          width: file.width,
+        }));
+      const send = (attachments: Parameters<AttachmentUploadTarget['sendMessage']>[0]['attachments']) => sendWithRateLimitRetry(() => withOperationTimeout(target.sendMessage({
+        attachments,
         body: body || fallbackBody(prepared),
         idempotencyKey: input.idempotencyKey,
         replyToMessageId,
-      }), BackendMutationTimeoutMs, 'message_send');
+      }), BackendMutationTimeoutMs, 'message_send'));
+      try {
+        messageId = await send(attachmentsWithDimensions);
+      } catch (error) {
+        if (!rejectsMediaDimensions(error)) throw error;
+        messageId = await send(attachmentsWithDimensions.map(({ height: _height, width: _width, ...attachment }) => attachment));
+      }
     } catch (error) {
       await persistUploadedBytesForRetry(prepared, target);
       throw error;
     }
     input.onMessageCreated?.(messageId);
     for (const attachment of prepared) {
+      void publishVideoPreview(attachment, messageId, target).catch(() => undefined);
       releasePreparedAttachment(attachment.file.id);
       reportProgress(attachment.file.id, 1);
     }
@@ -332,27 +405,49 @@ export async function sendComposerMessage(
       const attachment = prepared[index];
       if (!attachment) return null;
       try {
-        await withOperationTimeout(target.attachFile({
+        const attachInput = {
           contentType: attachment.contentType,
           durationMs: attachment.durationMs,
           filename: attachment.file.filename,
+          height: attachment.file.height,
           kind: attachment.kind,
           messageId: retryMessageId,
           size: attachment.size,
           storageId: attachment.storageId,
           uploadIntentId: attachment.uploadIntentId,
-        }), BackendMutationTimeoutMs, 'attachment_attach');
+          width: attachment.file.width,
+        };
+        try {
+          await withOperationTimeout(target.attachFile(attachInput), BackendMutationTimeoutMs, 'attachment_attach');
+        } catch (error) {
+          if (!rejectsMediaDimensions(error)) throw error;
+          const { height: _height, width: _width, ...legacyInput } = attachInput;
+          await withOperationTimeout(target.attachFile(legacyInput), BackendMutationTimeoutMs, 'attachment_attach');
+        }
+        void publishVideoPreview(attachment, retryMessageId, target).catch(() => undefined);
         releasePreparedAttachment(attachment.file.id);
         reportProgress(attachment.file.id, 1);
         return null;
       } catch {
         await persistUploadedBytesForRetry([attachment], target);
         reportProgress(attachment.file.id, 0);
-        return attachment.file.id;
+        return { id: attachment.file.id, reason: 'attachment_upload_failed' };
       }
     });
-    failedIds.push(...attachmentFailures.filter((id): id is string => id !== null));
+    for (const failure of attachmentFailures) {
+      if (!failure) continue;
+      failedIds.push(failure.id);
+      failedReasons[failure.id] = failure.reason;
+    }
   }
 
-  return { failedIds, messageId };
+  if (!messageId && !body && failedIds.some((id) => failedReasons[id] === 'attachment_too_large')) {
+    throw new Error('attachment_too_large');
+  }
+
+  return {
+    failedIds,
+    ...(Object.keys(failedReasons).length ? { failedReasons } : {}),
+    messageId,
+  };
 }

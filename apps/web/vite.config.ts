@@ -38,6 +38,12 @@ const config = defineConfig(({ mode }) => {
       dedupe: ['react', 'react-dom'],
       tsconfigPaths: true,
     },
+    ssr: {
+      // Keep SSR dependencies on Vite's deduplicated React instance. With the
+      // hoisted workspace linker, externalized Convex can resolve a nested
+      // physical React copy that does not share the renderer's hook dispatcher.
+      noExternal: ['convex', '@convex-dev/better-auth'],
+    },
     plugins: [
       {
         name: 'track-dev-workspace-url-bridge',

@@ -2,6 +2,7 @@ import type { Doc, Id } from '../../../../../convex/_generated/dataModel';
 
 export type AttachmentReference = {
   attachment: Doc<'attachments'>;
+  previewUrl?: string | null;
   url: string | null;
 };
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupThreadTimeline } from './grouped-thread-items';
+import { groupThreadTimeline, visibleTimelineItems } from './grouped-thread-items';
 
 type Message = {
-  message: { _id: string; createdAt: number; idempotencyKey?: string };
+  message: { _id: string; createdAt: number; deletedAt?: number; idempotencyKey?: string };
   author: { _id: string } | null;
 };
 
@@ -86,5 +86,51 @@ describe('groupThreadTimeline', () => {
       ['today', true],
     ]);
     expect(timeline.filter((item) => item.kind === 'date-sep').map(({ label }) => label)).toEqual(['Yesterday', 'Today']);
+  });
+
+  it('omits a date pill after its last visible message is hidden or deleted', () => {
+    const deleted = message('deleted', at(14, 9));
+    deleted.message.deletedAt = at(14, 10);
+    const timeline = groupThreadTimeline({
+      messages: [deleted, message('hidden', at(14, 8)), message('yesterday', at(13, 8))],
+      missingAuthorKey: 'anon',
+      today: new Date(2026, 9, 14, 12),
+    });
+    const visible = visibleTimelineItems(timeline, new Set(['hidden']));
+    expect(visible.map((item) => item.kind === 'date-sep' ? item.label : item.key)).toEqual([
+      'Yesterday', 'yesterday', 'deleted',
+    ]);
+  });
+
+  it('keeps consecutive deleted bubbles evenly spaced across a hidden day boundary', () => {
+    const earlier = message('earlier', at(13, 20, 41));
+    earlier.message.deletedAt = at(14, 9);
+    const later = message('later', at(14, 17, 6));
+    later.message.deletedAt = at(14, 18);
+    const timeline = groupThreadTimeline({
+      messages: [later, earlier],
+      missingAuthorKey: 'anon',
+      today: new Date(2026, 9, 14, 19),
+    });
+
+    const visible = visibleTimelineItems(timeline);
+    expect(visible.map((item) => [item.kind, item.kind === 'message' ? item.isFirstInGroup : null])).toEqual([
+      ['message', true],
+      ['message', false],
+    ]);
+  });
+
+  it('preserves group spacing when deleted bubbles have different authors', () => {
+    const first = message('first', at(14, 17, 6), 'member-1');
+    first.message.deletedAt = at(14, 18);
+    const second = message('second', at(14, 17, 7), 'member-2');
+    second.message.deletedAt = at(14, 18);
+    const timeline = groupThreadTimeline({
+      messages: [second, first],
+      missingAuthorKey: 'anon',
+      today: new Date(2026, 9, 14, 19),
+    });
+
+    expect(visibleTimelineItems(timeline).filter((item) => item.kind === 'message').map((item) => item.isFirstInGroup)).toEqual([true, true]);
   });
 });

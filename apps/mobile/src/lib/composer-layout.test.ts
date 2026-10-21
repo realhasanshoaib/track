@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { composerAttachmentStripLayout, composerAttachmentStripMetrics, composerControlVisibility, composerSurfaceBackgroundColor, composerTextMaxHeight } from './composer-layout';
+import { composerAttachmentStripLayout, composerAttachmentStripMetrics, composerControlVisibility, composerInputMultilineThreshold, composerSurfaceBackgroundColor, composerTextMaxHeight } from './composer-layout';
 
 describe('composer text height', () => {
   it('caps the input at four lines using the active font scale', () => {
     expect(composerTextMaxHeight(20, 1, 2)).toBe(80);
     expect(composerTextMaxHeight(20, 1.5, 2)).toBe(120);
     expect(composerTextMaxHeight(20, 3, 2)).toBe(160);
+  });
+
+  it('switches to multiline alignment after one line instead of waiting for several lines', () => {
+    const threshold = composerInputMultilineThreshold(24, 8);
+    expect(threshold).toBe(32);
+    expect(28 > threshold).toBe(false);
+    expect(48 > threshold).toBe(true);
   });
 });
 
@@ -37,17 +44,17 @@ describe('composer action visibility', () => {
 });
 
 describe('composer attachment strip layout', () => {
-  it('keeps the selected image flush with the strip bottom and reserves a stable height', () => {
+  it('keeps the selected image flush with the strip bottom and removes empty strip height while sending', () => {
     const layout = composerAttachmentStripLayout(76, 4, 0);
-    const visible = composerAttachmentStripMetrics(true, false, layout.height, 8);
-    const hiddenWhileSending = composerAttachmentStripMetrics(false, true, layout.height, 8);
+    const visible = composerAttachmentStripMetrics(true, layout.height, 8);
+    const hiddenWhileSending = composerAttachmentStripMetrics(false, layout.height, 8);
 
     expect(layout).toEqual({ height: 80, paddingBottom: 0, paddingTop: 4 });
     expect(visible).toEqual({ height: 80, marginBottom: 0 });
-    expect(hiddenWhileSending).toEqual(visible);
+    expect(hiddenWhileSending).toEqual({ height: 0, marginBottom: -8 });
   });
 
   it('collapses the reserved composer space after the send finishes', () => {
-    expect(composerAttachmentStripMetrics(false, false, 80, 8)).toEqual({ height: 0, marginBottom: -8 });
+    expect(composerAttachmentStripMetrics(false, 80, 8)).toEqual({ height: 0, marginBottom: -8 });
   });
 });

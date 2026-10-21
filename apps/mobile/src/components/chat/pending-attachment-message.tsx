@@ -4,19 +4,22 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { MessageBubbleFrame } from '@/components/chat/message-bubble';
-import { MESSAGE_MAX_WIDTH_RATIO } from '@/components/chat/message-layout';
+import { chatMessageMediaWidth } from '@/components/chat/message-layout';
 import { MESSAGE_ROW_VERTICAL_PADDING, PENDING_MESSAGE_BOTTOM_PADDING } from '@/lib/message-row-layout';
 import { MessageDeliveryMeta } from '@/components/chat/message-delivery-meta';
+import { TextMessageBody } from '@/components/chat/text-message-body';
 import { ChatImagePlaceholder, ChatImageTransition } from '@/components/chat/message-motion';
+import { VideoAttachmentPreview } from '@/components/chat/video-attachment';
 import { MessageText } from '@/components/chat/message-text';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { ChatMessageSpacing, Colors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { attachmentIcon, fileTypeLabel, formatFileSize, isAutoAttachmentBody, isImageAttachment } from '@/lib/attachment-presentation';
+import { attachmentIcon, fileTypeLabel, formatFileSize, isAutoAttachmentBody, isImageAttachment, isVideoAttachment } from '@/lib/attachment-presentation';
 import type { PendingMessageAttachment } from '@/lib/pending-messages';
 import { chatImageAspectRatio } from '@/lib/chat-image-layout';
 import { usePendingMessageProgress } from '@/lib/pending-message-progress';
+import { videoGeometryKey } from '@/lib/video-layout';
 
 const GAP = 2;
 const MAX_TILES = 4;
@@ -40,18 +43,20 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
   });
   const body = visibleAttachments.length && isAutoAttachmentBody(rawBody, visibleAttachments.map(({ filename }) => filename)) ? '' : rawBody;
   const images = visibleAttachments.filter((file) => isImageAttachment(file.contentType));
-  const files = visibleAttachments.filter((file) => !isImageAttachment(file.contentType));
+  const videos = visibleAttachments.filter((file) => isVideoAttachment(file.contentType));
+  const files = visibleAttachments.filter((file) => !isImageAttachment(file.contentType) && !isVideoAttachment(file.contentType));
   const imageProgress = images.some((file) => file.progress !== undefined)
     ? images.reduce((total, file) => total + clampProgress(file.progress), 0) / Math.max(images.length, 1)
     : undefined;
-  const maxWidth = Math.min(width * 0.72, 320, width * MESSAGE_MAX_WIDTH_RATIO);
+  const maxWidth = chatMessageMediaWidth(width);
   const fileListWidth = Math.min(maxWidth, Math.max(208, Math.min(width * 0.58, 260)));
   const visibleImages = images.slice(0, MAX_TILES);
   const overflow = images.length - visibleImages.length;
   const hasImages = visibleImages.length > 0;
-  const deliveryState = visibleAttachments.length && !sent ? (offline ? 'waiting' : 'sending') : undefined;
+  const hasVisualMedia = hasImages || videos.length > 0;
+  const deliveryState = !sent ? (offline ? 'waiting' : 'sending') : undefined;
   const inlineTextMeta = visibleAttachments.length === 0 && Boolean(body);
-  const deliveryMeta = hasImages ? (
+  const mediaDeliveryMeta = hasVisualMedia ? (
     <MessageDeliveryMeta
       deliveryState={deliveryState}
       isOwnMessage
@@ -67,17 +72,12 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
   return (
     <View style={[styles.timelineRow, isFirstInGroup ? styles.groupStart : styles.grouped]}>
       <View testID="pending-message-row" style={styles.row}>
-      <MessageBubbleFrame bareMedia={hasImages && !body && !files.length} hasMedia={hasImages} isOwnMessage>
+      <MessageBubbleFrame bareMedia={hasVisualMedia && !body && !files.length} hasMedia={hasVisualMedia} isOwnMessage>
         {visibleAttachments.length === 0 ? (
-          inlineTextMeta ? (
-            <View style={styles.inlineTextRow}>
-              <MessageText body={body} style={styles.inlineText} />
-              <MessageDeliveryMeta deliveryState={deliveryState} isOwnMessage timeLabel={formatPendingTime(at)} />
-            </View>
-          ) : null
+          inlineTextMeta ? <TextMessageBody body={body} deliveryState={deliveryState} isOwnMessage timeLabel={formatPendingTime(at)} /> : null
         ) : <>
           {visibleImages.length === 1 ? (
-            <PendingImage deliveryMeta={deliveryMeta} file={visibleImages[0]} offline={offline} sent={sent} width={maxWidth} />
+            <PendingImage deliveryMeta={mediaDeliveryMeta} file={visibleImages[0]} offline={offline} sent={sent} width={maxWidth} />
           ) : visibleImages.length > 1 ? (
             <View style={[styles.grid, { width: maxWidth }]}>
               {rows.map((row) => (
@@ -106,15 +106,33 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
                 </View>
               ))}
               {!sent ? <PendingImageOverlay imageCount={images.length} offline={offline} progress={imageProgress} /> : null}
-              {deliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{deliveryMeta}</View> : null}
+              {mediaDeliveryMeta ? <View pointerEvents="none" style={styles.deliveryMeta}>{mediaDeliveryMeta}</View> : null}
             </View>
           ) : null}
-          {files.length ? <View style={[styles.fileList, { width: fileListWidth }, hasImages && styles.fileListAfterImage]}>
+          {videos.map((file, index) => (
+            <VideoAttachmentPreview
+              available={false}
+              captionAttached={Boolean(body) && index === videos.length - 1}
+              deliveryMeta={index === videos.length - 1 && !hasImages ? mediaDeliveryMeta : undefined}
+              durationMs={file.durationMs}
+              filename={file.filename}
+              geometryKey={videoGeometryKey(file)}
+              height={file.height}
+              key={file.id}
+              pendingStatus={pendingAttachmentStatus(file.progress, offline, sent)}
+              progress={file.progress}
+              showPlayButton={false}
+              thumbnail={file.previewThumbnail}
+              thumbnailUri={file.previewUri ?? file.uri}
+              width={file.width}
+            />
+          ))}
+          {files.length ? <View style={[styles.fileList, { width: fileListWidth }, hasVisualMedia && styles.fileListAfterImage]}>
             {files.map((file) => <PendingFileCard file={file} key={file.id} offline={offline} sent={sent} />)}
           </View> : null}
           {body ? <View style={styles.body}><MessageText body={body} /></View> : null}
         </>}
-        {!hasImages && !inlineTextMeta ? (
+        {!hasVisualMedia && !inlineTextMeta ? (
           <View style={styles.textMeta}>
             <MessageDeliveryMeta deliveryState={deliveryState} isOwnMessage timeLabel={formatPendingTime(at)} />
           </View>
@@ -123,6 +141,14 @@ export function PendingMessageBubble({ attachments = [], at, body: rawBody, isFi
       </View>
     </View>
   );
+}
+
+function pendingAttachmentStatus(progress: number | undefined, offline: boolean, sent: boolean) {
+  if (sent) return 'Sent';
+  if (offline) return 'Waiting for connection';
+  if (progress === undefined || progress <= 0) return 'Preparing to send';
+  if (progress >= 1) return 'Finishing up';
+  return `Sending · ${Math.round(clampProgress(progress) * 100)}%`;
 }
 
 function PendingImage({ deliveryMeta, file, offline, sent, width }: {
@@ -253,7 +279,7 @@ function formatPendingTime(at: number) {
 }
 
 const styles = StyleSheet.create({
-  body: { marginTop: Spacing.one, paddingHorizontal: Spacing.two },
+  body: { marginTop: 0, paddingHorizontal: Spacing.two },
   deliveryMeta: { bottom: 7, position: 'absolute', right: 8 },
   fileCard: { alignItems: 'center', borderCurve: 'continuous', borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
   fileContent: { flex: 1, gap: Spacing.half, minWidth: 0 },
@@ -278,10 +304,8 @@ const styles = StyleSheet.create({
   // reconciliation does not change scroll extent when the server row arrives.
   row: { alignItems: 'flex-end', paddingHorizontal: Spacing.three, paddingVertical: MESSAGE_ROW_VERTICAL_PADDING, width: '100%' },
   timelineRow: { paddingBottom: PENDING_MESSAGE_BOTTOM_PADDING, width: '100%' },
-  groupStart: { paddingTop: Spacing.two },
-  grouped: { paddingTop: 2 },
+  groupStart: { paddingTop: ChatMessageSpacing.groupStart },
+  grouped: { paddingTop: ChatMessageSpacing.grouped },
   singleImage: { borderCurve: 'continuous', borderRadius: Radius.large, overflow: 'hidden' },
   textMeta: { alignItems: 'center', alignSelf: 'flex-end', flexDirection: 'row', marginTop: Spacing.half },
-  inlineText: { flexShrink: 1, minWidth: 0 },
-  inlineTextRow: { alignItems: 'flex-end', flexDirection: 'row', gap: Spacing.one, maxWidth: '100%', minWidth: 0 },
 });

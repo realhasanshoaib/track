@@ -3,23 +3,26 @@ import type { FunctionReturnType } from 'convex/server';
 import { memo, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import type { api } from '../../../../convex/_generated/api';
 import type { Doc, Id } from '../../../../convex/_generated/dataModel';
 import { AssistantMessage } from '@/components/chat/assistant-message';
 import { MessageBubble } from '@/components/chat/message-bubble';
+import { MessageDeleteMotionDuration } from '@/components/chat/message-motion';
 import type { DetailedMessage } from '@/components/chat/types';
 import type { MessageAction } from '@/components/message-actions';
 import { PlatformIcon } from '@/components/platform-icon';
+import { TaskInlineCards } from '@/components/task-inline-cards';
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing, TouchTarget } from '@/constants/theme';
+import { ChatMessageSpacing, Radius, Spacing, TouchTarget } from '@/constants/theme';
+import { hasPlayableAudioAttachment, isVideoAttachment } from '@/lib/attachment-presentation';
 import { useTheme } from '@/hooks/use-theme';
 import { messageSwipeCancelIntent, messageSwipeIntent } from '@/lib/message-swipe';
 import { hapticLight } from '@/lib/haptics';
-import { hasPlayableAudioAttachment } from '@/lib/attachment-presentation';
 import { areThreadRowRenderStatesEqual } from '@/lib/thread-row-render';
+import type { MobileTaskIdentity } from '@/lib/task-navigation';
 
 export type { AttachmentWithUrl, DetailedMessage } from '@/components/chat/types';
 
@@ -55,15 +58,26 @@ export type ThreadRowProps = {
   onOpenForwardSource?: () => void;
   /** Opens the Channel thread attached to this message. */
   onOpenThread?: () => void;
+  /** Fades selected rows before a bulk deletion removes them from the list. */
+  deleting?: boolean;
+  /** Shows the deleted-message tombstone while the server mutation is pending. */
+  optimisticallyDeleted?: boolean;
   /** Jumps to the message this one quotes. */
   onPressReply?: () => void;
   onSwipeReply?: () => void;
   onSwipeForward?: () => void;
   onSwipeReport?: () => void;
+  readReceipt?: { readCount: number; recipientCount: number };
+  /** Backward-compatible input for isolated previews; chat screens pass per-row counts. */
   readReceipts?: { recipientCount: number; readThroughSequences: number[] };
   selected?: boolean;
   selectionMode?: boolean;
   onPressMessage?: (item: GroupedThreadItem) => void;
+  taskLink?: {
+    identity: MobileTaskIdentity | null;
+    projectId: Id<'projects'>;
+    readOnly: boolean;
+  };
   variant?: 'conversation' | 'thread';
 };
 
@@ -76,14 +90,18 @@ export const ThreadRow = memo(function ThreadRow({
   onLongPress,
   onOpenForwardSource,
   onOpenThread,
+  deleting = false,
+  optimisticallyDeleted = false,
   onPressReply,
   onSwipeReply,
   onSwipeForward,
   onSwipeReport,
+  readReceipt,
   readReceipts,
   selected = false,
   selectionMode = false,
   onPressMessage,
+  taskLink,
   variant = 'conversation',
 }: ThreadRowProps) {
   const theme = useTheme();
@@ -91,7 +109,16 @@ export const ThreadRow = memo(function ThreadRow({
   const [actionsExposed, setActionsExposed] = useState(false);
   const actionWidth = useSharedValue(0);
   const replyProgress = useSharedValue(0);
+  const deleteProgress = useSharedValue(0);
+  const rowHeight = useSharedValue(0);
   const trayOpenAtStart = useSharedValue(false);
+  useEffect(() => {
+    deleteProgress.value = deleting
+      ? reducedMotion
+        ? 1
+        : withTiming(1, { duration: MessageDeleteMotionDuration, easing: Easing.out(Easing.quad) })
+      : 0;
+  }, [deleteProgress, deleting, reducedMotion]);
   useEffect(() => {
     if (!selectionMode) return;
     if (actionWidth.value !== 0) actionWidth.value = 0;
@@ -99,26 +126,38 @@ export const ThreadRow = memo(function ThreadRow({
     if (actionsExposed) setActionsExposed(false);
   }, [actionWidth, actionsExposed, replyProgress, selectionMode]);
   const hasSwipeActions = item.kind === 'message' && Boolean(onSwipeForward && onSwipeReport);
-  const inlinePlayback = item.kind === 'message' && !item.item.message.deletedAt
-    && hasPlayableAudioAttachment(item.item.attachments);
-  const readReceipt = item.kind === 'message' && isOwnMessage
+  const inlinePlayback = item.kind === 'message' && !item.item.message.deletedAt && !optimisticallyDeleted && (
+    hasPlayableAudioAttachment(item.item.attachments) ||
+    item.item.attachments.some(({ attachment }) => isVideoAttachment(attachment.contentType))
+  );
+  const resolvedReadReceipt = readReceipt ?? (item.kind === 'message' && isOwnMessage
     ? {
         readCount: readReceipts?.readThroughSequences.filter((sequence) =>
           sequence >= (item.item.message.channelSequence ?? Number.MAX_SAFE_INTEGER),
         ).length ?? 0,
         recipientCount: readReceipts?.recipientCount ?? 0,
       }
-    : undefined;
+    : undefined);
+  const linkedTasks = taskLink ? <TaskInlineCards
+    assistantStreamId={item.kind === 'assistant' ? item.stream._id : undefined}
+    identity={taskLink.identity}
+    messageId={item.kind === 'message' ? item.item.message._id : undefined}
+    projectId={taskLink.projectId}
+    readOnly={taskLink.readOnly}
+  /> : null;
   const messageBubble = item.kind === 'message' ? <MessageBubble
     highlighted={highlighted}
     isFirstInGroup={isFirstInGroup}
     isOwnMessage={Boolean(isOwnMessage)}
     message={item.item}
-    readReceipt={readReceipt}
+    linkedTasks={linkedTasks}
+    optimisticallyDeleted={optimisticallyDeleted}
+    readReceipt={resolvedReadReceipt}
     selected={selected}
     selectionMode={selectionMode}
     contextActions={selectionMode ? undefined : contextActions}
-    onLongPress={Platform.OS === 'android' || (Platform.OS === 'ios' && contextActions?.length && !inlinePlayback) ? undefined : onLongPress}
+    onLongPress={Platform.OS === 'android' || (Platform.OS === 'ios' && Boolean(contextActions?.length) && !inlinePlayback)
+      ? undefined : onLongPress}
     onPressSelection={onPressMessage ? () => onPressMessage(item) : undefined}
     onOpenForwardSource={onOpenForwardSource}
     onForwardMedia={onSwipeForward}
@@ -128,6 +167,7 @@ export const ThreadRow = memo(function ThreadRow({
   /> : null;
   const assistantBubble = item.kind === 'assistant' ? <AssistantMessage
     isFirstInGroup={isFirstInGroup}
+    linkedTasks={linkedTasks}
     onLongPress={Platform.OS === 'android' ? undefined : onLongPress}
     stream={item.stream}
     timeLabel={fmtTime(item.stream.createdAt)}
@@ -210,6 +250,14 @@ export const ThreadRow = memo(function ThreadRow({
       translateX: selectionMode ? 0 : -actionWidth.value - interpolate(actionWidth.value, [0, SWIPE_ACTION_WIDTH], [0, SWIPE_ACTION_GAP], 'clamp'),
     }],
   }));
+  const deleteStyle = useAnimatedStyle(() => ({
+    height: deleteProgress.value > 0 ? rowHeight.value * (1 - deleteProgress.value) : undefined,
+    opacity: 1 - deleteProgress.value,
+    transform: [
+      { translateY: deleteProgress.value * -6 },
+      { scale: 1 - deleteProgress.value * 0.015 },
+    ],
+  }));
   const actionTray = !selectionMode && hasSwipeActions ? <Animated.View
     accessibilityElementsHidden={!actionsExposed}
     accessibilityLabel="Message actions"
@@ -226,7 +274,15 @@ export const ThreadRow = memo(function ThreadRow({
     </Pressable>
   </Animated.View> : null;
 
+  // A row layout transition animates every mounted message when the list
+  // adds or reconciles a send. Keep timeline geometry direct; the explicit
+  // pending-row entrance and delete collapse provide local feedback.
   return (
+    <Animated.View
+      onLayout={(event) => { rowHeight.value = event.nativeEvent.layout.height; }}
+      pointerEvents={deleting ? 'none' : 'auto'}
+      style={[deleteStyle, styles.deletingRow]}
+    >
     <GestureDetector gesture={rowGesture}>
       <View style={styles.swipeContainer}>
         <Animated.View style={[styles.replyHint, replyIconStyle]}>
@@ -246,6 +302,7 @@ export const ThreadRow = memo(function ThreadRow({
         </View>
       </View>
     </GestureDetector>
+    </Animated.View>
   );
 }, areThreadRowPropsEqual);
 
@@ -253,6 +310,8 @@ export function areThreadRowPropsEqual(previous: ThreadRowProps, next: ThreadRow
   const renderState = (props: ThreadRowProps) => ({
     actionSignature: props.contextActions?.map(({ destructive, icon, label }) => `${label}|${icon}|${destructive ? '1' : '0'}`).join('\0') ?? '',
     highlighted: props.highlighted ?? false,
+    deleting: props.deleting ?? false,
+    optimisticallyDeleted: props.optimisticallyDeleted ?? false,
     interactionAvailability: [
       props.onLongPress,
       props.onOpenForwardSource,
@@ -267,9 +326,18 @@ export function areThreadRowPropsEqual(previous: ThreadRowProps, next: ThreadRow
     isFirstInGroup: props.isFirstInGroup,
     isOwnMessage: Boolean(props.isOwnMessage),
     item: props.item.kind === 'message' ? props.item.item : props.item.stream,
-    readReceipts: props.readReceipts,
+    readReceipts: props.readReceipt
+      ? `${props.readReceipt.readCount}:${props.readReceipt.recipientCount}`
+      : props.readReceipts,
     selected: props.selected ?? false,
     selectionMode: props.selectionMode ?? false,
+    taskLinkSignature: props.taskLink ? [
+      props.taskLink.projectId,
+      props.taskLink.identity?.companyId,
+      props.taskLink.identity?.membershipId,
+      props.taskLink.identity?.archived,
+      props.taskLink.readOnly,
+    ].join('|') : undefined,
     variant: props.variant ?? 'conversation',
   });
   return areThreadRowRenderStatesEqual(renderState(previous), renderState(next));
@@ -342,11 +410,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   groupStart: {
-    paddingTop: Spacing.two,
+    paddingTop: ChatMessageSpacing.groupStart,
   },
   grouped: {
-    paddingTop: 2,
+    paddingTop: ChatMessageSpacing.grouped,
   },
+  deletingRow: { overflow: 'hidden' },
   replyHint: {
     alignItems: 'center',
     bottom: 0,
@@ -396,6 +465,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   threadGroupStart: {
-    paddingTop: Spacing.two,
+    paddingTop: ChatMessageSpacing.groupStart,
   },
 });

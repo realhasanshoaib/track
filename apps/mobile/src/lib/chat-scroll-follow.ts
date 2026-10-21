@@ -14,6 +14,11 @@ export interface ChatScrollMetrics {
   viewportHeight: number;
 }
 
+/** Focusing the composer must not move a reader away from message history. */
+export function shouldFollowLatestOnComposerFocus(isAtLatest: boolean): boolean {
+  return isAtLatest;
+}
+
 /** Collapse same-frame layout events into one scroll using the latest measurements. */
 export function createCoalescedChatScrollScheduler(
   scheduleFrame: (callback: () => void) => unknown = (callback) => requestAnimationFrame(callback),
@@ -34,21 +39,17 @@ export function createCoalescedChatScrollScheduler(
   };
 }
 
-export interface ChatDeleteScrollSnapshot extends ViewportLayoutFollowState {
-  offsetY: number;
-}
+export type ChatDeleteScrollSnapshot = ViewportLayoutFollowState & { userScrolled?: boolean };
 
-/** Restore the reader's place after deleted rows or tombstones change height. */
+/** Keep history readers on FlatList's visible-content anchor after rows change. */
 export function restoreChatScrollAfterDeletion(
-  list: ChatListScrollTarget | null,
   snapshot: ChatDeleteScrollSnapshot,
   scrollToLatest: () => void,
 ): void {
-  if (snapshot.wasAtBottom || snapshot.followingLatest || snapshot.pinAfterSend) {
-    scrollToLatest();
-    return;
-  }
-  list?.scrollToOffset({ animated: false, offset: Math.max(0, snapshot.offsetY) });
+  // A drag during the optimistic delete supersedes the old follow-latest
+  // snapshot. Never issue a stale programmatic scroll over the reader's move.
+  if (snapshot.userScrolled) return;
+  if (snapshot.wasAtBottom || snapshot.followingLatest || snapshot.pinAfterSend) scrollToLatest();
 }
 
 /** Use measured layout dimensions so Android applies a changed IME inset immediately. */

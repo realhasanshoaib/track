@@ -48,6 +48,32 @@ export async function downloadAttachment(target: AttachmentTarget) {
   }
 }
 
+/** Saves a persistent user-visible copy in a folder selected from the system picker. */
+export async function saveAttachment(target: AttachmentTarget) {
+  if (Platform.OS === 'web') {
+    await downloadInBrowser(target);
+    return;
+  }
+  const directory = await Directory.pickDirectoryAsync();
+  const safeName = target.filename.replace(UNSAFE_NAME, '_') || 'file';
+  const destination = new File(directory, safeName);
+  const destinationExisted = destination.exists;
+  try {
+    await withDownloadTimeout((signal) =>
+      File.downloadFileAsync(target.url, destination, { idempotent: true, signal }),
+    );
+  } catch (error) {
+    if (!destinationExisted && destination.exists) {
+      try {
+        destination.delete();
+      } catch {
+        // Preserve the download error if cleanup also fails.
+      }
+    }
+    throw error;
+  }
+}
+
 /**
  * Web downloads the original filename without leaving chat. Native platforms
  * hand a cached copy to the system share and save sheet.

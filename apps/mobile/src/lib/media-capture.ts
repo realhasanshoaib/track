@@ -5,7 +5,6 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { File as ExpoFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
@@ -16,6 +15,7 @@ import type { UploadableFile } from '@/lib/attachment-upload';
 import { MaxImageEdge, prepareChatImageDimensions, prepareChatImageForUpload } from '@/lib/chat-image-layout';
 import { hapticDestructive, hapticLight, hapticMedium } from '@/lib/haptics';
 import { shouldFinishVoiceOnRelease, type VoiceGestureOutcome } from '@/lib/voice-recording-gesture';
+import { documentAttachmentContentType } from '@/lib/video-file-type';
 
 /** Captured and selected images enter the composer at a bounded pixel size. */
 export { MaxImageEdge };
@@ -48,21 +48,23 @@ function explainDenied(subject: string, canAskAgain: boolean) {
 }
 
 function assetToFile(asset: ImagePicker.ImagePickerAsset): UploadableFile {
-  const contentType = asset.mimeType ?? 'image/jpeg';
+  const isVideo = asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
+  const contentType = asset.mimeType ?? (isVideo ? 'video/mp4' : 'image/jpeg');
   const extension = contentType.split('/')[1] ?? 'jpg';
   const filename = asset.fileName && asset.fileName.trim().length > 0
     ? asset.fileName
-    : `photo-${Date.now()}.${extension}`;
+    : `${isVideo ? 'video' : 'photo'}-${Date.now()}.${extension}`;
   return {
     contentType,
+    durationMs: isVideo && typeof asset.duration === 'number' ? Math.max(0, Math.round(asset.duration)) : undefined,
     filename,
-    height: asset.height,
+    height: asset.height > 0 ? asset.height : undefined,
     id: nextId(),
     kind: 'file',
     previewUri: asset.uri,
     size: asset.fileSize,
     uri: asset.uri,
-    width: asset.width,
+    width: asset.width > 0 ? asset.width : undefined,
   };
 }
 
@@ -75,28 +77,37 @@ function filenameWithExtension(filename: string, extension: string) {
 export async function prepareImageForUpload(file: UploadableFile) {
   const contentType = file.contentType.toLowerCase();
   if (!['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'].includes(contentType)) return file;
-  return await prepareChatImageForUpload(file, async (uri, dimensions) => {
-    const context = ImageManipulator.manipulate(uri);
-    context.resize(dimensions);
-    const rendered = await context.renderAsync();
-    const keepPng = contentType === 'image/png';
-    const format = keepPng ? SaveFormat.PNG : SaveFormat.JPEG;
-    const result = await rendered.saveAsync({
-      compress: keepPng ? 1 : 0.82,
-      format,
+  try {
+    return await prepareChatImageForUpload(file, async (uri, dimensions) => {
+      // Load lazily so a stale native client can still send the original
+      // selected image while its optimized derivative is unavailable.
+      const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
+      const context = ImageManipulator.manipulate(uri);
+      context.resize(dimensions);
+      const rendered = await context.renderAsync();
+      const keepPng = contentType === 'image/png';
+      const format = keepPng ? SaveFormat.PNG : SaveFormat.JPEG;
+      const result = await rendered.saveAsync({
+        compress: keepPng ? 1 : 0.82,
+        format,
+      });
+      const nextUri = result.uri;
+      const extension = keepPng ? 'png' : 'jpg';
+      const outputSize = new ExpoFile(nextUri).size;
+      return {
+        contentType: keepPng ? 'image/png' : 'image/jpeg',
+        filename: filenameWithExtension(file.filename, extension),
+        height: result.height,
+        size: typeof outputSize === 'number' && outputSize > 0 ? outputSize : undefined,
+        uri: nextUri,
+        width: result.width,
+      };
     });
-    const nextUri = result.uri;
-    const extension = keepPng ? 'png' : 'jpg';
-    const outputSize = new ExpoFile(nextUri).size;
-    return {
-      contentType: keepPng ? 'image/png' : 'image/jpeg',
-      filename: filenameWithExtension(file.filename, extension),
-      height: result.height,
-      size: typeof outputSize === 'number' && outputSize > 0 ? outputSize : undefined,
-      uri: nextUri,
-      width: result.width,
-    };
-  });
+  } catch {
+    // Preserve the immediate picker preview and let the uploader send the
+    // source file if optimization is unavailable on this client build.
+    return file;
+  }
 }
 
 export async function capturePhoto(): Promise<UploadableFile[]> {
@@ -113,12 +124,12 @@ export async function capturePhoto(): Promise<UploadableFile[]> {
   return result.assets.map(assetToFile);
 }
 
-export async function pickImages(): Promise<UploadableFile[]> {
+export async function pickMedia(): Promise<UploadableFile[]> {
   // The platform picker grants access only to the assets a person selects.
   // Avoid asking for broad library access before opening it.
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsMultipleSelection: true,
-    mediaTypes: ['images'],
+    mediaTypes: ['images', 'videos'],
     quality: LibraryQuality,
     selectionLimit: SelectionLimit,
   });
@@ -133,7 +144,7 @@ export async function pickDocuments(): Promise<UploadableFile[]> {
   });
   if (result.canceled) return [];
   const files: UploadableFile[] = result.assets.map((asset) => ({
-    contentType: asset.mimeType ?? 'application/octet-stream',
+    contentType: documentAttachmentContentType(asset.name, asset.mimeType),
     filename: asset.name,
     id: nextId(),
     kind: 'file' as const,

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConvexError } from 'convex/values';
 
 import type { Id } from '../../../../convex/_generated/dataModel';
 import {
@@ -30,6 +31,42 @@ function makeTarget(overrides: Partial<AttachmentUploadTarget> = {}): Attachment
 }
 
 describe('sendComposerMessage recovery', () => {
+  it('waits for a short send rate limit and retries the same text message once', async () => {
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(new ConvexError({ kind: 'RateLimited', name: 'sendMessage', retryAfter: 1 }))
+      .mockResolvedValueOnce('message-1' as Id<'messages'>);
+
+    const result = await sendComposerMessage({
+      attachments: [],
+      body: 'A follow-up message',
+      idempotencyKey: 'send-key',
+      reportProgress: vi.fn(),
+      target: makeTarget({ sendMessage }),
+    });
+
+    expect(result.messageId).toBe('message-1');
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1]).toEqual(sendMessage.mock.calls[0]);
+  });
+
+  it('keeps the uploaded attachment and caption through a send rate limit', async () => {
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(new ConvexError({ kind: 'RateLimited', name: 'sendMessage', retryAfter: 1 }))
+      .mockResolvedValueOnce('message-1' as Id<'messages'>);
+
+    const result = await sendComposerMessage({
+      attachments: [makeFile('file-1', 'photo.jpg')],
+      body: 'Keep this caption',
+      idempotencyKey: 'media-send-key',
+      reportProgress: vi.fn(),
+      target: makeTarget({ getFileSize: vi.fn().mockReturnValue(4), uploadFile: vi.fn(), sendMessage }),
+    });
+
+    expect(result).toEqual({ failedIds: [], messageId: 'message-1' });
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1]).toEqual(sendMessage.mock.calls[0]);
+  });
+
   it('rejects a failed text send so the Composer can keep and retry the draft', async () => {
     const target = makeTarget({ sendMessage: vi.fn().mockRejectedValue(new Error('offline')) });
 
@@ -149,7 +186,7 @@ describe('sendComposerMessage recovery', () => {
     });
 
     await sendComposerMessage({
-      attachments: [makeFile('atomic', 'photo.jpg')],
+      attachments: [{ ...makeFile('atomic', 'photo.jpg'), height: 1080, width: 1920 }],
       body: '',
       idempotencyKey: 'send-atomic',
       reportProgress: vi.fn(),
@@ -163,6 +200,70 @@ describe('sendComposerMessage recovery', () => {
         uploadIntentId: 'intent-atomic',
       })],
     }));
+    const sentAttachments = sendMessage.mock.calls[0]?.[0].attachments;
+    expect(sentAttachments?.[0]).toMatchObject({ height: 1080, width: 1920 });
+  });
+
+  it('keeps media dimensions when retrying a previously accepted message', async () => {
+    const attachFile = vi.fn().mockResolvedValue(undefined);
+    const target = makeTarget({
+      attachFile,
+      getFileSize: vi.fn().mockReturnValue(1024),
+      uploadFile: vi.fn(),
+    });
+
+    await sendComposerMessage({
+      attachments: [{ ...makeFile('retry-video', 'clip.mp4'), contentType: 'video/mp4', height: 2436, width: 1126 }],
+      body: '',
+      messageId: 'message-existing' as Id<'messages'>,
+      reportProgress: vi.fn(),
+      target,
+    });
+
+    expect(attachFile).toHaveBeenCalledTimes(1);
+    expect(attachFile.mock.calls[0]?.[0]).toMatchObject({ height: 2436, width: 1126 });
+  });
+
+  it('retries without dimensions when an older send validator rejects them', async () => {
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(new Error('ArgumentValidationError: Object contains extra field `height` that is not in the validator.'))
+      .mockResolvedValueOnce('message-legacy' as Id<'messages'>);
+    const target = makeTarget({ getFileSize: vi.fn().mockReturnValue(4), sendMessage, uploadFile: vi.fn() });
+
+    const result = await sendComposerMessage({
+      attachments: [{ ...makeFile('legacy-image', 'photo.jpg'), height: 1080, width: 1920 }],
+      body: '',
+      idempotencyKey: 'send-legacy',
+      reportProgress: vi.fn(),
+      target,
+    });
+
+    expect(result).toEqual({ failedIds: [], messageId: 'message-legacy' });
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[0]?.[0].attachments?.[0]).toMatchObject({ height: 1080, width: 1920 });
+    expect(sendMessage.mock.calls[1]?.[0].attachments?.[0]).not.toHaveProperty('height');
+    expect(sendMessage.mock.calls[1]?.[0].attachments?.[0]).not.toHaveProperty('width');
+  });
+
+  it('retries attachment creation without dimensions for an older validator', async () => {
+    const attachFile = vi.fn()
+      .mockRejectedValueOnce(new Error('ArgumentValidationError: Object contains extra field `width` that is not in the validator.'))
+      .mockResolvedValueOnce(undefined);
+    const target = makeTarget({ attachFile, getFileSize: vi.fn().mockReturnValue(1024), uploadFile: vi.fn() });
+
+    const result = await sendComposerMessage({
+      attachments: [{ ...makeFile('legacy-video', 'clip.mp4'), contentType: 'video/mp4', height: 2436, width: 1126 }],
+      body: '',
+      messageId: 'message-existing' as Id<'messages'>,
+      reportProgress: vi.fn(),
+      target,
+    });
+
+    expect(result).toEqual({ failedIds: [], messageId: 'message-existing' });
+    expect(attachFile).toHaveBeenCalledTimes(2);
+    expect(attachFile.mock.calls[0]?.[0]).toMatchObject({ height: 2436, width: 1126 });
+    expect(attachFile.mock.calls[1]?.[0]).not.toHaveProperty('height');
+    expect(attachFile.mock.calls[1]?.[0]).not.toHaveProperty('width');
   });
 
   it('keeps uploaded bytes reusable if the message mutation fails', async () => {

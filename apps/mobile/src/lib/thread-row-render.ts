@@ -7,9 +7,11 @@ export type ThreadRowRenderState = {
   isFirstInGroup: boolean;
   isOwnMessage: boolean;
   item: unknown;
+  optimisticallyDeleted: boolean;
   readReceipts: unknown;
   selected: boolean;
   selectionMode: boolean;
+  taskLinkSignature?: string;
   variant: string;
 };
 
@@ -28,7 +30,9 @@ export function areThreadRowRenderStatesEqual(previous: ThreadRowRenderState, ne
     && previous.isFirstInGroup === next.isFirstInGroup
     && previous.isOwnMessage === next.isOwnMessage
     && previous.readReceipts === next.readReceipts
+    && previous.optimisticallyDeleted === next.optimisticallyDeleted
     && previous.selected === next.selected
     && previous.selectionMode === next.selectionMode
+    && previous.taskLinkSignature === next.taskLinkSignature
     && previous.variant === next.variant;
 }

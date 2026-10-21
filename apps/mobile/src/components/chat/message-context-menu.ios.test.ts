@@ -1,7 +1,12 @@
 import * as React from 'react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@expo/ui/community/menu', () => ({ MenuView: 'NativeMenuHost' }));
+vi.mock('@expo/ui/swift-ui', () => ({
+  Button: 'NativeMenuButton',
+  Host: 'NativeMenuHost',
+  Menu: 'NativeMenu',
+  RNHostView: 'NativeReactHost',
+}));
 import { MessageContextMenu } from './message-context-menu.ios';
 
 // The app's Metro transform supplies the JSX runtime. Keep this node-only
@@ -30,8 +35,14 @@ describe('iOS inline playback touch boundary', () => {
       children: React.createElement('span', null, 'Message'),
     });
     expect(result.type).toBe('NativeMenuHost');
-    expect(result.props.shouldOpenOnLongPress).toBe(true);
-    result.props.onPressAction({ nativeEvent: { event: 'message-action-0' } });
+    const menu = result.props.children;
+    expect(menu.type).toBe('NativeMenu');
+    expect(menu.props.label.type).toBe('NativeReactHost');
+    menu.props.onPrimaryAction();
+    expect(reply).not.toHaveBeenCalled();
+    const [button] = menu.props.children;
+    expect(button.type).toBe('NativeMenuButton');
+    button.props.onPress();
     expect(reply).toHaveBeenCalledOnce();
   });
 });

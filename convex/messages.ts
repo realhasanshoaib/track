@@ -4,9 +4,9 @@ import {
 } from '@track/shared/feature-flags'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
-import { parseMentions } from '@track/shared'
+import { MAX_BULK_MESSAGE_DELETE_COUNT, parseMentions } from '@track/shared'
 
-import { internalMutation, mutation, query } from './_generated/server'
+import { action, internalMutation, internalQuery, mutation, query } from './_generated/server'
 import type { Doc, Id } from './_generated/dataModel'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import { internal } from './_generated/api'
@@ -89,7 +89,6 @@ export function visibleMessages<T extends Doc<'messages'>>(messages: T[], hidden
 
 const UPLOAD_INTENT_TTL_MS = 15 * 60 * 1000
 const MAX_MESSAGE_ATTACHMENT_BYTES = 100 * 1024 * 1024
-const MAX_BULK_MESSAGE_DELETE_COUNT = 50
 
 async function validateMessageMentions(
   ctx: MutationCtx,
@@ -180,12 +179,12 @@ function validateUploadMetadata(input: {
   if (input.durationMs !== undefined && (!Number.isInteger(input.durationMs) || input.durationMs < 0)) {
     throw new Error('attachment_metadata_invalid')
   }
-  const hasImageDimensions = input.width !== undefined || input.height !== undefined
-  if (hasImageDimensions) {
+  const hasMediaDimensions = input.width !== undefined || input.height !== undefined
+  if (hasMediaDimensions) {
     const { height, width } = input
     const maxDimension = 100_000
     if (
-      !input.contentType.toLowerCase().startsWith('image/') ||
+      !/^(image|video)\//i.test(input.contentType) ||
       width === undefined || height === undefined ||
       !Number.isInteger(width) || !Number.isInteger(height) ||
       width < 1 || height < 1 || width > maxDimension || height > maxDimension
@@ -1924,6 +1923,115 @@ export const cleanupExpiredUploadIntents = internalMutation({
       }
     }
     return cleaned
+  },
+})
+
+const videoPreviewScope = {
+  projectId: v.id('projects'),
+  groupId: v.id('groups'),
+  messageId: v.id('messages'),
+  storageId: v.id('_storage'),
+  userId: v.id('users'),
+  actingCompanyId: v.optional(v.id('companies')),
+  projectMemberId: v.optional(v.id('projectMembers')),
+}
+
+/** Check the sender and attachment before allocating preview storage. */
+export const canPublishVideoPreview = internalQuery({
+  args: videoPreviewScope,
+  handler: async (ctx, args) => {
+    const access = await authorizeScopedRequest(ctx, {
+      projectId: args.projectId,
+      groupId: args.groupId,
+      claimedUserId: args.userId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }, 'writeChannel')
+    const message = await ctx.db.get(args.messageId)
+    if (!message || message.projectId !== args.projectId || message.groupId !== args.groupId || message.deletedAt ||
+      (message.authorProjectMemberId ? message.authorProjectMemberId !== access.projectMember._id : message.authorId !== args.userId) ||
+      message.actingCompanyId !== access.companyAccess?.company._id) return false
+    const attachment = (await Promise.all(message.attachmentIds.map((id) => ctx.db.get(id))))
+      .find((entry) => entry?.storageId === args.storageId)
+    return Boolean(attachment?.contentType.toLowerCase().startsWith('video/') && attachment.previewStatus !== 'ready')
+  },
+})
+
+export const commitVideoPreview = internalMutation({
+  args: {
+    ...videoPreviewScope,
+    previewStorageId: v.id('_storage'),
+    width: v.number(),
+    height: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const access = await authorizeScopedRequest(ctx, {
+      projectId: args.projectId,
+      groupId: args.groupId,
+      claimedUserId: args.userId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }, 'writeChannel')
+    const message = await ctx.db.get(args.messageId)
+    if (!message || message.projectId !== args.projectId || message.groupId !== args.groupId || message.deletedAt) {
+      throw new Error('message_scope_mismatch')
+    }
+    const member = access.projectMember
+    if (message.authorProjectMemberId ? message.authorProjectMemberId !== member._id : message.authorId !== args.userId) {
+      throw new Error('attachment_author_mismatch')
+    }
+    if (message.actingCompanyId !== access.companyAccess?.company._id) throw new Error('attachment_scope_mismatch')
+    const attachment = (await Promise.all(message.attachmentIds.map((id) => ctx.db.get(id))))
+      .find((entry) => entry?.storageId === args.storageId)
+    if (!attachment || !attachment.contentType.toLowerCase().startsWith('video/')) throw new Error('video_attachment_unavailable')
+    if (attachment.previewStatus === 'ready' && attachment.previewStorageId) return false
+    if (!Number.isInteger(args.width) || !Number.isInteger(args.height) ||
+      args.width < 1 || args.height < 1 || args.width > 1024 || args.height > 1024) {
+      throw new Error('video_preview_invalid')
+    }
+    await assertProjectSnapshotWritable(ctx, args.projectId)
+    await ctx.db.patch(attachment._id, {
+      previewStorageId: args.previewStorageId,
+      previewStatus: 'ready',
+      previewWidth: args.width,
+      previewHeight: args.height,
+      previewErrorCode: undefined,
+    })
+    return true
+  },
+})
+
+/** A poster is optional; failed generation or upload never blocks the video send. */
+export const publishVideoPreview = action({
+  args: { ...videoPreviewScope, bytes: v.bytes(), width: v.number(), height: v.number() },
+  handler: async (ctx, args) => {
+    const bytes = new Uint8Array(args.bytes)
+    if (bytes.length < 4 || bytes.length > 512 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8 ||
+      bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9 ||
+      !Number.isInteger(args.width) || !Number.isInteger(args.height) ||
+      args.width < 1 || args.height < 1 || args.width > 1024 || args.height > 1024) {
+      throw new Error('video_preview_invalid')
+    }
+    const scope = {
+      projectId: args.projectId,
+      groupId: args.groupId,
+      messageId: args.messageId,
+      storageId: args.storageId,
+      userId: args.userId,
+      actingCompanyId: args.actingCompanyId,
+      projectMemberId: args.projectMemberId,
+    }
+    if (!await ctx.runQuery(internal.messages.canPublishVideoPreview, scope)) return
+    const previewStorageId = await ctx.storage.store(new Blob([bytes], { type: 'image/jpeg' }))
+    try {
+      const committed = await ctx.runMutation(internal.messages.commitVideoPreview, {
+        ...scope, previewStorageId, width: args.width, height: args.height,
+      })
+      if (!committed) await ctx.storage.delete(previewStorageId)
+    } catch (error) {
+      await ctx.storage.delete(previewStorageId).catch(() => undefined)
+      throw error
+    }
   },
 })
 
