@@ -1,169 +1,76 @@
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server'
-import { appendAuditEvent } from './lib/audit'
+import { authComponent } from './auth'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
-import {
-  canRoleJoinDefaultGroup,
-  requireProjectManager,
-  requireProjectMember,
-} from './lib/permissions'
-const role = v.union(
-  v.literal('owner'),
-  v.literal('admin'),
-  v.literal('staff'),
-  v.literal('client'),
-)
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase()
-}
-function newInviteToken() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`
-}
-export const listForProject = query({
-  args: {
-    projectId: v.id('projects'),
-    userId: v.id('users'),
-  },
+import { authorizeGroupRequest } from './lib/requestAuthorization'
+import { addMember } from './groups'
+export const listForGroup = query({
+  args: { groupId: v.id('groups'), userId: v.id('users') },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.userId)
-    await requireProjectMember(ctx, args.projectId, args.userId)
-    return await ctx.db
-      .query('invitations')
-      .withIndex('by_project_status', (q) => q.eq('projectId', args.projectId))
-      .order('desc')
-      .take(50)
+    await authorizeGroupRequest(ctx, { ...args, claimedUserId: args.userId })
+    return await ctx.db.query('invitations').withIndex('by_group_status', q => q.eq('groupId', args.groupId)).order('desc').take(50)
   },
 })
 export const create = mutation({
-  args: {
-    projectId: v.id('projects'),
-    groupId: v.optional(v.id('groups')),
-    invitedBy: v.id('users'),
-    email: v.string(),
-    role,
-  },
+  args: { groupId: v.id('groups'), invitedBy: v.id('users'), email: v.string() },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.invitedBy)
-    await requireProjectManager(ctx, args.projectId, args.invitedBy)
-    const email = normalizeEmail(args.email)
-    if (!email.includes('@')) throw new Error('invalid_email')
+    await authorizeGroupRequest(ctx, { groupId: args.groupId, claimedUserId: args.invitedBy })
+    const email = args.email.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('invalid_email')
+    const pending = await ctx.db.query('invitations').withIndex('by_group_status', q => q.eq('groupId', args.groupId).eq('status', 'pending')).collect()
+    const existing = pending.find(i => i.email === email && i.expiresAt > Date.now())
+    if (existing) return existing._id
     const now = Date.now()
-    const inviteId = await ctx.db.insert('invitations', {
-      projectId: args.projectId,
-      groupId: args.groupId,
-      email,
-      role: args.role,
-      invitedBy: args.invitedBy,
-      status: 'pending',
-      token: newInviteToken(),
-      expiresAt: now + 1000 * 60 * 60 * 24 * 14,
-      createdAt: now,
-      updatedAt: now,
+    return await ctx.db.insert('invitations', {
+      groupId: args.groupId, email, invitedBy: args.invitedBy, status: 'pending',
+      token: crypto.randomUUID(), expiresAt: now + 14 * 24 * 60 * 60 * 1000,
+      createdAt: now, updatedAt: now,
     })
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      groupId: args.groupId,
-      actorId: args.invitedBy,
-      entityType: 'invitation',
-      entityId: inviteId,
-      action: 'invitation.created',
-      after: {
-        email,
-        role: args.role,
-        groupId: args.groupId,
-      },
-    })
-    return inviteId
   },
 })
-export const acceptPendingForCurrentUser = mutation({
-  args: {
-    userId: v.id('users'),
+export const revoke = mutation({
+  args: { invitationId: v.id('invitations'), userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const invite = await ctx.db.get(args.invitationId)
+    if (!invite) throw new Error('invitation_not_found')
+    await authorizeGroupRequest(ctx, { groupId: invite.groupId, claimedUserId: args.userId })
+    await ctx.db.patch(invite._id, { status: 'revoked', updatedAt: Date.now() })
   },
+})
+export const accept = mutation({
+  args: { userId: v.id('users'), token: v.string() },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
-    const user = await ctx.db.get(args.userId)
-    if (!user) throw new Error('user_not_found')
-    const now = Date.now()
-    const pending = await ctx.db
-      .query('invitations')
-      .withIndex('by_email_status', (q) =>
-        q.eq('email', normalizeEmail(user.email)).eq('status', 'pending'),
-      )
-      .collect()
-    const accepted: Array<string> = []
+    const invite = await ctx.db.query('invitations').withIndex('by_token', q => q.eq('token', args.token)).unique()
+    if (!invite || invite.email !== actor.user.email.trim().toLowerCase()) throw new Error('invitation_not_found')
+    if (invite.status === 'accepted' && invite.acceptedBy === actor.userId) return invite.groupId
+    if (invite.status !== 'pending' || invite.expiresAt <= Date.now()) throw new Error('invitation_expired')
+    const group = await ctx.db.get(invite.groupId)
+    if (!group) throw new Error('group_not_found')
+    await addMember(ctx, group._id, actor.userId)
+    await ctx.db.patch(invite._id, { status: 'accepted', acceptedBy: actor.userId, acceptedAt: Date.now(), updatedAt: Date.now() })
+    return group._id
+  },
+})
+export const acceptPendingForCurrentUser = mutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    assertActorMatches(actor, args.userId)
+    const authUser = await authComponent.getAuthUser(ctx)
+    if (!authUser.emailVerified || authUser.email.trim().toLowerCase() !== actor.user.email.trim().toLowerCase()) return []
+    const pending = await ctx.db.query('invitations').withIndex('by_email_status', q => q.eq('email', actor.user.email.trim().toLowerCase()).eq('status', 'pending')).collect()
+    const accepted = []
     for (const invite of pending) {
-      if (invite.expiresAt < now) {
-        await ctx.db.patch(invite._id, {
-          status: 'expired',
-          updatedAt: now,
-        })
+      if (invite.expiresAt <= Date.now()) {
+        await ctx.db.patch(invite._id, { status: 'expired', updatedAt: Date.now() })
         continue
       }
-      const existingProjectMember = await ctx.db
-        .query('projectMembers')
-        .withIndex('by_project_user', (q) =>
-          q.eq('projectId', invite.projectId).eq('userId', args.userId),
-        )
-        .unique()
-      if (existingProjectMember) {
-        await ctx.db.patch(existingProjectMember._id, {
-          role: invite.role,
-          updatedAt: now,
-        })
-      } else {
-        await ctx.db.insert('projectMembers', {
-          projectId: invite.projectId,
-          userId: args.userId,
-          role: invite.role,
-          status: 'active',
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
-      const groups = invite.groupId
-        ? [await ctx.db.get(invite.groupId)]
-        : await ctx.db
-            .query('groups')
-            .withIndex('by_project', (q) => q.eq('projectId', invite.projectId))
-            .collect()
-      for (const group of groups) {
-        if (!group) continue
-        if (!invite.groupId && !canRoleJoinDefaultGroup(invite.role, group.kind)) continue
-        const existingGroupMember = await ctx.db
-          .query('groupMembers')
-          .withIndex('by_group_user', (q) => q.eq('groupId', group._id).eq('userId', args.userId))
-          .unique()
-        if (!existingGroupMember) {
-          await ctx.db.insert('groupMembers', {
-            projectId: invite.projectId,
-            groupId: group._id,
-            userId: args.userId,
-            status: 'active',
-            createdAt: now,
-            updatedAt: now,
-          })
-        }
-      }
-      await ctx.db.patch(invite._id, {
-        status: 'accepted',
-        acceptedBy: args.userId,
-        acceptedAt: now,
-        updatedAt: now,
-      })
-      await appendAuditEvent(ctx, {
-        projectId: invite.projectId,
-        groupId: invite.groupId,
-        actorId: args.userId,
-        entityType: 'invitation',
-        entityId: invite._id,
-        action: 'invitation.accepted',
-        after: { email: user.email, role: invite.role },
-      })
-      accepted.push(invite._id)
+      if (!(await ctx.db.get(invite.groupId))) continue
+      await addMember(ctx, invite.groupId, actor.userId)
+      await ctx.db.patch(invite._id, { status: 'accepted', acceptedBy: actor.userId, acceptedAt: Date.now(), updatedAt: Date.now() })
+      accepted.push(invite.groupId)
     }
     return accepted
   },

@@ -1,318 +1,112 @@
 import { v } from 'convex/values'
-import { isActiveChannelMembership } from '@track/shared/channel-membership'
+import { groupPairKey } from '@track/shared'
 import { mutation, query } from './_generated/server'
-import { appendAuditEvent } from './lib/audit'
+import type { MutationCtx } from './_generated/server'
+import type { Id } from './_generated/dataModel'
 import { assertActorMatches, requireAuthenticatedActor } from './lib/actorContext'
+import { authorizeGroupRequest } from './lib/requestAuthorization'
 import { listActiveChannelMemberships } from './lib/channelMembership'
-import {
-  canRoleJoinDefaultGroup,
-  requireGroupMember,
-  requireProjectManager,
-  requireProjectMember,
-} from './lib/permissions'
-const role = v.union(
-  v.literal('owner'),
-  v.literal('admin'),
-  v.literal('staff'),
-  v.literal('client'),
-)
-export const listVisible = query({
-  args: {
-    projectId: v.id('projects'),
-    userId: v.id('users'),
-  },
+
+export async function addMember(ctx: MutationCtx, groupId: Id<'groups'>, userId: Id<'users'>) {
+  const existing = await ctx.db.query('groupMembers').withIndex('by_group_user', q => q.eq('groupId', groupId).eq('userId', userId)).unique()
+  const now = Date.now()
+  if (existing) {
+    if (existing.status === 'active') return
+    await ctx.db.patch(existing._id, { status: 'active', updatedAt: now })
+  } else {
+    await ctx.db.insert('groupMembers', { groupId, userId, status: 'active', createdAt: now, updatedAt: now })
+  }
+  const members = await listActiveChannelMemberships(ctx, groupId)
+  if (members.length > 2) await ctx.db.patch(groupId, { pairKey: undefined })
+}
+export const get = query({
+  args: { groupId: v.string(), userId: v.id('users') },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
-    await requireProjectMember(ctx, args.projectId, args.userId)
-    const memberships = await ctx.db
-      .query('groupMembers')
-      .withIndex('by_user', (q) => q.eq('userId', args.userId))
-      .collect()
-    const visibleMemberships = memberships.filter(
-      (membership) =>
-        membership.projectId === args.projectId && isActiveChannelMembership(membership),
-    )
-    const groups = await Promise.all(
-      visibleMemberships.map(async (membership) => await ctx.db.get(membership.groupId)),
-    )
-    return groups.filter((group) => group !== null)
+    const id = ctx.db.normalizeId('groups', args.groupId)
+    if (!id) return null
+    const membership = await ctx.db.query('groupMembers').withIndex('by_group_user', q => q.eq('groupId', id).eq('userId', actor.userId)).unique()
+    return membership?.status === 'active' ? await ctx.db.get(id) : null
   },
 })
-export const create = mutation({
-  args: {
-    projectId: v.id('projects'),
-    userId: v.id('users'),
-    name: v.string(),
-  },
+export const listVisible = query({
+  args: { userId: v.id('users') },
   handler: async (ctx, args) => {
     const actor = await requireAuthenticatedActor(ctx)
     assertActorMatches(actor, args.userId)
-    await requireProjectManager(ctx, args.projectId, args.userId)
+    const memberships = await ctx.db.query('groupMembers').withIndex('by_user', q => q.eq('userId', actor.userId)).collect()
+    const groups = await Promise.all(memberships.filter(m => m.status === 'active').map(m => ctx.db.get(m.groupId)))
+    return groups.filter(g => g !== null)
+  },
+})
+export const findPeople = query({
+  args: { userId: v.id('users'), name: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    assertActorMatches(actor, args.userId)
+    const term = args.name.trim()
+    if (!term) return []
+    const people = await ctx.db.query('users').withSearchIndex('search_display_name', q => q.search('displayName', term)).take(20)
+    return await Promise.all(people.filter(u => u._id !== actor.userId).map(async u => ({
+      _id: u._id, displayName: u.displayName,
+      avatarUrl: u.avatarStorageId ? await ctx.storage.getUrl(u.avatarStorageId) : null,
+    })))
+  },
+})
+export const startWithPerson = mutation({
+  args: { userId: v.id('users'), personId: v.id('users') },
+  handler: async (ctx, args) => {
+    const actor = await requireAuthenticatedActor(ctx)
+    assertActorMatches(actor, args.userId)
+    if (args.personId === actor.userId) throw new Error('choose_another_person')
+    const person = await ctx.db.get(args.personId)
+    if (!person) throw new Error('person_not_found')
+    const pairKey = groupPairKey(actor.userId, person._id)
+    const existing = await ctx.db.query('groups').withIndex('by_pair_key', q => q.eq('pairKey', pairKey)).unique()
+    if (existing) return existing._id
     const now = Date.now()
     const groupId = await ctx.db.insert('groups', {
-      projectId: args.projectId,
-      kind: 'custom',
-      name: args.name,
-      status: 'active',
-      createdBy: args.userId,
-      createdAt: now,
-      updatedAt: now,
+      name: actor.user.displayName + ' & ' + person.displayName, pairKey, status: 'active',
+      nextChannelSequence: 1, createdBy: actor.userId, createdAt: now, updatedAt: now,
     })
-    await ctx.db.insert('groupMembers', {
-      projectId: args.projectId,
-      groupId,
-      userId: args.userId,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      groupId,
-      actorId: args.userId,
-      entityType: 'group',
-      entityId: groupId,
-      action: 'group.created',
-      after: { name: args.name },
-    })
+    await addMember(ctx, groupId, actor.userId)
+    await addMember(ctx, groupId, person._id)
     return groupId
   },
 })
 export const update = mutation({
-  args: {
-    projectId: v.id('projects'),
-    groupId: v.id('groups'),
-    userId: v.id('users'),
-    name: v.string(),
-  },
+  args: { groupId: v.id('groups'), userId: v.id('users'), name: v.string() },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.userId)
-    await requireProjectManager(ctx, args.projectId, args.userId)
-    const group = await ctx.db.get(args.groupId)
-    if (!group || group.projectId !== args.projectId) throw new Error('group_not_found')
+    await authorizeGroupRequest(ctx, { ...args, claimedUserId: args.userId })
     const name = args.name.trim()
     if (!name) throw new Error('group_name_required')
-    await ctx.db.patch(args.groupId, {
-      name,
-      updatedAt: Date.now(),
-    })
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      groupId: args.groupId,
-      actorId: args.userId,
-      entityType: 'group',
-      entityId: args.groupId,
-      action: 'group.updated',
-      before: { name: group.name },
-      after: { name },
-    })
+    await ctx.db.patch(args.groupId, { name, updatedAt: Date.now() })
   },
 })
-export const remove = mutation({
-  args: {
-    projectId: v.id('projects'),
-    groupId: v.id('groups'),
-    userId: v.id('users'),
-  },
+export const setArchived = mutation({
+  args: { groupId: v.id('groups'), userId: v.id('users'), archived: v.boolean() },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.userId)
-    await requireProjectManager(ctx, args.projectId, args.userId)
-    const group = await ctx.db.get(args.groupId)
-    if (!group || group.projectId !== args.projectId) throw new Error('group_not_found')
-    const [
-      groupMembers,
-      groupReadStates,
-      messages,
-      attachments,
-      typingIndicators,
-      groupNotificationSettings,
-      invitations,
-    ] = await Promise.all([
-      ctx.db
-        .query('groupMembers')
-        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
-        .collect(),
-      ctx.db
-        .query('groupReadStates')
-        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
-        .collect(),
-      ctx.db
-        .query('messages')
-        .withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId))
-        .collect(),
-      ctx.db
-        .query('attachments')
-        .withIndex('by_group', (q) => q.eq('groupId', args.groupId))
-        .collect(),
-      ctx.db
-        .query('typingIndicators')
-        .withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId))
-        .collect(),
-      ctx.db.query('groupNotificationSettings').collect(),
-      Promise.all(
-        (['pending', 'accepted', 'revoked', 'expired'] as const).map((status) =>
-          ctx.db
-            .query('invitations')
-            .withIndex('by_project_status', (q) =>
-              q.eq('projectId', args.projectId).eq('status', status),
-            )
-            .collect(),
-        ),
-      ).then((rows) => rows.flat()),
-    ])
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      groupId: args.groupId,
-      actorId: args.userId,
-      entityType: 'group',
-      entityId: args.groupId,
-      action: 'group.deleted',
-      before: { name: group.name, kind: group.kind },
-    })
-    await Promise.all(
-      attachments.map((attachment) =>
-        ctx.storage.delete(attachment.storageId).catch(() => {}),
-      ),
-    )
-    for (const row of groupNotificationSettings) {
-      if (row.groupId === args.groupId) await ctx.db.delete(row._id)
-    }
-    for (const row of invitations) {
-      if (row.groupId === args.groupId) await ctx.db.delete(row._id)
-    }
-    for (const row of typingIndicators) await ctx.db.delete(row._id)
-    for (const row of attachments) await ctx.db.delete(row._id)
-    for (const row of messages) await ctx.db.delete(row._id)
-    for (const row of groupReadStates) await ctx.db.delete(row._id)
-    for (const row of groupMembers) await ctx.db.delete(row._id)
-    await ctx.db.delete(args.groupId)
+    await authorizeGroupRequest(ctx, { ...args, claimedUserId: args.userId })
+    await ctx.db.patch(args.groupId, { status: args.archived ? 'archived' : 'active', archivedAt: args.archived ? Date.now() : undefined, updatedAt: Date.now() })
   },
 })
-export const addProjectMember = mutation({
-  args: {
-    projectId: v.id('projects'),
-    actorId: v.id('users'),
-    userId: v.id('users'),
-    role,
-  },
+export const leave = mutation({
+  args: { groupId: v.id('groups'), userId: v.id('users') },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.actorId)
-    await requireProjectManager(ctx, args.projectId, args.actorId)
-    const now = Date.now()
-    const existing = await ctx.db
-      .query('projectMembers')
-      .withIndex('by_project_user', (q) =>
-        q.eq('projectId', args.projectId).eq('userId', args.userId),
-      )
-      .unique()
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        role: args.role,
-        updatedAt: now,
-      })
-    } else {
-      await ctx.db.insert('projectMembers', {
-        projectId: args.projectId,
-        userId: args.userId,
-        role: args.role,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-    const groups = await ctx.db
-      .query('groups')
-      .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
-      .collect()
-    for (const group of groups) {
-      if (!canRoleJoinDefaultGroup(args.role, group.kind)) continue
-      const existingGroupMember = await ctx.db
-        .query('groupMembers')
-        .withIndex('by_group_user', (q) => q.eq('groupId', group._id).eq('userId', args.userId))
-        .unique()
-      if (!existingGroupMember) {
-        await ctx.db.insert('groupMembers', {
-          projectId: args.projectId,
-          groupId: group._id,
-          userId: args.userId,
-          status: 'active',
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
-    }
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      actorId: args.actorId,
-      entityType: 'projectMember',
-      entityId: args.userId,
-      action: 'project_member.upserted',
-      after: {
-        userId: args.userId,
-        role: args.role,
-      },
-    })
-  },
-})
-export const addGroupMember = mutation({
-  args: {
-    projectId: v.id('projects'),
-    groupId: v.id('groups'),
-    actorId: v.id('users'),
-    userId: v.id('users'),
-  },
-  handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.actorId)
-    await requireProjectManager(ctx, args.projectId, args.actorId)
-    await requireProjectMember(ctx, args.projectId, args.userId)
-    const now = Date.now()
-    const existing = await ctx.db
-      .query('groupMembers')
-      .withIndex('by_group_user', (q) => q.eq('groupId', args.groupId).eq('userId', args.userId))
-      .unique()
-    if (!existing) {
-      await ctx.db.insert('groupMembers', {
-        projectId: args.projectId,
-        groupId: args.groupId,
-        userId: args.userId,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-    await appendAuditEvent(ctx, {
-      projectId: args.projectId,
-      groupId: args.groupId,
-      actorId: args.actorId,
-      entityType: 'groupMember',
-      entityId: args.userId,
-      action: 'group_member.added',
-      after: { userId: args.userId },
-    })
+    const { membership } = await authorizeGroupRequest(ctx, { ...args, claimedUserId: args.userId })
+    await ctx.db.patch(membership._id, { status: 'removed', updatedAt: Date.now() })
+    await ctx.db.patch(args.groupId, { pairKey: undefined })
+    const typing = await ctx.db.query('typingIndicators').withIndex('by_group_user', q => q.eq('groupId', args.groupId).eq('userId', args.userId)).unique()
+    if (typing) await ctx.db.delete(typing._id)
   },
 })
 export const listMembers = query({
-  args: {
-    groupId: v.id('groups'),
-    userId: v.id('users'),
-    projectMemberId: v.optional(v.id('projectMembers')),
-  },
+  args: { groupId: v.id('groups'), userId: v.id('users') },
   handler: async (ctx, args) => {
-    const actor = await requireAuthenticatedActor(ctx)
-    assertActorMatches(actor, args.userId)
-    await requireGroupMember(ctx, args.groupId, args.userId)
+    await authorizeGroupRequest(ctx, { ...args, claimedUserId: args.userId })
     const memberships = await listActiveChannelMemberships(ctx, args.groupId)
-    const members = await Promise.all(
-      memberships.map(async (membership) => {
-        const user = await ctx.db.get(membership.userId)
-        return { membership, user }
-      }),
-    )
-    return members.filter((item) => item.user !== null)
+    const rows = await Promise.all(memberships.map(async membership => ({ membership, user: await ctx.db.get(membership.userId) })))
+    return rows.filter((row): row is typeof row & { user: NonNullable<typeof row.user> } => row.user !== null)
   },
 })

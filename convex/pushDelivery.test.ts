@@ -75,7 +75,7 @@ describe('durable mobile push lifecycle', () => {
     const args = {
       sourceKind: 'test' as const, sourceId: 'test-source', eventKind: 'test', recipientUserId: userId,
       installationId, idempotencyKey: 'test-source:installation', title: 'Track', body: 'Test',
-      data: { schemaVersion: '1', url: '/projects' }, soundEnabled: true, ttlMs: 60_000,
+      data: { schemaVersion: '1', url: '/groups' }, soundEnabled: true, ttlMs: 60_000,
     }
     const first = await t.mutation(internal.pushDelivery.createIntent, args)
     expect(await t.mutation(internal.pushDelivery.createIntent, args)).toBe(first)
@@ -130,7 +130,7 @@ describe('durable mobile push lifecycle', () => {
       const intentId = await t.run(async (ctx) => ctx.db.insert('pushDeliveryIntents', {
         sourceKind: 'test', sourceId: 'interrupted-source', eventKind: 'test', recipientUserId: userId,
         installationId, idempotencyKey: 'interrupted-source:installation', title: 'Track', body: 'Test',
-        data: { schemaVersion: '1', url: '/projects' }, soundEnabled: true,
+        data: { schemaVersion: '1', url: '/groups' }, soundEnabled: true,
         status: 'sending', attemptCount: 1, expiresAt: Date.now() + 60_000,
         createdAt: Date.now() - 180_000, updatedAt: Date.now() - 180_000,
       }))

@@ -9,7 +9,7 @@ const modules = import.meta.glob(['./**/*.{ts,js}', '!./**/*.test.{ts,js}'])
 type TestBackend = ReturnType<typeof convexTest>
 describe('Channel messages', () => {
   it('returns bounded Channel context around an older target message', async () => {
-    const { groupId, owner, projectId, t } = await seedLegacyChannel()
+    const { groupId, owner, t } = await seedGroup()
     const actor = asUser(t, owner)
     const messageIds: Array<Id<'messages'>> = []
     for (const [index, body] of ['One', 'Two', 'Three', 'Four', 'Five', 'Six'].entries()) {
@@ -19,7 +19,7 @@ describe('Channel messages', () => {
           body,
           groupId,
           idempotencyKey: `bounded-history-${index}`,
-          projectId,
+
         }),
       )
     }
@@ -35,13 +35,13 @@ describe('Channel messages', () => {
     expect(pageIds).toEqual(expect.arrayContaining([messageIds[1], messageIds[3]]))
   })
   it('hydrates a quote outside the latest page and loads its original on demand', async () => {
-    const { groupId, owner, projectId, t } = await seedLegacyChannel()
+    const { groupId, owner, t } = await seedGroup()
     const actor = asUser(t, owner)
     const originalId = await t.run(async (ctx) => {
       let original: Id<'messages'> | undefined
       for (let index = 0; index < 150; index += 1) {
         const id = await ctx.db.insert('messages', {
-          projectId,
+
           groupId,
           authorId: owner,
           body: `History ${index}`,
@@ -57,7 +57,7 @@ describe('Channel messages', () => {
     })
     const replyId = await actor.mutation(api.messages.send, {
       authorId: owner,
-      projectId,
+
       groupId,
       body: 'A quote reply',
       replyToMessageId: originalId,
@@ -82,7 +82,7 @@ describe('Channel messages', () => {
     expect(focused.page.length).toBeLessThanOrEqual(5)
   })
   it('atomically links uploaded attachments and converges a send retry', async () => {
-    const { groupId, owner, projectId, t } = await seedLegacyChannel()
+    const { groupId, owner, t } = await seedGroup()
     const actor = asUser(t, owner)
     const storageId = await t.run(
       async (ctx) =>
@@ -114,7 +114,7 @@ describe('Channel messages', () => {
       body: 'Atomic send',
       groupId,
       idempotencyKey: 'atomic-send-retry',
-      projectId,
+
     }
     const firstMessageId = await actor.mutation(api.messages.send, sendArgs)
     expect(await actor.mutation(api.messages.send, sendArgs)).toBe(firstMessageId)
@@ -131,14 +131,14 @@ describe('Channel messages', () => {
     })
   })
   it('enforces message deletion authority and writes a body-free audit', async () => {
-    const { groupId, member, owner, projectId, t } = await seedLegacyChannel()
+    const { groupId, member, owner, t } = await seedGroup()
     const ownerActor = asUser(t, owner)
     const messageId = await ownerActor.mutation(api.messages.send, {
       authorId: owner,
       body: 'Delete this source.',
       groupId,
       idempotencyKey: 'deletable-message',
-      projectId,
+
     })
     await expect(
       asUser(t, member).mutation(api.messages.remove, {
@@ -164,27 +164,27 @@ describe('Channel messages', () => {
     expect(deletionAudit?.before).not.toHaveProperty('body')
   })
   it('keeps shared storage until its last attachment is deleted', async () => {
-    const { groupId, owner, projectId, t } = await seedLegacyChannel()
+    const { groupId, owner, t } = await seedGroup()
     const actor = asUser(t, owner)
     const firstMessageId = await actor.mutation(api.messages.send, {
       authorId: owner,
       body: 'Original attachment',
       groupId,
       idempotencyKey: 'original-attachment',
-      projectId,
+
     })
     const secondMessageId = await actor.mutation(api.messages.send, {
       authorId: owner,
       body: 'Copied attachment',
       groupId,
       idempotencyKey: 'copied-attachment',
-      projectId,
+
     })
     const { firstAttachmentId, secondAttachmentId, storageId } = await t.run(async (ctx) => {
       const createdAt = Date.now()
       const sharedStorageId = await ctx.storage.store(new Blob(['shared attachment']))
       const attachment = {
-        projectId,
+
         groupId,
         storageId: sharedStorageId,
         filename: 'shared.txt',
@@ -226,66 +226,19 @@ describe('Channel messages', () => {
     expect(await t.run(async (ctx) => await ctx.db.system.get(storageId))).toBeNull()
   })
 })
-async function seedLegacyChannel() {
-  const t = convexTest(schema, modules)
-  registerRateLimiter(t)
-  const owner = await seedUser(t, 'chat-owner')
-  const member = await seedUser(t, 'chat-member')
-  const outsider = await seedUser(t, 'chat-outsider')
-  const now = Date.now()
-  const fixture = await t.run(async (ctx) => {
-    const projectId = await ctx.db.insert('projects', {
-      name: 'Chat Project',
-      createdBy: owner,
-      createdAt: now,
-      updatedAt: now,
-    })
-    const ownerMembershipId = await ctx.db.insert('projectMembers', {
-      projectId,
-      userId: owner,
-      role: 'owner',
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
-    const memberMembershipId = await ctx.db.insert('projectMembers', {
-      projectId,
-      userId: member,
-      role: 'staff',
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
-    const groupId = await ctx.db.insert('groups', {
-      projectId,
-      kind: 'general',
-      name: 'General',
-      status: 'active',
-      createdBy: owner,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await ctx.db.insert('groupMembers', {
-      projectId,
-      groupId,
-      userId: owner,
-      projectMemberId: ownerMembershipId,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
-    await ctx.db.insert('groupMembers', {
-      projectId,
-      groupId,
-      userId: member,
-      projectMemberId: memberMembershipId,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    })
-    return { groupId, memberMembershipId, ownerMembershipId, projectId }
-  })
-  return { ...fixture, member, outsider, owner, t }
+async function seedGroup() {
+ const t = convexTest(schema, modules)
+ registerRateLimiter(t)
+ const owner = await seedUser(t, 'chat-owner')
+ const member = await seedUser(t, 'chat-member')
+ const outsider = await seedUser(t, 'chat-outsider')
+ const now = Date.now()
+ const groupId = await t.run(async ctx => {
+  const id = await ctx.db.insert('groups', { name: 'Chat', status: 'active', nextChannelSequence: 1, createdBy: owner, createdAt: now, updatedAt: now })
+  for (const userId of [owner, member]) await ctx.db.insert('groupMembers', { groupId: id, userId, status: 'active', createdAt: now, updatedAt: now })
+  return id
+ })
+ return { groupId, member, outsider, owner, t }
 }
 async function seedUser(t: TestBackend, subject: string) {
   return await t.run(async (ctx) => {

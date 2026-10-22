@@ -521,6 +521,14 @@ export const requestAccountDeletion = mutation({
       .first()
     const retentionNote =
       'Group messages and attachments remain for other members; personal profile fields and push subscriptions are removed.'
+    const memberships = await ctx.db.query('groupMembers')
+      .withIndex('by_user', q => q.eq('userId', args.userId)).collect()
+    for (const membership of memberships) {
+      await ctx.db.patch(membership._id, { status: 'removed', updatedAt: now })
+      await ctx.db.patch(membership.groupId, { pairKey: undefined })
+    }
+    const typing = await ctx.db.query('typingIndicators').withIndex('by_user', q => q.eq('userId', args.userId)).collect()
+    for (const indicator of typing) await ctx.db.delete(indicator._id)
     if (existing) {
       await ctx.db.patch(existing._id, {
         authUserId: authUser._id,

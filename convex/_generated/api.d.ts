@@ -39,7 +39,6 @@ import type * as mediaPreview from "../mediaPreview.js";
 import type * as messages from "../messages.js";
 import type * as mobile from "../mobile.js";
 import type * as notifications from "../notifications.js";
-import type * as projects from "../projects.js";
 import type * as pushDelivery from "../pushDelivery.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as reports from "../reports.js";
@@ -85,7 +84,6 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   mobile: typeof mobile;
   notifications: typeof notifications;
-  projects: typeof projects;
   pushDelivery: typeof pushDelivery;
   pushNotifications: typeof pushNotifications;
   reports: typeof reports;
