@@ -70,7 +70,9 @@ export const listForActingCompany = query({
     await requireActiveCompanyMembership(ctx, actor, args.actingCompanyId)
     const projectMemberships = await ctx.db
       .query('projectMembers')
-      .withIndex('by_user', (q) => q.eq('userId', actor.userId))
+      .withIndex('by_user_company', (q) =>
+        q.eq('userId', actor.userId).eq('companyId', args.actingCompanyId),
+      )
       .collect()
     const represented = projectMemberships.filter((member) =>
       member.companyId === args.actingCompanyId &&

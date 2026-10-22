@@ -143,6 +143,7 @@ export const remove = mutation({
 
     const [
       groupMembers,
+      groupReadStates,
       messages,
       attachments,
       typingIndicators,
@@ -152,6 +153,7 @@ export const remove = mutation({
       channelThreads,
     ] = await Promise.all([
       ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
+      ctx.db.query('groupReadStates').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('messages').withIndex('by_group_created_at', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('attachments').withIndex('by_group', (q) => q.eq('groupId', args.groupId)).collect(),
       ctx.db.query('typingIndicators').withIndex('by_group_updated_at', (q) => q.eq('groupId', args.groupId)).collect(),
@@ -211,6 +213,7 @@ export const remove = mutation({
     for (const row of typingIndicators) await ctx.db.delete(row._id)
     for (const row of attachments) await ctx.db.delete(row._id)
     for (const row of messages) await ctx.db.delete(row._id)
+    for (const row of groupReadStates) await ctx.db.delete(row._id)
     for (const row of groupMembers) await ctx.db.delete(row._id)
     await ctx.db.delete(args.groupId)
   },

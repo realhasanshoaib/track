@@ -144,9 +144,15 @@ export const getMemoryBoxForProject = query({
 export const listMemoryBoxesForCleanup = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
-      .query('projectMemoryBoxes')
-      .collect()
+    const boxes = await Promise.all(
+      (['creating', 'ready', 'paused'] as const).map((status) =>
+        ctx.db.query('projectMemoryBoxes')
+          .withIndex('by_status_updated_at', (q) => q.eq('status', status))
+          .collect(),
+      ),
+    )
+    // Keep the table's creation order when combining the status ranges.
+    return boxes.flat().sort((a, b) => a._creationTime - b._creationTime)
   },
 })
 

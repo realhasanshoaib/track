@@ -313,7 +313,15 @@ export const remove = mutation({
     for (const row of messages) await ctx.db.delete(row._id)
     for (const row of invitations) await ctx.db.delete(row._id)
     for (const row of projectMembers) await ctx.db.delete(row._id)
-    for (const row of groups) await ctx.db.delete(row._id)
+    for (const group of groups) {
+      const [groupMembers, groupReadStates] = await Promise.all([
+        ctx.db.query('groupMembers').withIndex('by_group', (q) => q.eq('groupId', group._id)).collect(),
+        ctx.db.query('groupReadStates').withIndex('by_group', (q) => q.eq('groupId', group._id)).collect(),
+      ])
+      for (const row of groupMembers) await ctx.db.delete(row._id)
+      for (const row of groupReadStates) await ctx.db.delete(row._id)
+      await ctx.db.delete(group._id)
+    }
     for (const row of auditEvents) await ctx.db.delete(row._id)
     await ctx.db.delete(args.projectId)
   },
