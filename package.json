@@ -28,11 +28,15 @@
     "e2e": "playwright test --config e2e/playwright.config.ts e2e/tests/track-journeys.spec.ts e2e/tests/task-editing.spec.ts",
     "perf:fixture": "PERF_OUTPUT_PATH=artifacts/performance/fixture-performance.json playwright test --config e2e/playwright.config.ts e2e/tests/performance.spec.mjs",
     "perf:build": "node scripts/perf/measure-web-build.mjs",
-    "gate": "q9gate run",
-    "gate:full": "q9gate run --full",
+    "gate": "pnpm check:tracker && pnpm test:tracker && q9gate run",
+    "gate:full": "pnpm check:tracker && pnpm test:tracker && q9gate run --full",
     "convex:dev": "convex dev",
     "convex:deploy:dev": "convex deploy",
-    "convex:deploy:prod": "convex deploy --env-file convex.prod.env"
+    "convex:deploy:prod": "convex deploy --env-file convex.prod.env",
+    "generate:tracker": "node scripts/generate-tracker.mjs",
+    "check:tracker": "node scripts/generate-tracker.mjs --check",
+    "serve:tracker": "node scripts/tracker-server.mjs",
+    "test:tracker": "node --test scripts/tracker.node-test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -46,6 +50,7 @@
     "convex": "^1.42.1",
     "convex-test": "0.0.54",
     "dependency-cruiser": "18.2.0",
+    "js-yaml": "4.3.1",
     "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "turbo": "^2.10.4",
