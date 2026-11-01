@@ -38,7 +38,7 @@
     "@track/shared": "workspace:*",
     "@upstash/box": "0.4.4",
     "ai": "^6.0.223",
-    "better-auth": "1.6.25",
+    "better-auth": "1.7.7",
     "fflate": "0.8.3",
     "firebase-admin": "14.2.0",
     "hono": "4.13.7",
